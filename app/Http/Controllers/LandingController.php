@@ -22,14 +22,14 @@ class LandingController extends Controller
     /**
      * Get crime location data as JSON for the heatmap
      * Public API endpoint - returns only non-sensitive location data
+     * Used by: Web landing page heatmap visualization
      */
     public function getCrimeData(Request $request)
     {
         // Determine date range filter
-        $dateRange = $request->query('range', 180); // default 6 months
+        $dateRange = $request->query('range', 'all'); // default all records
 
-        $query = CrimeIncident::with('category')
-            ->select('latitude', 'longitude', 'incident_date', 'crime_category_id')
+        $query = CrimeIncident::select('latitude', 'longitude', 'incident_date')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude');
 
@@ -44,15 +44,14 @@ class LandingController extends Controller
                 return [
                     'lat' => (float) $incident->latitude,
                     'lng' => (float) $incident->longitude,
-                    'date' => $incident->incident_date->format('Y-m-d'),
-                    'category' => $incident->category->category_name ?? 'Unknown'
+                    'date' => $incident->incident_date->format('Y-m-d')
                 ];
             });
 
         return response()->json($crimeData);
     }
 
-    /**
+/**
      * Handle anonymous tip submission
      */
     public function submitTip(Request $request)
