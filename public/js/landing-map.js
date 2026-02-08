@@ -1,9 +1,6 @@
 // Global variables
 let map;
 let heatLayer;
-let markersLayer;
-let markersGroup = [];
-let currentView = 'heatmap';
 let qcGeoJsonLayer;
 
 // Initialize map on page load
@@ -31,9 +28,6 @@ function initMap() {
         // Load QC boundary from GeoJSON
         loadQcBoundary();
 
-        // Initialize layer groups
-        markersLayer = L.layerGroup().addTo(map);
-
         // Load crime data
         loadCrimeData();
 
@@ -44,7 +38,7 @@ function initMap() {
 }
 
 /**
- * Load Quezon City boundary from GeoJSON file
+ * Load Quezon City boundary from GeoJSON file and restrict map to QC area only
  */
 function loadQcBoundary() {
     try {
@@ -54,15 +48,55 @@ function loadQcBoundary() {
                 return response.json();
             })
             .then(data => {
+                // Calculate bounds from GeoJSON to restrict map view
+                let bounds = L.geoJSON(data).getBounds();
+
+                // Set max bounds to QC area - users cannot pan outside this area
+                map.setMaxBounds(bounds.pad(0.05)); // 5% padding for visual comfort
+
+                // Restrict zoom to reasonable levels for QC
+                map.setMinZoom(11);
+                map.setMaxZoom(18);
+
+                // Add QC boundary as visual overlay with light, clean styling
                 qcGeoJsonLayer = L.geoJSON(data, {
                     style: {
-                        color: '#274d4c',
-                        weight: 3,
-                        opacity: 0.8,
-                        fillOpacity: 0.05,
-                        fill: true
+                        color: '#274d4c',           // Theme green border - Quezon City boundary
+                        weight: 5,                  // Bold border for clear definition
+                        opacity: 1,                 // Full opacity on border
+                        fillOpacity: 0.08,          // Very light fill to show QC area clearly
+                        fill: true,
+                        fillColor: '#e8f5f3',       // Very light green-tinted fill for visibility
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    },
+                    onEachFeature: function(feature, layer) {
+                        // Add popup to show QC area info
+                        layer.bindPopup('<div style="text-align:center;"><strong style="color:#274d4c;">Quezon City</strong><br><small>Coverage Area - Restricted to this boundary</small></div>');
+
+                        // Add hover effect for interactivity
+                        layer.on('mouseover', function() {
+                            this.setStyle({
+                                weight: 6,
+                                opacity: 1,
+                                fillOpacity: 0.15,
+                                fillColor: '#d0ebe7'
+                            });
+                            this.openPopup();
+                        });
+                        layer.on('mouseout', function() {
+                            this.setStyle({
+                                weight: 5,
+                                opacity: 1,
+                                fillOpacity: 0.08,
+                                fillColor: '#e8f5f3'
+                            });
+                            this.closePopup();
+                        });
                     }
                 }).addTo(map);
+
+                console.log('QC boundary loaded - QC area light, outside areas darkened');
             })
             .catch(error => {
                 console.warn('Could not load QC boundary GeoJSON:', error);
@@ -86,8 +120,8 @@ async function loadCrimeData() {
         // Get date range from filter
         const dateRange = document.getElementById('dateRangeFilter').value;
         const apiUrl = dateRange === 'all'
-            ? '/api/crime-data?range=all'
-            : `/api/crime-data?range=${dateRange}`;
+            ? '/api/crime-heatmap?range=all'
+            : `/api/crime-heatmap?range=${dateRange}`;
 
         // Fetch crime data
         const response = await fetch(apiUrl);
@@ -104,9 +138,6 @@ async function loadCrimeData() {
             return;
         }
 
-        // Store data globally for marker view
-        window.crimeData = data;
-
         // Create heatmap data points
         const heatPoints = data.map(incident => {
             return [
@@ -121,18 +152,19 @@ async function loadCrimeData() {
             map.removeLayer(heatLayer);
         }
 
-        // Create new heatmap layer with Leaflet.heat
+        // Create new heatmap layer with Leaflet.heat - density-based color gradient
         heatLayer = L.heatLayer(heatPoints, {
-            radius: 25,
-            blur: 35,
+            radius: 30,
+            blur: 40,
             maxZoom: 13,
-            minOpacity: 0.3,
+            minOpacity: 0.2,
             gradient: {
-                0.0: 'blue',
-                0.25: 'cyan',
-                0.5: 'lime',
-                0.75: 'yellow',
-                1.0: 'red'
+                0.0: '#3498db',      // Blue - Low density
+                0.2: '#2ecc71',      // Green - Low-Medium density
+                0.4: '#f39c12',      // Orange - Medium density
+                0.6: '#e74c3c',      // Red - Medium-High density
+                0.8: '#c0392b',      // Dark Red - High density
+                1.0: '#8b0000'       // Dark Red - Very High density
             }
         }).addTo(map);
 
@@ -144,135 +176,6 @@ async function loadCrimeData() {
     } finally {
         // Hide loader
         if (loader) loader.classList.add('hidden');
-    }
-}
-
-/**
- * Switch to heatmap view
- */
-function switchToHeatmap() {
-    try {
-        // Remove markers layer
-        markersLayer.clearLayers();
-
-        // Add heatmap if not visible
-        if (heatLayer && !map.hasLayer(heatLayer)) {
-            map.addLayer(heatLayer);
-        }
-
-        // Update button styles
-        updateButtonStyles('heatmap');
-
-        currentView = 'heatmap';
-        console.log('Switched to heatmap view');
-
-    } catch (error) {
-        console.error('Error switching to heatmap view:', error);
-    }
-}
-
-/**
- * Switch to markers view
- */
-function switchToMarkers() {
-    try {
-        // Remove heatmap if visible
-        if (heatLayer && map.hasLayer(heatLayer)) {
-            map.removeLayer(heatLayer);
-        }
-
-        // Clear existing markers
-        markersLayer.clearLayers();
-        markersGroup = [];
-
-        // Add markers for each crime incident
-        if (!window.crimeData || window.crimeData.length === 0) {
-            console.warn('No crime data to display as markers');
-            return;
-        }
-
-        window.crimeData.forEach(incident => {
-            try {
-                const lat = parseFloat(incident.lat);
-                const lng = parseFloat(incident.lng);
-
-                if (isNaN(lat) || isNaN(lng)) {
-                    return; // Skip invalid coordinates
-                }
-
-                // Create circle marker
-                const marker = L.circleMarker([lat, lng], {
-                    radius: 6,
-                    fillColor: getCategoryColor(incident.category),
-                    color: '#333',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.8
-                });
-
-                // Add popup with incident info
-                const popupContent = `
-                    <div class="text-sm">
-                        <strong style="color: #274d4c;">${escapeHtml(incident.category)}</strong><br>
-                        <small class="text-gray-600">Date: ${escapeHtml(incident.date)}</small>
-                    </div>
-                `;
-
-                marker.bindPopup(popupContent);
-                marker.addTo(markersLayer);
-                markersGroup.push(marker);
-
-            } catch (err) {
-                console.warn('Error creating marker:', err);
-            }
-        });
-
-        // Update button styles
-        updateButtonStyles('markers');
-
-        currentView = 'markers';
-        console.log(`Added ${markersGroup.length} markers`);
-
-    } catch (error) {
-        console.error('Error switching to markers view:', error);
-        showMapError('Failed to switch to markers view');
-    }
-}
-
-/**
- * Get color for crime category
- */
-function getCategoryColor(category) {
-    const colors = {
-        'Theft': '#f59e0b',
-        'Robbery': '#ef4444',
-        'Assault': '#dc2626',
-        'Burglary': '#f97316',
-        'Vandalism': '#84cc16',
-        'Homicide': '#7f1d1d',
-        'Drug Related': '#6366f1',
-        'Rape': '#e11d48',
-        'Kidnapping': '#a21caf',
-        'Unknown': '#6b7280'
-    };
-    return colors[category] || colors['Unknown'];
-}
-
-/**
- * Update button styling
- */
-function updateButtonStyles(activeView) {
-    const heatmapBtn = document.getElementById('heatmapViewBtn');
-    const markersBtn = document.getElementById('markersViewBtn');
-
-    if (activeView === 'heatmap') {
-        heatmapBtn.classList.add('bg-alertara-600', 'hover:bg-alertara-700');
-        markersBtn.classList.remove('bg-alertara-600', 'hover:bg-alertara-700');
-        markersBtn.classList.add('text-gray-300', 'hover:bg-gray-700');
-    } else {
-        markersBtn.classList.add('bg-alertara-600', 'hover:bg-alertara-700');
-        heatmapBtn.classList.remove('bg-alertara-600', 'hover:bg-alertara-700');
-        heatmapBtn.classList.add('text-gray-300', 'hover:bg-gray-700');
     }
 }
 
@@ -314,28 +217,11 @@ function escapeHtml(text) {
  */
 function attachEventListeners() {
     try {
-        // Heatmap view button
-        const heatmapBtn = document.getElementById('heatmapViewBtn');
-        if (heatmapBtn) {
-            heatmapBtn.addEventListener('click', switchToHeatmap);
-        }
-
-        // Markers view button
-        const markersBtn = document.getElementById('markersViewBtn');
-        if (markersBtn) {
-            markersBtn.addEventListener('click', switchToMarkers);
-        }
-
         // Date range filter
         const dateFilter = document.getElementById('dateRangeFilter');
         if (dateFilter) {
             dateFilter.addEventListener('change', function() {
                 loadCrimeData();
-                // Reload current view
-                if (currentView === 'markers') {
-                    // Small delay to ensure data is loaded
-                    setTimeout(switchToMarkers, 500);
-                }
             });
         }
 
