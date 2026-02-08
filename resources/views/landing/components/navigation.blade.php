@@ -1,62 +1,49 @@
 <nav id="mainNav" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-white/0">
-    <div class="container mx-auto px-4 py-4 max-w-7xl">
+    <div class="container mx-auto px-4 py-3 max-w-7xl">
         <div class="flex items-center justify-between">
-            <!-- Logo and Title -->
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-alertara-600 rounded-full flex items-center justify-center">
-                    <i class="fas fa-shield-alt text-white text-lg"></i>
-                </div>
-                <span class="text-xl font-bold text-alertara-700 hidden sm:block">Crime Monitor QC</span>
+            <!-- Logo -->
+            <div class="flex items-center gap-3">
+                <img src="{{ asset('images/logo.svg') }}" alt="Logo" class="h-12 sm:h-14 w-auto">
+                <span class="hidden sm:inline font-bold text-lg text-gray-900">Crime Monitor</span>
             </div>
 
-            <!-- Desktop Navigation Links -->
-            <div class="hidden md:flex items-center space-x-8">
-                <a href="#home" class="nav-link text-gray-700 hover:text-alertara-600 font-medium transition-colors">Home</a>
-                <a href="#about" class="nav-link text-gray-700 hover:text-alertara-600 font-medium transition-colors">About</a>
-                <a href="#map" class="nav-link text-gray-700 hover:text-alertara-600 font-medium transition-colors">Crime Map</a>
-                <a href="#submit-tip" class="nav-link text-gray-700 hover:text-alertara-600 font-medium transition-colors">Submit Tip</a>
-                <a href="{{ route('login') }}" class="px-5 py-2 bg-alertara-600 text-white rounded-lg hover:bg-alertara-700 transition-colors font-medium">
-                    Login
+            <!-- Desktop Navigation -->
+            <div class="hidden md:flex items-center space-x-6">
+                <a href="#home" class="nav-link text-xs sm:text-sm text-gray-700 hover:text-alertara-600 active:text-alertara-700 font-medium transition-colors">Home</a>
+                <a href="#about" class="nav-link text-xs sm:text-sm text-gray-700 hover:text-alertara-600 active:text-alertara-700 font-medium transition-colors">About</a>
+                <a href="#map" class="nav-link text-xs sm:text-sm text-gray-700 hover:text-alertara-600 active:text-alertara-700 font-medium transition-colors">Map</a>
+                <a href="#submit-tip" class="nav-link text-xs sm:text-sm text-gray-700 hover:text-alertara-600 active:text-alertara-700 font-medium transition-colors">Report</a>
+                <a href="{{ route('login') }}" class="py-2 sm:py-2.5 px-4 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-alertara-600 hover:bg-alertara-700 transition-colors">
+                    Sign In
                 </a>
             </div>
 
             <!-- Mobile Menu Button -->
-            <button class="md:hidden text-gray-700 hover:text-alertara-600 transition-colors" id="mobileMenuBtn">
-                <i class="fas fa-bars text-2xl"></i>
+            <button class="md:hidden text-gray-700 hover:text-alertara-600" id="mobileMenuBtn">
+                <i class="fas fa-bars text-xl"></i>
             </button>
         </div>
 
-        <!-- Mobile Menu Dropdown -->
-        <div id="mobileMenu" class="hidden md:hidden pt-4 border-t border-gray-200 mt-4">
-            <a href="#home" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <i class="fas fa-home mr-2"></i>Home
-            </a>
-            <a href="#about" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <i class="fas fa-info-circle mr-2"></i>About
-            </a>
-            <a href="#map" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <i class="fas fa-map mr-2"></i>Crime Map
-            </a>
-            <a href="#submit-tip" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <i class="fas fa-paper-plane mr-2"></i>Submit Tip
-            </a>
-            <a href="{{ route('login') }}" class="block px-4 py-2 text-alertara-600 hover:bg-alertara-50 rounded-lg transition-colors font-medium border-t border-gray-200 mt-2 pt-4">
-                <i class="fas fa-sign-in-alt mr-2"></i>Login
-            </a>
+        <!-- Mobile Menu -->
+        <div id="mobileMenu" class="hidden md:hidden pt-3 border-t border-gray-200 mt-3 space-y-1">
+            <a href="#home" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 rounded transition-colors">Home</a>
+            <a href="#about" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 rounded transition-colors">About</a>
+            <a href="#map" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 rounded transition-colors">Map</a>
+            <a href="#submit-tip" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 rounded transition-colors">Report</a>
+            <a href="{{ route('login') }}" class="block px-3 py-2 text-xs text-alertara-600 hover:bg-alertara-50 rounded font-medium border-t border-gray-200 mt-2 pt-3">Sign In</a>
         </div>
     </div>
 </nav>
 
 <script>
-    // Mobile menu toggle
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const mobileMenu = document.getElementById('mobileMenu');
+    const navbar = document.getElementById('mainNav');
 
     mobileMenuBtn.addEventListener('click', function() {
         mobileMenu.classList.toggle('hidden');
     });
 
-    // Close menu when a link is clicked
     document.querySelectorAll('#mobileMenu a').forEach(link => {
         link.addEventListener('click', function() {
             mobileMenu.classList.add('hidden');
@@ -64,29 +51,49 @@
     });
 
     // Navbar scroll effect
-    const navbar = document.getElementById('mainNav');
     window.addEventListener('scroll', function() {
         if (window.scrollY > 50) {
             navbar.classList.remove('bg-white/0');
-            navbar.classList.add('bg-white', 'shadow-md');
+            navbar.classList.add('bg-white', 'shadow-sm');
         } else {
-            navbar.classList.remove('bg-white', 'shadow-md');
+            navbar.classList.remove('bg-white', 'shadow-sm');
             navbar.classList.add('bg-white/0');
         }
     });
 
-    // Smooth scroll for anchor links
+    // Smooth scroll & active state
+    const sections = ['home', 'about', 'map', 'submit-tip'];
+    const navLinks = document.querySelectorAll('.nav-link');
+
     document.querySelectorAll('a[href^="#"]').forEach(link => {
         link.addEventListener('click', function(e) {
             const href = this.getAttribute('href');
             if (href === '#') return;
-
             e.preventDefault();
             const element = document.querySelector(href);
             if (element) {
-                const offset = 80; // Height of fixed navbar
+                const offset = 80;
                 const top = element.getBoundingClientRect().top + window.scrollY - offset;
                 window.scrollTo({ top: top, behavior: 'smooth' });
+            }
+        });
+    });
+
+    // Highlight active nav link on scroll
+    window.addEventListener('scroll', function() {
+        let current = '';
+        sections.forEach(id => {
+            const section = document.querySelector('#' + id);
+            if (section && section.offsetTop <= window.scrollY + 100) {
+                current = id;
+            }
+        });
+        navLinks.forEach(link => {
+            link.classList.remove('text-alertara-700');
+            link.classList.add('text-gray-700');
+            if (link.getAttribute('href') === '#' + current) {
+                link.classList.remove('text-gray-700');
+                link.classList.add('text-alertara-700');
             }
         });
     });
