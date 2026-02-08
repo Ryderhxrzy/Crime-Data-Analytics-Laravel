@@ -21,10 +21,10 @@ use App\Http\Controllers\LandingController;
 // Public landing page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 
-// Public API for crime data (rate limited)
-Route::get('/api/crime-data', [LandingController::class, 'getCrimeData'])
+// Public API for crime heatmap (rate limited)
+Route::get('/api/crime-heatmap', [LandingController::class, 'getCrimeData'])
     ->middleware('throttle:60,1')
-    ->name('api.crime-data');
+    ->name('api.crime-heatmap');
 
 // Public tip submission
 Route::post('/submit-tip', [LandingController::class, 'submitTip'])->name('submit-tip');
