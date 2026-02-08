@@ -455,8 +455,22 @@ class AuthController extends Controller
             $request->session()->regenerate();
 
             return redirect()->intended('dashboard');
-        } catch (\Exception) {
-            return redirect('/')->withErrors(['error' => 'Failed to authenticate with Google']);
+        } catch (\Exception $e) {
+            \Log::error('Google OAuth Callback Error', [
+                'error' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'redirect_uri' => config('services.google.redirect'),
+                'app_url' => config('app.url'),
+                'google_config' => [
+                    'client_id' => config('services.google.client_id') ? 'SET' : 'NOT SET',
+                    'client_secret' => config('services.google.client_secret') ? 'SET' : 'NOT SET',
+                    'redirect' => config('services.google.redirect'),
+                ]
+            ]);
+            return redirect('/')->withErrors(['error' => 'Failed to authenticate with Google. Please try again or contact support.']);
         }
     }
 }
