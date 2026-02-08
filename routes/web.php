@@ -16,8 +16,21 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CrimeIncidentController;
+use App\Http\Controllers\LandingController;
 
-Route::get('/', [AuthController::class, 'showLogin'])->name('login');
+// Public landing page
+Route::get('/', [LandingController::class, 'index'])->name('landing');
+
+// Public API for crime data (rate limited)
+Route::get('/api/crime-data', [LandingController::class, 'getCrimeData'])
+    ->middleware('throttle:60,1')
+    ->name('api.crime-data');
+
+// Public tip submission
+Route::post('/submit-tip', [LandingController::class, 'submitTip'])->name('submit-tip');
+
+// Authentication routes
+Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::get('/unlock-account/{token}', [AuthController::class, 'unlockAccount'])->name('unlock-account');
