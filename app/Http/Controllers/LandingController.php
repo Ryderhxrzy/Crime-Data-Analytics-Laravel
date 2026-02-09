@@ -87,6 +87,7 @@ class LandingController extends Controller
 
     /**
      * Handle anonymous tip submission (API endpoint)
+     * CAPTCHA is optional - for mobile apps, they can submit without CAPTCHA
      */
     public function submitTipApi(Request $request)
     {
@@ -96,16 +97,18 @@ class LandingController extends Controller
             'location' => 'required|string|max:500',
             'date_of_crime' => 'nullable|date_format:Y-m-d\TH:i',
             'details' => 'required|string|min:10|max:2000',
-            'cf-turnstile-response' => 'required'
+            'cf-turnstile-response' => 'nullable|string'  // Optional for mobile
         ]);
 
-        // Verify CAPTCHA (using submit tip secret key)
+        // Verify CAPTCHA only if token is provided (for web requests)
         $captchaToken = $request->input('cf-turnstile-response');
-        if (!$this->verifyCaptcha($captchaToken, 'submit_tip')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Security verification failed. Please try again.'
-            ], 422);
+        if (!empty($captchaToken)) {
+            if (!$this->verifyCaptcha($captchaToken, 'submit_tip')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Security verification failed. Please try again.'
+                ], 422);
+            }
         }
 
         // Save tip to database
