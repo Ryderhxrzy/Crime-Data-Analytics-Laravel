@@ -20,6 +20,11 @@ Route::get('/crime-heatmap', [LandingController::class, 'getCrimeData'])
     ->middleware('throttle:60,1')
     ->name('api.crime-heatmap');
 
+// Public API for submitting anonymous tips (rate limited)
+Route::post('/submit-tip', [LandingController::class, 'submitTipApi'])
+    ->middleware('throttle:5,1')
+    ->name('api.submit-tip');
+
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
