@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use App\Models\CrimeIncident;
+use App\Models\CrimeTip;
 
 class LandingController extends Controller
 {
@@ -52,52 +54,138 @@ class LandingController extends Controller
     }
 
 /**
-     * Handle anonymous tip submission
+     * Handle anonymous tip submission (Web form)
      */
     public function submitTip(Request $request)
     {
         // Validate form
         $validated = $request->validate([
+            'crime_type' => 'required|string|max:100',
+            'location' => 'required|string|max:500',
+            'incident_date' => 'nullable|string|max:255',
             'tip_content' => 'required|string|min:10|max:2000',
-            'location' => 'nullable|string|max:500',
-            'contact_info' => 'nullable|string|max:255',
             'cf-turnstile-response' => 'required'
         ]);
 
-        // Verify CAPTCHA
+        // Verify CAPTCHA (using submit tip secret key)
         $captchaToken = $request->input('cf-turnstile-response');
-        if (!$this->verifyCaptcha($captchaToken)) {
+        if (!$this->verifyCaptcha($captchaToken, 'submit_tip')) {
             return back()->withErrors(['captcha' => 'Security verification failed. Please try again.'])->withInput();
         }
 
-        // TODO: Save tip to database (if CrimeTip model is created)
-        // CrimeTip::create([
-        //     'tip_content' => $validated['tip_content'],
-        //     'location' => $validated['location'],
-        //     'contact_info' => $validated['contact_info'],
-        //     'status' => 'pending'
-        // ]);
+        // Save tip to database
+        CrimeTip::create([
+            'crime_type' => $validated['crime_type'],
+            'location' => $validated['location'],
+            'date_of_crime' => $validated['incident_date'] ? $validated['incident_date'] : null,
+            'details' => $validated['tip_content'],
+            'status' => 'open'
+        ]);
 
         return back()->with('success', 'Thank you for your tip! We appreciate your help in keeping our community safe.');
     }
 
     /**
-     * Verify Cloudflare Turnstile CAPTCHA
+     * Handle anonymous tip submission (API endpoint)
      */
-    private function verifyCaptcha($token)
+    public function submitTipApi(Request $request)
     {
+        // Validate API request
+        $validated = $request->validate([
+            'crime_type' => 'required|string|max:100',
+            'location' => 'required|string|max:500',
+            'date_of_crime' => 'nullable|date_format:Y-m-d\TH:i',
+            'details' => 'required|string|min:10|max:2000',
+            'cf-turnstile-response' => 'required'
+        ]);
+
+        // Verify CAPTCHA (using submit tip secret key)
+        $captchaToken = $request->input('cf-turnstile-response');
+        if (!$this->verifyCaptcha($captchaToken, 'submit_tip')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Security verification failed. Please try again.'
+            ], 422);
+        }
+
+        // Save tip to database
         try {
-            $client = new \GuzzleHttp\Client();
-            $response = $client->post('https://challenges.cloudflare.com/turnstile/validate', [
-                'form_params' => [
-                    'secret' => config('captcha.secret'),
-                    'response' => $token
-                ]
+            $tip = CrimeTip::create([
+                'crime_type' => $validated['crime_type'],
+                'location' => $validated['location'],
+                'date_of_crime' => $validated['date_of_crime'] ?? null,
+                'details' => $validated['details'],
+                'status' => 'open'
             ]);
 
-            $body = json_decode($response->getBody(), true);
-            return $body['success'] ?? false;
+            return response()->json([
+                'success' => true,
+                'message' => 'Thank you for your tip! We appreciate your help in keeping our community safe.',
+                'data' => [
+                    'id' => $tip->id,
+                    'created_at' => $tip->created_at
+                ]
+            ], 201);
         } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while processing your submission. Please try again.'
+            ], 500);
+        }
+    }
+
+    /**
+     * Verify Cloudflare Turnstile CAPTCHA
+     */
+    private function verifyCaptcha($token, $type = 'general')
+    {
+        try {
+            // Get the appropriate secret key based on type
+            $secretKey = ($type === 'submit_tip')
+                ? config('captcha.submit_tip_secret')
+                : config('captcha.secret');
+
+            // Check if secret key is set
+            if (empty($secretKey)) {
+                \Log::error('CAPTCHA: Secret key not configured', ['type' => $type]);
+                return false;
+            }
+
+            // Check if token is empty
+            if (empty($token)) {
+                \Log::warning('CAPTCHA: Token is empty');
+                return false;
+            }
+
+            // Use Laravel's HTTP client for better reliability
+            \Log::info('CAPTCHA: Starting verification', ['token_length' => strlen($token)]);
+
+            $response = Http::asForm()->timeout(10)->withoutRedirecting()->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+                'secret' => $secretKey,
+                'response' => $token
+            ]);
+
+            \Log::info('CAPTCHA: Response received', ['status' => $response->status()]);
+
+            if (!$response->successful()) {
+                \Log::error('CAPTCHA API error', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'headers' => $response->headers()
+                ]);
+                return false;
+            }
+
+            $body = $response->json();
+
+            if (isset($body['success']) && $body['success'] === true) {
+                return true;
+            }
+
+            \Log::warning('CAPTCHA verification failed', ['errors' => $body['error-codes'] ?? []]);
+            return false;
+        } catch (\Exception $e) {
+            \Log::error('CAPTCHA verification error: ' . $e->getMessage());
             return false;
         }
     }
