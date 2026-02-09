@@ -289,13 +289,6 @@ class AuthController extends Controller
 
     private function verifyCaptcha($token)
     {
-        // Log for debugging
-        \Log::info('Captcha verification attempt', [
-            'token_length' => strlen($token ?? ''),
-            'token_exists' => !empty($token),
-            'token_preview' => substr($token ?? '', 0, 50),
-            'secret_key_exists' => !empty(env('CLOUDFLARE_SECRET_KEY')),
-        ]);
 
         if (empty($token)) {
             \Log::warning('CAPTCHA token is empty');
