@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\Api\MobileUserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,6 +25,15 @@ Route::get('/crime-heatmap', [LandingController::class, 'getCrimeData'])
 Route::post('/submit-tip', [LandingController::class, 'submitTipApi'])
     ->middleware('throttle:5,1')
     ->name('api.submit-tip');
+
+// Mobile User API endpoints
+Route::post('/mobile-users/register', [MobileUserController::class, 'register'])
+    ->middleware('throttle:5,1')
+    ->name('api.mobile-users.register');
+
+Route::post('/mobile-users/login', [MobileUserController::class, 'login'])
+    ->middleware('throttle:5,1')
+    ->name('api.mobile-users.login');
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
