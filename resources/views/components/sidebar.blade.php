@@ -34,55 +34,32 @@
         <div class="p-3">
             <!-- Navigation Sections -->
             <nav class="space-y-1">
-                <!-- Crime Management Section Header -->
-                <div class="pt-2 mt-2">
-                    <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-wide px-3 py-2">Crime Management</h3>
-                </div>
-
-                <!-- Crime Incidents -->
-                <div>
-                    <a href="{{ route('crimes.index') }}"
-                       class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crimes.*') ? 'bg-alertara-700 text-alertara-100' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
-                        <i class="fas fa-file-text w-4 h-4 mr-3 flex-shrink-0"></i>
-                        <span>Crime</span>
-                    </a>
-                </div>
-
                 <!-- System Overview -->
                 <div>
                     <a href="{{ route('dashboard') }}"
                        class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('dashboard') ? 'bg-alertara-700 text-alertara-100' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
-                        <i class="fas fa-home w-4 h-4 mr-3 flex-shrink-0"></i>
-                        <span>System Overview</span>
+                        <i class="fas fa-chart-pie w-4 h-4 mr-3 flex-shrink-0"></i>
+                        <span>Dashboard</span>
                     </a>
                 </div>
 
-                <!-- Analytics Summary -->
-                <div>
-                    <a href="#analytics"
-                       class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                        <i class="fas fa-chart-bar w-4 h-4 mr-3 flex-shrink-0"></i>
-                        <span>Analytics Summary</span>
-                    </a>
-                </div>
-
-                <!-- Crime Mapping Section Header -->
+                <!-- Crime Analysis Section Header -->
                 <div class="pt-2 mt-2">
-                    <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-wide px-3 py-2">Crime Analysis</h3>
+                    <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wide px-3 py-2">Crime Analysis</h3>
                 </div>
 
                 <!-- Crime Mapping -->
                 <div>
-                    <a href="#crime-mapping"
-                       class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                        <i class="fas fa-map-marked-alt w-4 h-4 mr-3 flex-shrink-0"></i>
+                    <a href="{{ route('mapping') }}"
+                       class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('mapping') ? 'bg-alertara-700 text-alertara-100' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
+                        <i class="fas fa-map w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Crime Mapping</span>
                     </a>
                 </div>
 
                 <!-- Trend Analysis Section Header -->
                 <div class="pt-2 mt-2">
-                    <h3 class="text-xs font-semibold text-alertara-600 uppercase tracking-wide px-3 py-2">Trend Analysis</h3>
+                    <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wide px-3 py-2">Analytics</h3>
                 </div>
 
                 <!-- Trend Analysis (Collapsible) -->
@@ -93,30 +70,30 @@
                             <i class="fas fa-chart-line w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Trend Analytics</span>
                         </span>
-                        <i class="fas fa-chevron-right w-3 h-3 transition-transform duration-200 chevron-icon text-gray-400"></i>
+                        <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon text-gray-400"></i>
                     </button>
                     <div class="trend-content hidden space-y-0 ml-3 mt-0">
                         <a href="#time-trends"
                            class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                            <i class="fas fa-circle-dot w-2 h-2 mr-3 flex-shrink-0"></i>
+                            <i class="fas fa-calendar-days w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Time-Based Trends</span>
                         </a>
                         <a href="#location-trends"
                            class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                            <i class="fas fa-circle-dot w-2 h-2 mr-3 flex-shrink-0"></i>
+                            <i class="fas fa-map-pin w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Location Trends</span>
                         </a>
                         <a href="#crime-type-trends"
                            class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                            <i class="fas fa-circle-dot w-2 h-2 mr-3 flex-shrink-0"></i>
+                            <i class="fas fa-chart-bar w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Crime Type Trends</span>
                         </a>
                     </div>
                 </div>
 
-                <!-- Predictive Policing Tools Section Header -->
+                <!-- Predictive Analytics Section Header -->
                 <div class="pt-2 mt-2">
-                    <h3 class="text-xs font-semibold text-alertara-600 uppercase tracking-wide px-3 py-2">Predictive Policing</h3>
+                    <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wide px-3 py-2">Predictive</h3>
                 </div>
 
                 <!-- Predictive Analytics (Collapsible) -->
@@ -124,47 +101,33 @@
                     <button class="predictive-toggle w-full flex items-center justify-between px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                             type="button">
                         <span class="flex items-center">
-                            <i class="fas fa-robot w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <i class="fas fa-brain w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Predictive Analytics</span>
                         </span>
-                        <i class="fas fa-chevron-right w-3 h-3 transition-transform duration-200 chevron-icon text-gray-400"></i>
+                        <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon text-gray-400"></i>
                     </button>
                     <div class="predictive-content hidden space-y-0 ml-3 mt-0">
                         <a href="#predictive"
                            class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                            <i class="fas fa-circle-dot w-2 h-2 mr-3 flex-shrink-0"></i>
-                            <span>Analytics Details</span>
+                            <i class="fas fa-location-dot w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>Crime Hotspot</span>
                         </a>
-                    </div>
-                </div>
-
-                <!-- Key Metrics Section Header -->
-                <div class="pt-2 mt-2">
-                    <h3 class="text-xs font-semibold text-alertara-600 uppercase tracking-wide px-3 py-2">Key Metrics</h3>
-                </div>
-
-                <!-- Key Metrics (Collapsible) -->
-                <div>
-                    <button class="metrics-toggle w-full flex items-center justify-between px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                            type="button">
-                        <span class="flex items-center">
-                            <i class="fas fa-chart-pie w-4 h-4 mr-3 flex-shrink-0"></i>
-                            <span>Key Metrics</span>
-                        </span>
-                        <i class="fas fa-chevron-right w-3 h-3 transition-transform duration-200 chevron-icon text-gray-400"></i>
-                    </button>
-                    <div class="metrics-content hidden space-y-0 ml-3 mt-0">
-                        <a href="#metrics"
+                        <a href="#predictive"
                            class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                            <i class="fas fa-circle-dot w-2 h-2 mr-3 flex-shrink-0"></i>
-                            <span>Metrics Overview</span>
+                            <i class="fas fa-triangle-exclamation w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>Risk Forecasting</span>
+                        </a>
+                        <a href="#predictive"
+                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-magnifying-glass w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>Pattern Detection</span>
                         </a>
                     </div>
                 </div>
 
                 <!-- Reports & Alerts Section Header -->
                 <div class="pt-2 mt-2">
-                    <h3 class="text-xs font-semibold text-alertara-600 uppercase tracking-wide px-3 py-2">Reports & Alerts</h3>
+                    <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wide px-3 py-2">Reports & Alerts</h3>
                 </div>
 
                 <!-- Reports (Collapsible) -->
@@ -172,16 +135,21 @@
                     <button class="reports-toggle w-full flex items-center justify-between px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                             type="button">
                         <span class="flex items-center">
-                            <i class="fas fa-file-alt w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <i class="fas fa-file-lines w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Reports</span>
                         </span>
-                        <i class="fas fa-chevron-right w-3 h-3 transition-transform duration-200 chevron-icon text-gray-400"></i>
+                        <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon text-gray-400"></i>
                     </button>
                     <div class="reports-content hidden space-y-0 ml-3 mt-0">
                         <a href="#reports"
                            class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                            <i class="fas fa-circle-dot w-2 h-2 mr-3 flex-shrink-0"></i>
+                            <i class="fas fa-eye w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>View Reports</span>
+                        </a>
+                        <a href="#reports-download"
+                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-download w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>Download Report</span>
                         </a>
                     </div>
                 </div>
@@ -190,8 +158,22 @@
                 <div>
                     <a href="#alerts"
                        class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                        <i class="fas fa-bell w-4 h-4 mr-3 flex-shrink-0"></i>
+                        <i class="fas fa-exclamation-circle w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Alerts</span>
+                    </a>
+                </div>
+
+                <!-- Crime Management Section Header -->
+                <div class="pt-2 mt-2">
+                    <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-wide px-3 py-2">Crime Management</h3>
+                </div>
+
+                <!-- Crime Incidents -->
+                <div>
+                    <a href="{{ route('crimes.index') }}"
+                       class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crimes.*') ? 'bg-alertara-700 text-alertara-100' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
+                        <i class="fas fa-file-lines w-4 h-4 mr-3 flex-shrink-0"></i>
+                        <span>Crime</span>
                     </a>
                 </div>
 
@@ -199,19 +181,19 @@
                 <div class="pt-4 mt-4 border-t border-gray-200">
                     <a href="#profile"
                        class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                        <i class="fas fa-user-circle w-4 h-4 mr-3 flex-shrink-0"></i>
+                        <i class="fas fa-user w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Profile</span>
                     </a>
                     <a href="#settings"
                        class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                        <i class="fas fa-cog w-4 h-4 mr-3 flex-shrink-0"></i>
+                        <i class="fas fa-sliders-h w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Settings</span>
                     </a>
                     <form action="{{ route('logout') }}" method="POST" class="m-0">
                         @csrf
                         <button type="submit"
                                 class="w-full flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
-                            <i class="fas fa-sign-out-alt w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <i class="fas fa-arrow-right-from-bracket w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Logout</span>
                         </button>
                     </form>
