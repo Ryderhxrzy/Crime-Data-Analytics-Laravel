@@ -41,7 +41,11 @@ Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallbac
 
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('auth')->name('dashboard');
 Route::get('/dashboard/charts', [DashboardController::class, 'getChartData'])->middleware('auth')->name('dashboard.charts');
-Route::get('/mapping', [LandingController::class, 'mapping'])->middleware('auth')->name('mapping');
+Route::get('/time-based-trends', [DashboardController::class, 'timeBasedTrends'])->middleware('auth')->name('time-based-trends');
+Route::get('/location-trends', [DashboardController::class, 'locationTrends'])->middleware('auth')->name('location-trends');
+Route::get('/crime-type-trends', [DashboardController::class, 'crimeTypeTrends'])->middleware('auth')->name('crime-type-trends');
+Route::post('/dashboard/location-charts', [DashboardController::class, 'getLocationChartData'])->name('dashboard.location.charts');
+Route::get('/dashboard/location-trends', [DashboardController::class, 'locationTrends'])->name('dashboard.location.trends');Route::get('/mapping', [LandingController::class, 'mapping'])->middleware('auth')->name('mapping');
 Route::get('/crimes', [CrimeIncidentController::class, 'index'])->middleware('auth')->name('crimes.index');
 
 // Incident details endpoint (authenticated)
