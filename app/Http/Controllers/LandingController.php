@@ -39,7 +39,8 @@ class LandingController extends Controller
         // Determine date range filter
         $dateRange = $request->query('range', 'all'); // default all records
 
-        $query = CrimeIncident::select('latitude', 'longitude', 'incident_date', 'incident_title', 'clearance_status')
+        $query = CrimeIncident::with('category')
+            ->select('id', 'latitude', 'longitude', 'incident_date', 'incident_title', 'clearance_status', 'crime_category_id')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude');
 
@@ -67,15 +68,49 @@ class LandingController extends Controller
         $crimeData = $query->get()
             ->map(function($incident) {
                 return [
+                    'id' => $incident->id,
                     'latitude' => (float) $incident->latitude,
                     'longitude' => (float) $incident->longitude,
                     'incident_date' => $incident->incident_date->format('Y-m-d'),
                     'incident_title' => $incident->incident_title,
-                    'clearance_status' => $incident->clearance_status
+                    'clearance_status' => $incident->clearance_status,
+                    'crime_category_id' => $incident->crime_category_id,
+                    'category_name' => $incident->category ? $incident->category->category_name : 'Unknown',
+                    'color_code' => $incident->category ? $incident->category->color_code : '#274d4c',
+                    'icon' => $incident->category ? $incident->category->icon : 'fa-exclamation-circle'
                 ];
             });
 
         return response()->json($crimeData);
+    }
+
+    /**
+     * Get full incident details (authenticated only)
+     */
+    public function getIncidentDetails($id)
+    {
+        try {
+            $incident = CrimeIncident::with('category', 'barangay')
+                ->findOrFail($id);
+
+            return response()->json([
+                'id' => $incident->id,
+                'category_name' => $incident->category ? $incident->category->category_name : 'Unknown',
+                'color_code' => $incident->category ? $incident->category->color_code : '#274d4c',
+                'icon' => $incident->category ? $incident->category->icon : 'fa-exclamation-circle',
+                'incident_title' => $incident->incident_title,
+                'incident_date' => $incident->incident_date ? $incident->incident_date->format('Y-m-d') : 'Not specified',
+                'incident_time' => $incident->incident_time ?? 'Not specified',
+                'location' => $incident->barangay ? $incident->barangay->barangay_name : 'Not specified',
+                'address' => $incident->address_details ?? 'Not specified',
+                'barangay_name' => $incident->barangay ? $incident->barangay->barangay_name : 'Unknown',
+                'clearance_status' => $incident->clearance_status,
+                'case_number' => $incident->incident_code ?? 'N/A',
+                'incident_details' => $incident->incident_description ?? 'No additional details',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Incident not found'], 404);
+        }
     }
 
 /**
