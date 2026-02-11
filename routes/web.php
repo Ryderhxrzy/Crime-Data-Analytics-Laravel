@@ -43,3 +43,6 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('aut
 Route::get('/dashboard/charts', [DashboardController::class, 'getChartData'])->middleware('auth')->name('dashboard.charts');
 Route::get('/mapping', [LandingController::class, 'mapping'])->middleware('auth')->name('mapping');
 Route::get('/crimes', [CrimeIncidentController::class, 'index'])->middleware('auth')->name('crimes.index');
+
+// Incident details endpoint (authenticated)
+Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->middleware('auth')->name('api.crime-incident');
