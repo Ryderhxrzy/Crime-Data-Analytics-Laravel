@@ -22,16 +22,24 @@ class LandingController extends Controller
     }
 
     /**
+     * Display the crime mapping page (authenticated users only)
+     */
+    public function mapping()
+    {
+        return view('mapping');
+    }
+
+    /**
      * Get crime location data as JSON for the heatmap
-     * Public API endpoint - returns only non-sensitive location data
-     * Used by: Web landing page heatmap visualization
+     * Can be used by: Web landing page, authenticated mapping page
+     * Supports filtering by crime type, status, barangay, and date range
      */
     public function getCrimeData(Request $request)
     {
         // Determine date range filter
         $dateRange = $request->query('range', 'all'); // default all records
 
-        $query = CrimeIncident::select('latitude', 'longitude', 'incident_date')
+        $query = CrimeIncident::select('latitude', 'longitude', 'incident_date', 'incident_title', 'clearance_status')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude');
 
@@ -41,12 +49,29 @@ class LandingController extends Controller
             $query->where('incident_date', '>=', now()->subDays($days));
         }
 
+        // Apply crime type filter (for authenticated users)
+        if ($request->has('crime_type') && !empty($request->query('crime_type'))) {
+            $query->where('crime_category_id', $request->query('crime_type'));
+        }
+
+        // Apply case status filter (for authenticated users)
+        if ($request->has('status') && !empty($request->query('status'))) {
+            $query->where('clearance_status', $request->query('status'));
+        }
+
+        // Apply barangay filter (for authenticated users)
+        if ($request->has('barangay') && !empty($request->query('barangay'))) {
+            $query->where('barangay_id', $request->query('barangay'));
+        }
+
         $crimeData = $query->get()
             ->map(function($incident) {
                 return [
-                    'lat' => (float) $incident->latitude,
-                    'lng' => (float) $incident->longitude,
-                    'date' => $incident->incident_date->format('Y-m-d')
+                    'latitude' => (float) $incident->latitude,
+                    'longitude' => (float) $incident->longitude,
+                    'incident_date' => $incident->incident_date->format('Y-m-d'),
+                    'incident_title' => $incident->incident_title,
+                    'clearance_status' => $incident->clearance_status
                 ];
             });
 
