@@ -26,6 +26,15 @@ Route::post('/submit-tip', [LandingController::class, 'submitTipApi'])
     ->middleware('throttle:5,1')
     ->name('api.submit-tip');
 
+// Crime categories and barangays endpoints (for filters)
+Route::get('/crime-categories', function() {
+    return \App\Models\CrimeCategory::select('id', 'category_name')->get();
+})->middleware('throttle:60,1');
+
+Route::get('/barangays', function() {
+    return \App\Models\Barangay::select('id', 'barangay_name')->get();
+})->middleware('throttle:60,1');
+
 // Mobile User API endpoints
 Route::post('/mobile-users/register', [MobileUserController::class, 'register'])
     ->middleware('throttle:5,1')
