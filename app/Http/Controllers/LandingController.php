@@ -39,8 +39,8 @@ class LandingController extends Controller
         // Determine date range filter
         $dateRange = $request->query('range', 'all'); // default all records
 
-        $query = CrimeIncident::with('category')
-            ->select('id', 'latitude', 'longitude', 'incident_date', 'incident_title', 'clearance_status', 'crime_category_id')
+        $query = CrimeIncident::with('category', 'barangay')
+            ->select('id', 'latitude', 'longitude', 'incident_date', 'incident_title', 'clearance_status', 'crime_category_id', 'barangay_id')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude');
 
@@ -75,6 +75,8 @@ class LandingController extends Controller
                     'incident_title' => $incident->incident_title,
                     'clearance_status' => $incident->clearance_status,
                     'crime_category_id' => $incident->crime_category_id,
+                    'barangay_id' => $incident->barangay_id,
+                    'location' => $incident->barangay ? $incident->barangay->barangay_name : 'Unknown Barangay',
                     'category_name' => $incident->category ? $incident->category->category_name : 'Unknown',
                     'color_code' => $incident->category ? $incident->category->color_code : '#274d4c',
                     'icon' => $incident->category ? $incident->category->icon : 'fa-exclamation-circle'
