@@ -64,27 +64,27 @@
 
                 <!-- Trend Analysis (Collapsible) -->
                 <div>
-                    <button class="trend-toggle w-full flex items-center justify-between px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    <button class="trend-toggle w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? 'bg-alertara-700 text-alertara-100 font-semibold mb-2' : 'text-gray-700 hover:bg-gray-100' }}"
                             type="button">
                         <span class="flex items-center">
                             <i class="fas fa-chart-line w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Trend Analytics</span>
                         </span>
-                        <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon text-gray-400"></i>
+                        <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? 'text-alertara-100' : 'text-gray-400' }}"></i>
                     </button>
-                    <div class="trend-content hidden space-y-0 ml-3 mt-0">
-                        <a href="#time-trends"
-                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                    <div class="trend-content {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? '' : 'hidden' }} space-y-0 ml-3 mt-0">
+                        <a href="{{ route('time-based-trends') }}"
+                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors {{ request()->routeIs('time-based-trends') ? 'bg-alertara-100 text-alertara-700' : '' }}">
                             <i class="fas fa-calendar-days w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Time-Based Trends</span>
                         </a>
-                        <a href="#location-trends"
-                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                        <a href="{{ route('location-trends') }}"
+                           class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('location-trends') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-map-pin w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Location Trends</span>
                         </a>
-                        <a href="#crime-type-trends"
-                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                        <a href="{{ route('crime-type-trends') }}"
+                           class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-type-trends') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-chart-bar w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Crime Type Trends</span>
                         </a>
@@ -242,4 +242,15 @@
     setupToggle('.predictive-toggle', '.predictive-content');
     setupToggle('.metrics-toggle', '.metrics-content');
     setupToggle('.reports-toggle', '.reports-content');
+
+    // Initialize chevron rotation for active menus
+    document.addEventListener('DOMContentLoaded', function() {
+        const trendContent = document.querySelector('.trend-content');
+        const trendChevron = document.querySelector('.trend-toggle .chevron-icon');
+
+        // If Trend Analytics submenu is visible (active) for time-based, location, or crime type trends, rotate chevron
+        if (trendContent && !trendContent.classList.contains('hidden') && trendChevron) {
+            trendChevron.style.transform = 'rotate(90deg)';
+        }
+    });
 </script>
