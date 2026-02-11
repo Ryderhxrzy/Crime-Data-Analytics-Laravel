@@ -7,6 +7,7 @@ use App\Models\Barangay;
 use App\Models\CrimeCategory;
 use App\Models\CrimeAlert;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
@@ -114,6 +115,87 @@ class DashboardController extends Controller
             'severityData' => json_encode($severityData),
             'clearanceLabels' => json_encode(['Cleared', 'Uncleared']),
             'clearanceChartData' => json_encode([$clearedIncidents, $unclearedIncidents]),
+        ]);
+    }
+
+    /**
+     * Get filtered chart data via AJAX
+     */
+    public function getChartData(Request $request)
+    {
+        $year  = $request->get('year', now()->year);
+        $month = $request->get('month', null);
+
+        // 1. Monthly Crime Trend (by month for the selected year)
+        $monthlyTrend = CrimeIncident::select(
+                DB::raw('DATE_FORMAT(incident_date, "%Y-%m") as month'),
+                DB::raw('COUNT(*) as count')
+            )
+            ->whereYear('incident_date', $year)
+            ->groupBy(DB::raw('DATE_FORMAT(incident_date, "%Y-%m")'))
+            ->orderBy('month')
+            ->get();
+
+        // Build query for other charts
+        $query = CrimeIncident::query()->whereYear('incident_date', $year);
+        if ($month) {
+            $query->whereMonth('incident_date', $month);
+        }
+
+        // 2. Crime Type Distribution (by category)
+        $crimeTypes = (clone $query)
+            ->select('crime_category_id', DB::raw('COUNT(*) as count'))
+            ->with('category')
+            ->groupBy('crime_category_id')
+            ->orderByDesc('count')
+            ->limit(10)
+            ->get();
+
+        // 3. Weekly Distribution (by day of week)
+        $weeklyDist = (clone $query)
+            ->select(DB::raw('DAYOFWEEK(incident_date) as day_num'), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw('DAYOFWEEK(incident_date)'))
+            ->orderBy('day_num')
+            ->get();
+
+        // 4. Peak Crime Hours (by hour from incident_time)
+        $peakHours = (clone $query)
+            ->select(DB::raw('HOUR(incident_time) as hour'), DB::raw('COUNT(*) as count'))
+            ->whereNotNull('incident_time')
+            ->groupBy(DB::raw('HOUR(incident_time)'))
+            ->orderBy('hour')
+            ->get();
+
+        // Map day numbers to names
+        $dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        $weeklyFormatted = collect(range(1, 7))->map(fn($d) => [
+            'day'   => $dayNames[$d - 1],
+            'count' => $weeklyDist->firstWhere('day_num', $d)?->count ?? 0,
+        ]);
+
+        // Map all 24 hours
+        $hoursFormatted = collect(range(0, 23))->map(fn($h) => [
+            'hour'  => str_pad($h, 2, '0', STR_PAD_LEFT) . ':00',
+            'count' => $peakHours->firstWhere('hour', $h)?->count ?? 0,
+        ]);
+
+        return response()->json([
+            'monthlyTrend' => [
+                'labels' => $monthlyTrend->pluck('month')->values(),
+                'data'   => $monthlyTrend->pluck('count')->values(),
+            ],
+            'crimeTypes' => [
+                'labels' => $crimeTypes->map(fn($i) => $i->category->category_name ?? 'Unknown')->values(),
+                'data'   => $crimeTypes->pluck('count')->values(),
+            ],
+            'weeklyDist' => [
+                'labels' => $weeklyFormatted->pluck('day')->values(),
+                'data'   => $weeklyFormatted->pluck('count')->values(),
+            ],
+            'peakHours' => [
+                'labels' => $hoursFormatted->pluck('hour')->values(),
+                'data'   => $hoursFormatted->pluck('count')->values(),
+            ],
         ]);
     }
 }
