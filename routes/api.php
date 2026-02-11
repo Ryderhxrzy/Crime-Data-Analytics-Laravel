@@ -21,6 +21,7 @@ Route::get('/crime-heatmap', [LandingController::class, 'getCrimeData'])
     ->middleware('throttle:60,1')
     ->name('api.crime-heatmap');
 
+
 // Public API for submitting anonymous tips (rate limited)
 Route::post('/submit-tip', [LandingController::class, 'submitTipApi'])
     ->middleware('throttle:5,1')
@@ -28,7 +29,7 @@ Route::post('/submit-tip', [LandingController::class, 'submitTipApi'])
 
 // Crime categories and barangays endpoints (for filters)
 Route::get('/crime-categories', function() {
-    return \App\Models\CrimeCategory::select('id', 'category_name')->get();
+    return \App\Models\CrimeCategory::select('id', 'category_name', 'color_code', 'icon')->get();
 })->middleware('throttle:60,1');
 
 Route::get('/barangays', function() {
