@@ -40,4 +40,6 @@ Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('l
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('auth')->name('dashboard');
+Route::get('/dashboard/charts', [DashboardController::class, 'getChartData'])->middleware('auth')->name('dashboard.charts');
+Route::get('/mapping', [LandingController::class, 'mapping'])->middleware('auth')->name('mapping');
 Route::get('/crimes', [CrimeIncidentController::class, 'index'])->middleware('auth')->name('crimes.index');
