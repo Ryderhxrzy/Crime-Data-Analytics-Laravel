@@ -132,8 +132,10 @@
         const RESEND_COOLDOWN = 30; // 30 seconds
         const OTP_INPUTS = document.querySelectorAll('.otp-input');
         const OTP_CODE_INPUT = document.getElementById('otp_code');
+        const SUBMIT_BTN = document.getElementById('submitBtn');
         let timerInterval = null;
         let timerStartTime = null;
+        let isSubmitting = false;
 
         // Handle individual OTP digit inputs
         OTP_INPUTS.forEach((input, index) => {
@@ -155,6 +157,9 @@
                 if (this.value && index < OTP_INPUTS.length - 1) {
                     OTP_INPUTS[index + 1].focus();
                 }
+
+                // Check if all fields are filled and auto-submit
+                checkIfAllFilled();
             });
 
             input.addEventListener('keydown', function(e) {
@@ -194,6 +199,26 @@
         function updateOtpCode() {
             const otpCode = Array.from(OTP_INPUTS).map(input => input.value).join('');
             OTP_CODE_INPUT.value = otpCode;
+        }
+
+        function checkIfAllFilled() {
+            const otpCode = OTP_CODE_INPUT.value;
+            if (otpCode.length === 6 && !isSubmitting) {
+                // All fields filled, auto-submit
+                submitOtpForm();
+            }
+        }
+
+        function submitOtpForm() {
+            // Prevent double submission
+            if (isSubmitting) return;
+
+            isSubmitting = true;
+            SUBMIT_BTN.disabled = true;
+            SUBMIT_BTN.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Verifying...';
+
+            // Auto-submit the form
+            document.getElementById('otpForm').submit();
         }
 
         // Initialize timer
@@ -261,9 +286,14 @@
                         input.classList.remove('filled');
                     });
                     OTP_CODE_INPUT.value = '';
-                    document.getElementById('submitBtn').disabled = false;
+                    isSubmitting = false;
+                    SUBMIT_BTN.disabled = false;
+                    SUBMIT_BTN.innerHTML = 'Verify Code';
                     document.getElementById('expiredMessage').classList.add('hidden');
                     OTP_INPUTS[0].focus();
+
+                    // Show resend cooldown timer (30 seconds)
+                    showResendCooldown(RESEND_COOLDOWN);
 
                     // Reinitialize timer with new start time
                     updateTimer(OTP_TIMEOUT);
@@ -279,7 +309,7 @@
                         }
                     }, 1000);
 
-                    toastr.success('New OTP code sent successfully!');
+                    toastr.success('New OTP code sent successfully! Timer reset to 5 minutes.');
 
                 } else {
                     btn.disabled = false;
@@ -319,7 +349,7 @@
             }, 1000);
         }
 
-        // Disable form submission if OTP is expired
+        // Disable form submission if OTP is expired or prevent double submission
         document.getElementById('otpForm').addEventListener('submit', function(e) {
             const otpCode = OTP_CODE_INPUT.value;
             if (otpCode.length !== 6) {
@@ -328,11 +358,21 @@
             } else if (document.getElementById('expiredMessage').classList.contains('hidden') === false) {
                 e.preventDefault();
                 toastr.error('OTP has expired. Please request a new one.');
+            } else if (isSubmitting) {
+                e.preventDefault();
+            } else {
+                // Mark as submitting and block button
+                isSubmitting = true;
+                SUBMIT_BTN.disabled = true;
+                SUBMIT_BTN.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Verifying...';
             }
         });
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize resend button as disabled (can only resend after timer expires)
+            document.getElementById('resendBtn').disabled = true;
+
             // Focus first input
             OTP_INPUTS[0].focus();
             initializeTimer();
