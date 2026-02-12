@@ -222,15 +222,28 @@
             <!-- Crime Hotspot Bubble Map -->
             <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <i class="fas fa-map-marked-alt" style="color: #274d4c;"></i>
-                        Crime Hotspot Bubble Map
+                    <h3 class="text-lg font-bold text-gray-900">
+                        <i class="fas fa-map-marked-alt mr-2" style="color: #274d4c;"></i>Crime Hotspot Bubble Map
                     </h3>
-                    <button onclick="openDetailedAnalysis('hotspot')" class="px-3 py-1 bg-[#274d4c] text-white text-sm rounded-lg hover:bg-[#1a3534] transition-colors flex items-center gap-2">
-                        <i class="fas fa-expand-alt"></i>
-                        Open Detailed Analysis
+                    <button onclick="openLocationAnalysisModal('hotspot')" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Open Detailed Analysis">
+                        <i class="fas fa-expand text-lg"></i>
                     </button>
                 </div>
+                
+                <!-- Radius Analysis Controls -->
+                <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div class="flex items-center gap-4">
+                        <label class="text-sm font-medium text-gray-700">Radius Analysis:</label>
+                        <input type="range" id="radiusSlider" min="5" max="50" value="15" class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="radiusValue" class="text-sm font-medium text-gray-700 min-w-[3rem]">15</span>
+                        <button onclick="resetRadius()" class="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors">Reset</button>
+                    </div>
+                    <div class="flex items-center gap-2 mt-2">
+                        <input type="checkbox" id="autoRadius" class="rounded border-gray-300 text-[#274d4c] focus:ring-[#274d4c]">
+                        <label for="autoRadius" class="text-sm text-gray-700">Auto-adjust radius based on incident count</label>
+                    </div>
+                </div>
+                
                 <div style="position: relative; height: 400px;">
                     <canvas id="locationHotspotChart"></canvas>
                 </div>
@@ -239,13 +252,11 @@
             <!-- Top Risk Areas List -->
             <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <i class="fas fa-exclamation-triangle" style="color: #274d4c;"></i>
-                        Top Risk Areas
+                    <h3 class="text-lg font-bold text-gray-900">
+                        <i class="fas fa-exclamation-triangle mr-2" style="color: #274d4c;"></i>Top Risk Areas
                     </h3>
-                    <button onclick="openDetailedAnalysis('risk')" class="px-3 py-1 bg-[#274d4c] text-white text-sm rounded-lg hover:bg-[#1a3534] transition-colors flex items-center gap-2">
-                        <i class="fas fa-expand-alt"></i>
-                        Open Detailed Analysis
+                    <button onclick="openLocationAnalysisModal('risk')" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Open Detailed Analysis">
+                        <i class="fas fa-expand text-lg"></i>
                     </button>
                 </div>
                 <div style="position: relative; height: 400px;">
@@ -256,13 +267,11 @@
             <!-- Location Comparison Bar Chart -->
             <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <i class="fas fa-chart-bar" style="color: #274d4c;"></i>
-                        Location Comparison
+                    <h3 class="text-lg font-bold text-gray-900">
+                        <i class="fas fa-chart-bar mr-2" style="color: #274d4c;"></i>Location Comparison
                     </h3>
-                    <button onclick="openDetailedAnalysis('comparison')" class="px-3 py-1 bg-[#274d4c] text-white text-sm rounded-lg hover:bg-[#1a3534] transition-colors flex items-center gap-2">
-                        <i class="fas fa-expand-alt"></i>
-                        Open Detailed Analysis
+                    <button onclick="openLocationAnalysisModal('comparison')" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Open Detailed Analysis">
+                        <i class="fas fa-expand text-lg"></i>
                     </button>
                 </div>
                 <div style="position: relative; height: 400px;">
@@ -273,13 +282,11 @@
             <!-- Crime Type by Location Doughnut Chart -->
             <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <i class="fas fa-chart-pie" style="color: #274d4c;"></i>
-                        Crime Type by Location
+                    <h3 class="text-lg font-bold text-gray-900">
+                        <i class="fas fa-chart-pie mr-2" style="color: #274d4c;"></i>Crime Type by Location
                     </h3>
-                    <button onclick="openDetailedAnalysis('crimeType')" class="px-3 py-1 bg-[#274d4c] text-white text-sm rounded-lg hover:bg-[#1a3534] transition-colors flex items-center gap-2">
-                        <i class="fas fa-expand-alt"></i>
-                        Open Detailed Analysis
+                    <button onclick="openLocationAnalysisModal('crimeType')" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Open Detailed Analysis">
+                        <i class="fas fa-expand text-lg"></i>
                     </button>
                 </div>
                 <div style="position: relative; height: 400px;">
@@ -291,13 +298,11 @@
         <!-- Detailed Insights -->
         <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <i class="fas fa-lightbulb" style="color: #274d4c;"></i>
-                    Location-Based Insights
+                <h3 class="text-lg font-bold text-gray-900">
+                    <i class="fas fa-lightbulb mr-2" style="color: #274d4c;"></i>Location-Based Insights
                 </h3>
-                <button onclick="openDetailedAnalysis('insights')" class="px-3 py-1 bg-[#274d4c] text-white text-sm rounded-lg hover:bg-[#1a3534] transition-colors flex items-center gap-2">
-                    <i class="fas fa-expand-alt"></i>
-                    Open Detailed Analysis
+                <button onclick="openLocationAnalysisModal('insights')" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Open Detailed Analysis">
+                    <i class="fas fa-expand text-lg"></i>
                 </button>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -337,7 +342,7 @@
             </div>
 
             <!-- Modal Content -->
-            <div class="flex-1 overflow-y-auto bg-gray-50 p-6">
+            <div id="modalContent" class="flex-1 overflow-y-auto bg-gray-50 p-6">
                 <!-- Statistics Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     <div class="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -462,8 +467,33 @@
         // Store chart instances globally
         const locationCharts = {};
 
+        // Radius and Tooltip Management
+        let currentRadius = 15;
+        let autoRadiusEnabled = false;
+        let activeTooltip = null;
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize charts
+            // Initialize radius controls
+            const radiusSlider = document.getElementById('radiusSlider');
+            const radiusValue = document.getElementById('radiusValue');
+            const autoRadiusCheckbox = document.getElementById('autoRadius');
+            
+            if (radiusSlider && radiusValue) {
+                radiusSlider.addEventListener('input', function() {
+                    currentRadius = parseInt(this.value);
+                    radiusValue.textContent = currentRadius;
+                    updateBubbleRadius();
+                });
+            }
+            
+            if (autoRadiusCheckbox) {
+                autoRadiusCheckbox.addEventListener('change', function() {
+                    autoRadiusEnabled = this.checked;
+                    updateBubbleRadius();
+                });
+            }
+            
+            // Initialize page
             initializeAllCharts();
             
             // Setup filter functionality
@@ -472,6 +502,65 @@
             // Load initial data
             loadLocationData();
         });
+
+        function resetRadius() {
+            currentRadius = 15;
+            document.getElementById('radiusSlider').value = 15;
+            document.getElementById('radiusValue').textContent = 15;
+            document.getElementById('autoRadius').checked = false;
+            autoRadiusEnabled = false;
+            updateBubbleRadius();
+        }
+
+        function updateBubbleRadius() {
+            if (locationCharts.hotspot) {
+                const chart = locationCharts.hotspot;
+                const data = chart.data.datasets[0].data;
+                
+                chart.data.datasets[0].data = data.map((point, index) => ({
+                    x: point.x,
+                    y: point.y,
+                    r: autoRadiusEnabled ? Math.max(5, point.v / 2) : currentRadius,
+                    label: point.label || `Location ${index + 1}`,
+                    v: point.v || point.r
+                }));
+                
+                chart.update();
+            }
+        }
+
+        function showClickTooltip(event, dataPoint) {
+            // Remove existing tooltip
+            if (activeTooltip) {
+                activeTooltip.remove();
+            }
+            
+            // Create custom tooltip
+            const tooltip = document.createElement('div');
+            tooltip.className = 'absolute bg-gray-900 text-white p-3 rounded-lg shadow-lg z-50 text-sm';
+            tooltip.style.left = event.pageX + 10 + 'px';
+            tooltip.style.top = event.pageY - 30 + 'px';
+            tooltip.innerHTML = `
+                <div class="font-semibold">${dataPoint.label}</div>
+                <div class="text-xs mt-1">Incidents: ${dataPoint.v || dataPoint.r}</div>
+                <div class="text-xs">Radius: ${dataPoint.r}</div>
+            `;
+            
+            document.body.appendChild(tooltip);
+            activeTooltip = tooltip;
+            
+            // Remove tooltip when clicking elsewhere
+            setTimeout(() => {
+                document.addEventListener('click', hideTooltip, { once: true });
+            }, 100);
+        }
+
+        function hideTooltip() {
+            if (activeTooltip) {
+                activeTooltip.remove();
+                activeTooltip = null;
+            }
+        }
 
         function initializeAllCharts() {
             // Main page charts
@@ -507,14 +596,41 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'point'
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const element = elements[0];
+                            const dataPoint = element.element.$context.raw;
+                            showClickTooltip(event.native, dataPoint);
+                        }
+                    },
+                    onHover: (event, elements) => {
+                        ctx.canvas.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+                    },
                     plugins: {
                         legend: { display: true, position: 'top' },
                         tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const raw = context.raw;
-                                    return `${raw.label}: ${raw.r} incidents`;
-                                }
+                            enabled: false, // Disable default hover tooltip
+                            external: function(context) {
+                                // Tooltip will be handled by click
+                            }
+                        },
+                        zoom: {
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'xy',
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
                             }
                         }
                     },
@@ -529,13 +645,18 @@
                             max: 100
                         },
                         y: {
+                            position: 'bottom', // Move scale to bottom
                             title: {
                                 display: true,
-                                text: 'Risk Level'
+                                text: 'Crime Intensity Scale'
                             },
                             beginAtZero: true,
                             min: 0,
-                            max: 100
+                            max: 100,
+                            grid: {
+                                color: '#e5e7eb',
+                                drawBorder: false
+                            }
                         }
                     }
                 }
@@ -854,70 +975,185 @@
             document.body.style.overflow = 'auto';
         }
 
-        // Open Detailed Analysis for specific section
-        function openDetailedAnalysis(section) {
-            // Update modal title based on section
-            const modalTitle = document.querySelector('#locationAnalysisModal h2');
-            const modalSubtitle = document.querySelector('#locationAnalysisModal p');
+        // Open Location Analysis Modal with specific content
+        function openLocationAnalysisModal(section) {
+            const modal = document.getElementById('locationAnalysisModal');
+            const modalContent = document.getElementById('modalContent');
             
-            const sectionTitles = {
-                'hotspot': 'Crime Hotspot Analysis',
-                'risk': 'Risk Areas Analysis',
-                'comparison': 'Location Comparison Analysis',
-                'crimeType': 'Crime Type Distribution Analysis',
-                'insights': 'Strategic Insights Analysis'
-            };
+            // Clear existing content
+            modalContent.innerHTML = '';
             
-            const sectionSubtitles = {
-                'hotspot': 'Detailed analysis of crime hotspots and geographical patterns',
-                'risk': 'Comprehensive risk assessment across different locations',
-                'comparison': 'Comparative analysis of crime incidents across locations',
-                'crimeType': 'Distribution and patterns of crime types by location',
-                'insights': 'Strategic recommendations and actionable insights'
-            };
-            
-            modalTitle.innerHTML = `<i class="fas fa-map-marked-alt mr-3"></i>${sectionTitles[section] || 'Location Analysis'}`;
-            modalSubtitle.textContent = sectionSubtitles[section] || 'Detailed location-based crime analysis';
+            // Load specific content based on section
+            switch(section) {
+                case 'hotspot':
+                    modalContent.innerHTML = `
+                        <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4">
+                                <i class="fas fa-map-marked-alt mr-2" style="color: #274d4c;"></i>Expanded Hotspot Analysis
+                            </h3>
+                            <div style="position: relative; height: 500px;">
+                                <canvas id="modalHotspotChart"></canvas>
+                            </div>
+                            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="p-4 bg-red-50 border-red-200 rounded-lg">
+                                    <h4 class="font-semibold text-red-900 mb-2">Critical Hotspots</h4>
+                                    <ul class="text-sm text-gray-700 space-y-2">
+                                        <li>• Downtown area: 45% increase in incidents</li>
+                                        <li>• Commercial District: Highest theft concentration</li>
+                                        <li>• Industrial Zone: Night-time vulnerability</li>
+                                    </ul>
+                                </div>
+                                <div class="p-4 bg-orange-50 border-orange-200 rounded-lg">
+                                    <h4 class="font-semibold text-orange-900 mb-2">Patrol Recommendations</h4>
+                                    <ul class="text-sm text-gray-700 space-y-2">
+                                        <li>• Increase foot patrols in downtown evenings</li>
+                                        <li>• Set up mobile surveillance units</li>
+                                        <li>• Focus on weekend coverage</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    setTimeout(() => initializeModalHotspotChart(), 100);
+                    break;
+                    
+                case 'risk':
+                    modalContent.innerHTML = `
+                        <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4">
+                                <i class="fas fa-exclamation-triangle mr-2" style="color: #274d4c;"></i>Comprehensive Risk Assessment
+                            </h3>
+                            <div style="position: relative; height: 500px;">
+                                <canvas id="modalTopRiskAreasChart"></canvas>
+                            </div>
+                            <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="p-4 bg-red-50 border-red-200 rounded-lg">
+                                    <h4 class="font-semibold text-red-900 mb-2">High Risk Areas</h4>
+                                    <p class="text-sm text-gray-700">5 locations require immediate attention with incident rates above threshold</p>
+                                </div>
+                                <div class="p-4 bg-yellow-50 border-yellow-200 rounded-lg">
+                                    <h4 class="font-semibold text-yellow-900 mb-2">Medium Risk Areas</h4>
+                                    <p class="text-sm text-gray-700">8 locations showing concerning trends that need monitoring</p>
+                                </div>
+                                <div class="p-4 bg-green-50 border-green-200 rounded-lg">
+                                    <h4 class="font-semibold text-green-900 mb-2">Low Risk Areas</h4>
+                                    <p class="text-sm text-gray-700">12 locations maintaining acceptable safety levels</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    setTimeout(() => initializeModalTopRiskAreasChart(), 100);
+                    break;
+                    
+                case 'comparison':
+                    modalContent.innerHTML = `
+                        <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4">
+                                <i class="fas fa-chart-bar mr-2" style="color: #274d4c;"></i>Detailed Location Comparison
+                            </h3>
+                            <div style="position: relative; height: 500px;">
+                                <canvas id="modalLocationComparisonChart"></canvas>
+                            </div>
+                            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="p-4 bg-blue-50 border-blue-200 rounded-lg">
+                                    <h4 class="font-semibold text-blue-900 mb-2">Top Performers</h4>
+                                    <ul class="text-sm text-gray-700 space-y-2">
+                                        <li>• Suburbs: 32% reduction in incidents</li>
+                                        <li>• Riverside: Improved response times</li>
+                                        <li>• Residential Areas: Community policing success</li>
+                                    </ul>
+                                </div>
+                                <div class="p-4 bg-purple-50 border-purple-200 rounded-lg">
+                                    <h4 class="font-semibold text-purple-900 mb-2">Areas Needing Attention</h4>
+                                    <ul class="text-sm text-gray-700 space-y-2">
+                                        <li>• Downtown: Resource allocation needed</li>
+                                        <li>• Commercial District: Security upgrades required</li>
+                                        <li>• Industrial Zone: Lighting improvements</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    setTimeout(() => initializeModalLocationComparisonChart(), 100);
+                    break;
+                    
+                case 'crimeType':
+                    modalContent.innerHTML = `
+                        <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4">
+                                <i class="fas fa-chart-pie mr-2" style="color: #274d4c;"></i>Crime Type Distribution Analysis
+                            </h3>
+                            <div style="position: relative; height: 500px;">
+                                <canvas id="modalCrimeTypeByLocationChart"></canvas>
+                            </div>
+                            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="p-4 bg-indigo-50 border-indigo-200 rounded-lg">
+                                    <h4 class="font-semibold text-indigo-900 mb-2">Location-Specific Patterns</h4>
+                                    <ul class="text-sm text-gray-700 space-y-2">
+                                        <li>• Downtown: Theft and assault dominant</li>
+                                        <li>• Commercial: Fraud and shoplifting prevalent</li>
+                                        <li>• Residential: Burglary and vandalism concerns</li>
+                                    </ul>
+                                </div>
+                                <div class="p-4 bg-teal-50 border-teal-200 rounded-lg">
+                                    <h4 class="font-semibold text-teal-900 mb-2">Prevention Strategies</h4>
+                                    <ul class="text-sm text-gray-700 space-y-2">
+                                        <li>• Targeted education programs by area</li>
+                                        <li>• Environmental design improvements</li>
+                                        <li>• Business-community partnerships</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    setTimeout(() => initializeModalCrimeTypeByLocationChart(), 100);
+                    break;
+                    
+                case 'insights':
+                    modalContent.innerHTML = `
+                        <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4">
+                                <i class="fas fa-lightbulb mr-2" style="color: #274d4c;"></i>Strategic Insights & Recommendations
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="space-y-4">
+                                    <div class="p-4 bg-blue-50 border-blue-200 rounded-lg">
+                                        <h4 class="font-semibold text-blue-900 mb-2">Resource Allocation</h4>
+                                        <p class="text-sm text-gray-700 mb-3">Reallocate 40% more resources to high-risk areas during peak hours (6PM-2AM). Focus on downtown and commercial districts with increased patrol frequency.</p>
+                                        <div class="text-xs text-blue-700 font-medium">Expected Impact: 25% reduction in incidents</div>
+                                    </div>
+                                    <div class="p-4 bg-green-50 border-green-200 rounded-lg">
+                                        <h4 class="font-semibold text-green-900 mb-2">Community Engagement</h4>
+                                        <p class="text-sm text-gray-700 mb-3">Establish neighborhood watch programs in medium-risk areas. Launch community awareness campaigns focusing on theft prevention and reporting procedures.</p>
+                                        <div class="text-xs text-green-700 font-medium">Expected Impact: Increased reporting rates</div>
+                                    </div>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="p-4 bg-orange-50 border-orange-200 rounded-lg">
+                                        <h4 class="font-semibold text-orange-900 mb-2">Technology Integration</h4>
+                                        <p class="text-sm text-gray-700 mb-3">Deploy smart surveillance systems in identified hotspots. Implement predictive policing analytics to forecast high-risk periods and locations.</p>
+                                        <div class="text-xs text-orange-700 font-medium">Expected Impact: Proactive crime prevention</div>
+                                    </div>
+                                    <div class="p-4 bg-purple-50 border-purple-200 rounded-lg">
+                                        <h4 class="font-semibold text-purple-900 mb-2">Policy Recommendations</h4>
+                                        <p class="text-sm text-gray-700 mb-3">Review zoning regulations for commercial areas. Implement improved street lighting programs. Establish business security standards.</p>
+                                        <div class="text-xs text-purple-700 font-medium">Expected Impact: Long-term crime reduction</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+            }
             
             // Show modal
-            openLocationAnalysisModal();
-            
-            // Focus on specific section/tab based on analysis type
-            setTimeout(() => {
-                highlightAnalysisSection(section);
-            }, 200);
-        }
-        
-        // Highlight specific analysis section in modal
-        function highlightAnalysisSection(section) {
-            // Remove any existing highlights
-            document.querySelectorAll('.analysis-section').forEach(el => {
-                el.classList.remove('ring-2', 'ring-[#274d4c]', 'bg-blue-50');
-            });
-            
-            // Add highlight to the relevant section
-            const sectionMap = {
-                'hotspot': 'modal-hotspot-section',
-                'risk': 'modal-risk-section', 
-                'comparison': 'modal-comparison-section',
-                'crimeType': 'modal-crimetype-section',
-                'insights': 'modal-insights-section'
-            };
-            
-            const targetSection = document.getElementById(sectionMap[section]);
-            if (targetSection) {
-                targetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                targetSection.classList.add('ring-2', 'ring-[#274d4c]', 'bg-blue-50');
-                
-                // Remove highlight after 3 seconds
-                setTimeout(() => {
-                    targetSection.classList.remove('ring-2', 'ring-[#274d4c]', 'bg-blue-50');
-                }, 3000);
-            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
         }
 
-        function initializeModalCharts() {
-            // Initialize Modal Hotspot Chart
+        // Individual Modal Chart Initialization Functions
+        function initializeModalHotspotChart() {
             const modalHotspotCtx = document.getElementById('modalHotspotChart')?.getContext('2d');
             if (modalHotspotCtx) {
                 new Chart(modalHotspotCtx, {
@@ -926,11 +1162,11 @@
                         datasets: [{
                             label: 'Crime Hotspots',
                             data: [
-                                {x: 25, y: 35, r: 18, label: 'Downtown'},
-                                {x: 45, y: 25, r: 15, label: 'Riverside'},
-                                {x: 65, y: 45, r: 22, label: 'Industrial Zone'},
-                                {x: 35, y: 65, r: 12, label: 'Suburbs'},
-                                {x: 85, y: 30, r: 14, label: 'Commercial District'}
+                                {x: 25, y: 35, r: 22, label: 'Downtown', v: 22},
+                                {x: 45, y: 25, r: 18, label: 'Riverside', v: 18},
+                                {x: 65, y: 45, r: 25, label: 'Industrial Zone', v: 25},
+                                {x: 35, y: 65, r: 15, label: 'Suburbs', v: 15},
+                                {x: 85, y: 30, r: 16, label: 'Commercial District', v: 16}
                             ],
                             backgroundColor: 'rgba(39, 77, 76, 0.6)',
                             borderColor: '#274d4c',
@@ -939,26 +1175,72 @@
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false
+                        maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'point'
+                        },
+                        onClick: (event, elements) => {
+                            if (elements.length > 0) {
+                                const element = elements[0];
+                                const dataPoint = element.element.$context.raw;
+                                showClickTooltip(event.native, dataPoint);
+                            }
+                        },
+                        plugins: {
+                            legend: { display: true, position: 'top' },
+                            tooltip: {
+                                enabled: false, // Disable default hover tooltip
+                                external: function(context) {
+                                    // Tooltip will be handled by click
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Location Area'
+                                },
+                                grid: { display: false },
+                                min: 0,
+                                max: 100
+                            },
+                            y: {
+                                position: 'bottom', // Move scale to bottom
+                                title: {
+                                    display: true,
+                                    text: 'Crime Intensity Scale'
+                                },
+                                beginAtZero: true,
+                                min: 0,
+                                max: 100,
+                                grid: {
+                                    color: '#e5e7eb',
+                                    drawBorder: false
+                                }
+                            }
+                        }
                     }
                 });
             }
+        }
 
-            // Initialize Modal Top Risk Areas Chart
+        function initializeModalTopRiskAreasChart() {
             const modalTopRiskCtx = document.getElementById('modalTopRiskAreasChart')?.getContext('2d');
             if (modalTopRiskCtx) {
                 new Chart(modalTopRiskCtx, {
                     type: 'bar',
                     data: {
-                        labels: ['Downtown', 'Industrial Zone', 'Riverside', 'Commercial District', 'Suburbs'],
+                        labels: ['Downtown', 'Industrial Zone', 'Commercial District', 'Riverside', 'Suburbs'],
                         datasets: [{
                             label: 'Risk Score',
-                            data: [8.5, 7.2, 6.8, 9.1, 6.5],
+                            data: [9.2, 8.5, 8.8, 7.1, 5.9],
                             backgroundColor: [
                                 'rgba(239, 68, 68, 0.8)',
                                 'rgba(245, 158, 11, 0.8)',
-                                'rgba(245, 158, 11, 0.8)',
                                 'rgba(239, 68, 68, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
                                 'rgba(34, 197, 94, 0.8)'
                             ]
                         }]
@@ -966,12 +1248,19 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        indexAxis: 'y'
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                max: 10
+                            }
+                        }
                     }
                 });
             }
+        }
 
-            // Initialize Modal Location Comparison Chart
+        function initializeModalLocationComparisonChart() {
             const modalComparisonCtx = document.getElementById('modalLocationComparisonChart')?.getContext('2d');
             if (modalComparisonCtx) {
                 new Chart(modalComparisonCtx, {
@@ -981,33 +1270,39 @@
                         datasets: [
                             {
                                 label: 'Current Period',
-                                data: [120, 95, 78, 65, 45],
+                                data: [145, 110, 92, 78, 52],
                                 backgroundColor: '#274d4c'
                             },
                             {
                                 label: 'Previous Period',
-                                data: [105, 88, 82, 70, 55],
+                                data: [128, 125, 88, 85, 68],
                                 backgroundColor: '#94a3b8'
                             }
                         ]
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
                     }
                 });
             }
+        }
 
-            // Initialize Modal Crime Type Chart
+        function initializeModalCrimeTypeByLocationChart() {
             const modalCrimeTypeCtx = document.getElementById('modalCrimeTypeByLocationChart')?.getContext('2d');
             if (modalCrimeTypeCtx) {
                 new Chart(modalCrimeTypeCtx, {
                     type: 'doughnut',
                     data: {
-                        labels: ['Theft', 'Assault', 'Vandalism', 'Robbery', 'Others'],
+                        labels: ['Theft', 'Assault', 'Burglary', 'Vandalism', 'Fraud', 'Others'],
                         datasets: [{
-                            data: [132, 98, 45, 67, 28],
-                            backgroundColor: ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#6b7280']
+                            data: [165, 118, 87, 56, 43, 31],
+                            backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#6b7280']
                         }]
                     },
                     options: {

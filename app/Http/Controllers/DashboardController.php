@@ -578,4 +578,37 @@ class DashboardController extends Controller
 
         return $riskLevels;
     }
+
+    /**
+     * Show crime hotspot analysis page
+     */
+    public function crimeHotspot()
+    {
+        $barangays = Barangay::orderBy('barangay_name')->get();
+        $crimeCategories = CrimeCategory::orderBy('category_name')->get();
+        
+        return view('crime-hotspot', compact('barangays', 'crimeCategories'));
+    }
+
+    /**
+     * Show risk forecasting page
+     */
+    public function riskForecasting()
+    {
+        $barangays = Barangay::orderBy('barangay_name')->get();
+        $crimeCategories = CrimeCategory::orderBy('category_name')->get();
+        
+        return view('risk-forecasting', compact('barangays', 'crimeCategories'));
+    }
+
+    /**
+     * Show pattern detection page
+     */
+    public function patternDetection()
+    {
+        $barangays = Barangay::orderBy('barangay_name')->get();
+        $crimeCategories = CrimeCategory::orderBy('category_name')->get();
+        
+        return view('pattern-detection', compact('barangays', 'crimeCategories'));
+    }
 }

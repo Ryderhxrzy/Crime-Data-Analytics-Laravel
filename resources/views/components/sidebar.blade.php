@@ -98,27 +98,27 @@
 
                 <!-- Predictive Analytics (Collapsible) -->
                 <div>
-                    <button class="predictive-toggle w-full flex items-center justify-between px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    <button class="predictive-toggle w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? 'bg-alertara-700 text-alertara-100 font-semibold mb-2' : 'text-gray-700 hover:bg-gray-100' }}"
                             type="button">
                         <span class="flex items-center">
                             <i class="fas fa-brain w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Predictive Analytics</span>
                         </span>
-                        <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon text-gray-400"></i>
+                        <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? 'text-alertara-100' : 'text-gray-400' }}"></i>
                     </button>
-                    <div class="predictive-content hidden space-y-0 ml-3 mt-0">
-                        <a href="#predictive"
-                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                    <div class="predictive-content {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? '' : 'hidden' }} space-y-0 ml-3 mt-0">
+                        <a href="{{ route('crime-hotspot') }}"
+                           class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-hotspot') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-location-dot w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Crime Hotspot</span>
                         </a>
-                        <a href="#predictive"
-                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                        <a href="{{ route('risk-forecasting') }}"
+                           class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('risk-forecasting') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-triangle-exclamation w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Risk Forecasting</span>
                         </a>
-                        <a href="#predictive"
-                           class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                        <a href="{{ route('pattern-detection') }}"
+                           class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('pattern-detection') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-magnifying-glass w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Pattern Detection</span>
                         </a>
@@ -251,6 +251,14 @@
         // If Trend Analytics submenu is visible (active) for time-based, location, or crime type trends, rotate chevron
         if (trendContent && !trendContent.classList.contains('hidden') && trendChevron) {
             trendChevron.style.transform = 'rotate(90deg)';
+        }
+
+        const predictiveContent = document.querySelector('.predictive-content');
+        const predictiveChevron = document.querySelector('.predictive-toggle .chevron-icon');
+
+        // If Predictive Analytics submenu is visible (active) for crime hotspot, risk forecasting, or pattern detection, rotate chevron
+        if (predictiveContent && !predictiveContent.classList.contains('hidden') && predictiveChevron) {
+            predictiveChevron.style.transform = 'rotate(90deg)';
         }
     });
 </script>
