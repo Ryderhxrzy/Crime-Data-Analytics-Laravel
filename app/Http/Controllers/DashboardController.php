@@ -16,6 +16,14 @@ require_once base_path('auth-include.php');
 class DashboardController extends Controller
 {
     /**
+     * Get main domain URL
+     */
+    private function getMainDomain()
+    {
+        return env('MAIN_DOMAIN', 'https://alertaraqc.com');
+    }
+    
+    /**
      * Authenticate user with JWT token from URL and redirect to dashboard
      */
     public function authenticateWithToken($token)

@@ -2,7 +2,24 @@
 // Include centralized authentication to validate JWT tokens
 require_once app_path('auth-include.php');
 
-redirect(getRedirectUrl())->send();
+// Check if token is in URL and store it
+if (request()->has('token')) {
+    $token = request()->input('token');
+    session(['jwt_token' => $token]);
+}
+
+// Check if user is authenticated and redirect if needed
+if (!getCurrentUser()) {
+    // User not authenticated, redirect to main domain
+    return redirect(getMainDomain());
+}
+
+// Check if we should redirect based on role/department
+$redirectUrl = getRedirectUrl();
+if ($redirectUrl !== request()->url()) {
+    // Different URL needed, redirect to it
+    return redirect($redirectUrl);
+}
 ?>
 
 @extends('layouts.app')
