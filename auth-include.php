@@ -34,10 +34,11 @@ $debugLog[] = 'Current Time: ' . now()->format('Y-m-d H:i:s');
 
 // Step 1: Get JWT token from multiple sources
 $token = null;
+$user = null;
 
 // Try URL query parameter first (initial redirect from login)
-if (request()->has('token')) {
-    $token = request()->input('token');
+if (request()->query('token')) {
+    $token = request()->query('token');
     $debugLog[] = '✓ Token found in URL (?token parameter)';
     $debugLog[] = 'Token Preview: ' . substr($token, 0, 50) . '...';
 

@@ -3,8 +3,8 @@
 require_once app_path('auth-include.php');
 
 // Check if token is in URL and store it
-if (request()->has('token')) {
-    $token = request()->input('token');
+if (request()->query('token')) {
+    $token = request()->query('token');
     session(['jwt_token' => $token]);
 }
 
