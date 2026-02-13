@@ -64,12 +64,17 @@ Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDe
 
 // DEBUG: Session & JWT token check (remove in production)
 Route::get('/debug/session', function () {
+    // Load auth-include for this route
+    require_once app_path('auth-include.php');
+
+    $currentUser = getCurrentUser();
+
     return response()->json([
         'session_id' => session()->getId(),
         'jwt_token_in_session' => session('jwt_token') ? 'YES ✓' : 'NO ✗',
         'token_preview' => session('jwt_token') ? substr(session('jwt_token'), 0, 50) . '...' : 'No token',
-        'auth_user' => getCurrentUser() ? 'YES ✓ - ' . (getCurrentUser()['email'] ?? 'No email') : 'NO ✗',
+        'auth_user' => $currentUser ? 'YES ✓ - ' . ($currentUser['email'] ?? 'No email') : 'NO ✗',
         'app_env' => app()->environment(),
-        'all_session_data' => session()->all(),
+        'session_data_keys' => array_keys(session()->all()),
     ]);
 });
