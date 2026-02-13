@@ -72,36 +72,34 @@ if (!$token) {
 $user = null;
 
 if ($token) {
-    $debugLog[] = '🔐 Validating JWT token using Laravel JWTAuth...';
+    $debugLog[] = '🔐 Validating JWT token...';
 
     try {
-        // Use tymon/jwt-auth to validate and authenticate user
-        $authUser = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
+        // Validate token signature and get payload (do NOT authenticate from local database)
+        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
 
-        if ($authUser) {
-            // Get payload for expiration time
-            $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+        // Extract ALL data from JWT payload (from centralized login system)
+        $user = [
+            'sub' => $payload->get('sub') ?? null,
+            'id' => $payload->get('sub') ?? $payload->get('id') ?? null,
+            'email' => $payload->get('email') ?? '',
+            'department' => $payload->get('department') ?? '',
+            'role' => $payload->get('role') ?? 'admin',
+            'iat' => $payload->get('iat') ?? time(),
+            'exp' => $payload->get('exp') ?? (time() + 3600)
+        ];
 
-            $user = [
-                'sub' => $authUser->id,
-                'id' => $authUser->id,
-                'email' => $authUser->email,
-                'department' => $authUser->department ?? '',
-                'role' => $authUser->role ?? 'admin',
-                'iat' => $payload->get('iat') ?? time(),
-                'exp' => $payload->get('exp') ?? (time() + 3600)
-            ];
-
+        // Verify payload has required fields
+        if (!$user['id'] || !$user['email']) {
+            $debugLog[] = '✗ JWT token missing required fields (id or email)';
+            $user = null;
+        } else {
             $debugLog[] = '✓ JWT token validated successfully!';
             $debugLog[] = 'User ID: ' . ($user['id'] ?? 'N/A');
             $debugLog[] = 'User Email: ' . ($user['email'] ?? 'N/A');
             $debugLog[] = 'Department: ' . ($user['department'] ?? 'N/A');
             $debugLog[] = 'Role: ' . ($user['role'] ?? 'N/A');
             $debugLog[] = 'Expires: ' . date('Y-m-d H:i:s', $user['exp'] ?? time());
-
-        } else {
-            $debugLog[] = '✗ JWT token validation FAILED!';
-            $debugLog[] = 'Error: Token invalid or expired';
         }
 
     } catch (\Exception $e) {
