@@ -364,17 +364,21 @@ class AuthController extends Controller
         // Also clear local auth
         Auth::logout();
 
+        // Determine redirect URL based on environment
+        if (app()->environment() === 'production') {
+            // Production: redirect to centralized login system
+            $redirectUrl = 'https://login.alertaraqc.com';
+        } else {
+            // Local/Development: redirect to local login page
+            $redirectUrl = '/login';
+        }
+
+        // Invalidate session after preparing redirect
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        // Redirect based on environment
-        if (app()->environment() === 'production') {
-            // Production: redirect to centralized login system
-            return redirect('https://login.alertaraqc.com');
-        } else {
-            // Local/Development: redirect to local login page
-            return redirect('/login');
-        }
+        // Return redirect with session invalidation
+        return redirect($redirectUrl)->with('message', 'You have been logged out successfully.');
     }
 
     public function redirectToGoogle()

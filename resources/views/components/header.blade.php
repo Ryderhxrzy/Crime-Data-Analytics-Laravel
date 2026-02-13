@@ -69,12 +69,9 @@
                         <a href="#profile" class="block px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
                             <i class="fas fa-user-circle mr-2"></i>My Profile
                         </a>
-                        <form action="{{ route('logout') }}" method="POST" class="m-0">
-                            @csrf
-                            <button type="submit" class="w-full text-left px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
-                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                            </button>
-                        </form>
+                        <button onclick="performLogout()" class="w-full text-left px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </button>
                     </div>
                 </div>
             </div>
@@ -96,6 +93,47 @@
 
     updateDateTime();
     setInterval(updateDateTime, 1000); // Update every second
+
+    // Perform logout with CSRF token
+    function performLogout() {
+        // Get CSRF token from meta tag
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                      document.querySelector('input[name="_token"]')?.value;
+
+        if (!token) {
+            console.error('CSRF token not found');
+            // Fallback: redirect to login
+            window.location.href = '{{ app()->environment() === "production" ? "https://login.alertaraqc.com" : "/login" }}';
+            return;
+        }
+
+        // Send logout request with proper redirect handling
+        fetch('{{ route("logout") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token,
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin',
+            redirect: 'follow'  // Follow redirects
+        })
+        .then(response => {
+            // If response was redirected, the URL will be in response.url
+            if (response.ok || response.redirected) {
+                // Redirect to the final URL (after any server redirects)
+                window.location.href = response.url;
+            } else {
+                throw new Error('Logout failed');
+            }
+        })
+        .catch(error => {
+            console.error('Logout error:', error);
+            // Fallback: redirect to login based on environment
+            const redirectUrl = '{{ app()->environment() === "production" ? "https://login.alertaraqc.com" : "/login" }}';
+            window.location.href = redirectUrl;
+        });
+    }
 
     // Profile dropdown toggle
     document.addEventListener('DOMContentLoaded', function() {
