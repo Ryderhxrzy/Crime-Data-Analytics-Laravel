@@ -47,14 +47,17 @@ Route::get('/location-trends', [DashboardController::class, 'locationTrends'])->
 Route::get('/crime-type-trends', [DashboardController::class, 'crimeTypeTrends'])->name('crime-type-trends');
 Route::post('/dashboard/location-charts', [DashboardController::class, 'getLocationChartData'])->name('dashboard.location.charts');
 Route::get('/dashboard/location-trends', [DashboardController::class, 'locationTrends'])->name('dashboard.location.trends');
+// Authenticated mapping page (for users logging in via centralized system)
 Route::get('/mapping', [LandingController::class, 'mapping'])->name('mapping');
+// Note: Authentication is handled via JWT token in session, checked in auth-include.php
 Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');
 Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->name('risk-forecasting');
 Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
 Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
 
-// Special route for JWT token authentication
-Route::get('/dashboard/token/{token}', [DashboardController::class, 'authenticateWithToken'])->name('dashboard.token.auth');
+// Note: Token authentication now handled automatically in all authenticated views via query parameter
+// Example: /dashboard?token=xyz or /mapping?token=xyz
+// No special route needed - all views capture token via: @php session(['jwt_token' => request()->query('token')]) @endphp
 
 // Incident details endpoint (authenticated)
 Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->middleware('auth')->name('api.crime-incident');

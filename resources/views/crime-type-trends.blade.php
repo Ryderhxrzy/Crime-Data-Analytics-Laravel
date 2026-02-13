@@ -1,3 +1,10 @@
+@php
+// Handle JWT token from centralized login URL
+if (request()->query('token')) {
+    session(['jwt_token' => request()->query('token')]);
+}
+@endphp
+
 @extends('layouts.app')
 @section('title', 'Crime Type Trends Analysis')
 @section('content')

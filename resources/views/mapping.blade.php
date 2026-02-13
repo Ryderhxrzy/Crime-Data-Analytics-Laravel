@@ -1,3 +1,14 @@
+<?php
+// Include centralized authentication to validate JWT tokens
+require_once app_path('auth-include.php');
+
+// Check if token is in URL and store it
+if (request()->query('token')) {
+    $token = request()->query('token');
+    session(['jwt_token' => $token]);
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
