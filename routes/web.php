@@ -39,18 +39,19 @@ Route::post('/otp/resend', [AuthController::class, 'resendOtp'])->name('otp.rese
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('login.google');
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
 
-Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('auth')->name('dashboard');
-Route::get('/dashboard/charts', [DashboardController::class, 'getChartData'])->middleware('auth')->name('dashboard.charts');
-Route::get('/time-based-trends', [DashboardController::class, 'timeBasedTrends'])->middleware('auth')->name('time-based-trends');
-Route::get('/location-trends', [DashboardController::class, 'locationTrends'])->middleware('auth')->name('location-trends');
-Route::get('/crime-type-trends', [DashboardController::class, 'crimeTypeTrends'])->middleware('auth')->name('crime-type-trends');
+// Dashboard routes with conditional authentication
+Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+Route::get('/dashboard/charts', [DashboardController::class, 'getChartData'])->name('dashboard.charts');
+Route::get('/time-based-trends', [DashboardController::class, 'timeBasedTrends'])->name('time-based-trends');
+Route::get('/location-trends', [DashboardController::class, 'locationTrends'])->name('location-trends');
+Route::get('/crime-type-trends', [DashboardController::class, 'crimeTypeTrends'])->name('crime-type-trends');
 Route::post('/dashboard/location-charts', [DashboardController::class, 'getLocationChartData'])->name('dashboard.location.charts');
 Route::get('/dashboard/location-trends', [DashboardController::class, 'locationTrends'])->name('dashboard.location.trends');
-Route::get('/mapping', [LandingController::class, 'mapping'])->middleware('auth')->name('mapping');
-Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->middleware('auth')->name('crime-hotspot');
-Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->middleware('auth')->name('risk-forecasting');
-Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->middleware('auth')->name('pattern-detection');
-Route::get('/crimes', [CrimeIncidentController::class, 'index'])->middleware('auth')->name('crimes.index');
+Route::get('/mapping', [LandingController::class, 'mapping'])->name('mapping');
+Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');
+Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->name('risk-forecasting');
+Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
+Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
 
 // Incident details endpoint (authenticated)
 Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->middleware('auth')->name('api.crime-incident');
