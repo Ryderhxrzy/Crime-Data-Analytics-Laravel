@@ -1,290 +1,357 @@
 <?php
-// Authentication Include File
-// Include this at the top of any dashboard file to handle JWT authentication
-// Usage: require_once 'auth-include.php';
+/**
+ * JWT Authentication Include File for Laravel
+ *
+ * Include this at the top of any dashboard Blade view to validate JWT tokens
+ * from the centralized login system.
+ *
+ * Usage in your dashboard view:
+ * <?php require_once app_path('path/to/auth-include.php'); ?>
+ *
+ * Then use these helper functions:
+ * - getCurrentUser()      // Returns array with user data
+ * - getUserEmail()        // Returns user email
+ * - getUserRole()         // Returns 'admin' or 'super_admin'
+ * - getUserDepartment()   // Returns department code
+ * - getDepartmentName()   // Returns human-readable department name
+ * - isSuperAdmin()        // Boolean check
+ * - isAdmin()             // Boolean check
+ */
 
-// Step 1: Check environment first
-$environment = app()->environment() ?? env('APP_ENV', 'local');
+// Get JWT secret and main domain from environment
+$jwtSecret = env('JWT_SECRET');
+$mainDomain = env('MAIN_DOMAIN', 'https://alertaraqc.com');
 
-// Skip JWT authentication in local environment
-if ($environment === 'local') {
-    // In local environment, use Laravel's built-in authentication
-    // Don't override the existing auth system
-    return;
+if (!$jwtSecret) {
+    abort(500, 'JWT_SECRET not configured in environment');
 }
 
-// Step 2: Detect environment (Laravel vs Pure PHP) - Only for production
-$isLaravel = false;
-$jwtSecret = null;
-$mainDomain = 'https://alertaraqc.com';
+// Debug logging
+$debugLog = [];
+$debugLog[] = '=== JWT AUTHENTICATION DEBUG ===';
+$debugLog[] = 'Current URL: ' . request()->fullUrl();
+$debugLog[] = 'Current Time: ' . now()->format('Y-m-d H:i:s');
 
-if (defined('LARAVEL_START') || function_exists('app') || class_exists('Illuminate\Foundation\Application')) {
-    $isLaravel = true;
-    try {
-        if (function_exists('config')) {
-            $jwtSecret = config('jwt.secret');
-        }
-        if (!$jwtSecret && env('JWT_SECRET')) {
-            $jwtSecret = env('JWT_SECRET');
-        }
-        $mainDomain = env('MAIN_DOMAIN', 'https://alertaraqc.com');
-    } catch (Exception $e) {
-        $jwtSecret = env('JWT_SECRET', 'fallback-laravel-secret');
-    }
-} else {
-    $isLaravel = false;
-    $envFile = __DIR__ . '/.env';
-    if (file_exists($envFile)) {
-        $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        foreach ($lines as $line) {
-            if (strpos($line, '#') === 0) continue;
-            if (strpos($line, '=') === false) continue;
-            list($key, $value) = explode('=', $line, 2);
-            putenv(trim($key) . '=' . trim($value));
-            $_ENV[trim($key)] = trim($value);
-        }
-    }
-    $jwtSecret = $_ENV['JWT_SECRET'] ?? 'fallback-php-secret';
-    $mainDomain = $_ENV['MAIN_DOMAIN'] ?? 'https://alertaraqc.com';
-}
-
-// Define constants
-define('IS_LARAVEL', $isLaravel);
-define('JWT_SECRET', $jwtSecret);
-define('MAIN_DOMAIN', $mainDomain);
-
-// Step 3: JWT Validation Function
-function validateJWT($token) {
-    try {
-        if (IS_LARAVEL) {
-            if (class_exists('Tymon\JWTAuth\Facades\JWTAuth')) {
-                $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                return $payload->toArray();
-            } elseif (function_exists('auth')) {
-                $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
-                return $user ? [
-                    'sub' => $user->id,
-                    'email' => $user->email,
-                    'department' => $user->department ?? '',
-                    'role' => $user->role ?? '',
-                    'iat' => time(),
-                    'exp' => time() + 3600
-                ] : null;
-            }
-        } else {
-            if (!class_exists('Firebase\JWT\JWT')) {
-                require_once 'vendor/autoload.php';
-            }
-            $decoded = \Firebase\JWT\JWT::decode($token, new \Firebase\JWT\Key(JWT_SECRET, 'HS256'));
-            return (array) $decoded;
-        }
-    } catch (Exception $e) {
-        error_log("JWT Validation Error: " . $e->getMessage());
-        return null;
-    }
-    return null;
-}
-
-// Step 4: Get Token
+// Step 1: Get JWT token from multiple sources
 $token = null;
+
+// Try URL query parameter first (initial redirect from login)
+if (request()->has('token')) {
+    $token = request()->input('token');
+    $debugLog[] = '✓ Token found in URL (?token parameter)';
+    $debugLog[] = 'Token Preview: ' . substr($token, 0, 50) . '...';
+
+    // Store in session for subsequent requests
+    session(['jwt_token' => $token]);
+    $debugLog[] = '✓ Token stored in session';
+} else {
+    // Try to get from session for subsequent requests
+    $token = session('jwt_token');
+    if ($token) {
+        $debugLog[] = '✓ Token retrieved from session';
+        $debugLog[] = 'Token Preview: ' . substr($token, 0, 50) . '...';
+    } else {
+        $debugLog[] = '✗ No token found in URL or session';
+    }
+}
+
+// Step 2: Try Authorization header as fallback
+if (!$token) {
+    $authHeader = request()->header('Authorization');
+    if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+        $token = str_replace('Bearer ', '', $authHeader);
+        $debugLog[] = '✓ Token found in Authorization header';
+        $debugLog[] = 'Token Preview: ' . substr($token, 0, 50) . '...';
+    } else {
+        $debugLog[] = '✗ No Authorization header found';
+    }
+}
+
+// Step 3: Validate JWT token using Laravel's JWTAuth
 $user = null;
 
-// From URL (initial redirect)
-if (isset($_GET['token'])) {
-    $token = $_GET['token'];
-    if (!IS_LARAVEL) {
-        session_start();
-        $_SESSION['jwt_token'] = $token;
-    } else {
-        session(['jwt_token' => $token]);
-    }
-} elseif (IS_LARAVEL) {
-    $token = session('jwt_token');
-} else {
-    if (session_status() == PHP_SESSION_NONE) {
-        session_start();
-    }
-    $token = $_SESSION['jwt_token'] ?? null;
-}
-
-// From Authorization header
-if (!$token) {
-    $headers = getallheaders() ?? [];
-    if (isset($headers['Authorization'])) {
-        $token = str_replace('Bearer ', '', $headers['Authorization']);
-    }
-}
-
-// Step 5: Validate Token
 if ($token) {
-    $user = validateJWT($token);
-}
+    $debugLog[] = '🔐 Validating JWT token using Laravel JWTAuth...';
 
-// Step 6: Redirect if not authenticated
-if (!$user) {
-    // Check if user has department info and redirect to appropriate subdomain
-    $userDepartment = $user['department'] ?? '';
-    $subdomainRedirect = $mainDomain;
-    
-    if ($userDepartment) {
-        $departmentSubdomains = [
-            'law-enforcement' => 'law-enforcement',
-            'traffic' => 'traffic',
-            'fire' => 'fire',
-            'emergency' => 'emergency',
-            'community' => 'community',
-            'crime-analytics' => 'crime-analytics',
-            'public-safety' => 'public-safety',
-            'health-safety' => 'health-safety',
-            'disaster' => 'disaster',
-            'emergency-comm' => 'emergency-comm',
-            'super-admin' => 'super-admin'
-        ];
-        
-        $subdomain = $departmentSubdomains[strtolower($userDepartment)] ?? 'crime-analytics';
-        
-        // For crime-analytics subdomain, redirect with token
-        if ($subdomain === 'crime-analytics') {
-            $subdomainRedirect = "https://{$subdomain}.alertaraqc.com/dashboard/token/{$token}";
+    try {
+        // Use tymon/jwt-auth to validate and authenticate user
+        $authUser = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
+
+        if ($authUser) {
+            // Get payload for expiration time
+            $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+
+            $user = [
+                'sub' => $authUser->id,
+                'id' => $authUser->id,
+                'email' => $authUser->email,
+                'department' => $authUser->department ?? '',
+                'role' => $authUser->role ?? 'admin',
+                'iat' => $payload->get('iat') ?? time(),
+                'exp' => $payload->get('exp') ?? (time() + 3600)
+            ];
+
+            $debugLog[] = '✓ JWT token validated successfully!';
+            $debugLog[] = 'User ID: ' . ($user['id'] ?? 'N/A');
+            $debugLog[] = 'User Email: ' . ($user['email'] ?? 'N/A');
+            $debugLog[] = 'Department: ' . ($user['department'] ?? 'N/A');
+            $debugLog[] = 'Role: ' . ($user['role'] ?? 'N/A');
+            $debugLog[] = 'Expires: ' . date('Y-m-d H:i:s', $user['exp'] ?? time());
+
         } else {
-            $subdomainRedirect = "https://{$subdomain}.alertaraqc.com?token={$token}";
+            $debugLog[] = '✗ JWT token validation FAILED!';
+            $debugLog[] = 'Error: Token invalid or expired';
         }
+
+    } catch (\Exception $e) {
+        $debugLog[] = '✗ JWT token validation FAILED!';
+        $debugLog[] = 'Error: ' . $e->getMessage();
+
+        \Log::error('JWT Validation Error: ' . $e->getMessage(), [
+            'token' => substr($token, 0, 50) . '...',
+            'error' => $e->getMessage()
+        ]);
     }
-    
-    if (IS_LARAVEL) {
-        return redirect($subdomainRedirect);
-    } else {
-        header('Location: ' . $subdomainRedirect);
-        exit();
-    }
+} else {
+    $debugLog[] = '✗ No token available for validation';
 }
 
-// Step 7: Extract User Data (Available globally)
-$userId = $user['sub'] ?? null;
-$userEmail = $user['email'] ?? '';
-$userDepartment = $user['department'] ?? '';
-$userRole = $user['role'] ?? '';
-$iat = $user['iat'] ?? 0;
-$exp = $user['exp'] ?? 0;
-
-// Step 8: Check Expiration
-if ($exp && $exp < time()) {
-    if (IS_LARAVEL) {
-        session()->forget('jwt_token');
-        return redirect(MAIN_DOMAIN);
-    } else {
-        session_destroy();
-        header('Location: ' . MAIN_DOMAIN);
-        exit();
-    }
+// Log debug information
+foreach ($debugLog as $log) {
+    \Log::debug($log);
 }
 
-// Step 9: Get Department Info
-$currentSubdomain = explode('.', $_SERVER['HTTP_HOST'])[0] ?? 'unknown';
+// Step 4: Redirect if not authenticated
+if (!$user) {
+    $debugLog[] = '';
+    $debugLog[] = '❌ AUTHENTICATION FAILED - REDIRECTING';
+    $debugLog[] = 'Redirect URL: ' . $mainDomain;
+    $debugLog[] = '===================================';
+
+    foreach ($debugLog as $log) {
+        \Log::debug($log);
+    }
+
+    return redirect($mainDomain);
+}
+
+// Step 5: Check token expiration
+if ($user['exp'] && $user['exp'] < time()) {
+    \Log::warning('JWT token expired', [
+        'email' => $user['email'],
+        'expired_at' => date('Y-m-d H:i:s', $user['exp'])
+    ]);
+
+    session()->forget('jwt_token');
+    return redirect($mainDomain);
+}
+
+// Step 6: Authentication successful - log it
+$debugLog[] = '';
+$debugLog[] = '✅ AUTHENTICATION SUCCESSFUL';
+$debugLog[] = '===================================';
+
+foreach ($debugLog as $log) {
+    \Log::debug($log);
+}
+
+// Step 7: Make user data globally available
+$GLOBALS['authenticated_user'] = $user;
+
+// Department name mapping
 $departmentNames = [
-    'law-enforcement' => 'Law Enforcement Department',
-    'traffic' => 'Traffic & Transport Department',
-    'fire' => 'Fire & Rescue Department',
-    'emergency' => 'Emergency Response Department',
-    'community' => 'Community Policing Department',
-    'crime-analytics' => 'Crime Data Analytics Department',
-    'public-safety' => 'Public Safety Department',
-    'health-safety' => 'Health & Safety Department',
-    'disaster' => 'Disaster Preparedness Department',
-    'emergency-comm' => 'Emergency Communication Department',
-    'super-admin' => 'Super Admin Dashboard'
+    'law_enforcement_department' => 'Law Enforcement Department',
+    'traffic_and_transport_department' => 'Traffic & Transport Department',
+    'fire_and_rescue_department' => 'Fire & Rescue Department',
+    'emergency_response_department' => 'Emergency Response Department',
+    'community_policing_department' => 'Community Policing Department',
+    'crime_data_department' => 'Crime Data Analytics Department',
+    'public_safety_department' => 'Public Safety Department',
+    'health_and_safety_department' => 'Health & Safety Department',
+    'disaster_preparedness_department' => 'Disaster Preparedness Department',
+    'emergency_communication_department' => 'Emergency Communication Department',
 ];
 
-$departmentName = $departmentNames[$currentSubdomain] ?? ucfirst($currentSubdomain) . ' Department';
+$departmentName = $departmentNames[$user['department']] ?? ucfirst(str_replace('_', ' ', $user['department']));
 
-// Step 10: Make user data available globally
-$GLOBALS['authenticated_user'] = [
-    'id' => $userId,
-    'email' => $userEmail,
-    'department' => $userDepartment,
-    'role' => $userRole,
-    'department_name' => $departmentName,
-    'subdomain' => $currentSubdomain,
-    'exp' => $exp,
-    'is_laravel' => IS_LARAVEL
-];
+// Step 8: Helper Functions
 
-// Step 11: Helper Functions for use in dashboard files
-function getCurrentUser() {
+/**
+ * Get current authenticated user
+ */
+function getCurrentUser()
+{
     return $GLOBALS['authenticated_user'] ?? null;
 }
 
-function getUserRole() {
+/**
+ * Get user role
+ */
+function getUserRole()
+{
     return $GLOBALS['authenticated_user']['role'] ?? 'guest';
 }
 
-function getUserEmail() {
+/**
+ * Get user email
+ */
+function getUserEmail()
+{
     return $GLOBALS['authenticated_user']['email'] ?? '';
 }
 
-function getUserDepartment() {
+/**
+ * Get user department code
+ */
+function getUserDepartment()
+{
     return $GLOBALS['authenticated_user']['department'] ?? '';
 }
 
-function getDepartmentName() {
-    return $GLOBALS['authenticated_user']['department_name'] ?? '';
+/**
+ * Get human-readable department name
+ */
+function getDepartmentName()
+{
+    static $names = [
+        'law_enforcement_department' => 'Law Enforcement Department',
+        'traffic_and_transport_department' => 'Traffic & Transport Department',
+        'fire_and_rescue_department' => 'Fire & Rescue Department',
+        'emergency_response_department' => 'Emergency Response Department',
+        'community_policing_department' => 'Community Policing Department',
+        'crime_data_department' => 'Crime Data Analytics Department',
+        'public_safety_department' => 'Public Safety Department',
+        'health_and_safety_department' => 'Health & Safety Department',
+        'disaster_preparedness_department' => 'Disaster Preparedness Department',
+        'emergency_communication_department' => 'Emergency Communication Department',
+    ];
+
+    $dept = getUserDepartment();
+    return $names[$dept] ?? ucfirst(str_replace('_', ' ', $dept));
 }
 
-function isSuperAdmin() {
+/**
+ * Check if user is super admin
+ */
+function isSuperAdmin()
+{
     return getUserRole() === 'super_admin';
 }
 
-function isAdmin() {
+/**
+ * Check if user is admin
+ */
+function isAdmin()
+{
     return getUserRole() === 'admin';
 }
 
-function isLaravelEnv() {
-    return IS_LARAVEL;
+/**
+ * Get logout URL
+ */
+function getLogoutUrl()
+{
+    return env('MAIN_DOMAIN', 'https://alertaraqc.com') . '/logout';
 }
 
-function getLogoutUrl() {
-    return MAIN_DOMAIN . '/logout';
-}
+/**
+ * Get JavaScript token refresh script
+ */
+function getTokenRefreshScript()
+{
+    $user = getCurrentUser();
+    $exp = $user['exp'] ?? 0;
+    $mainDomain = env('MAIN_DOMAIN', 'https://alertaraqc.com');
 
-function getMainDomain() {
-    return MAIN_DOMAIN;
-}
-
-// Step 12: Auto-refresh token check (JavaScript helper)
-function getTokenRefreshScript() {
-    $exp = $GLOBALS['authenticated_user']['exp'] ?? 0;
-    $mainDomain = MAIN_DOMAIN;
     return "
     <script>
         // Token expiration check
-        const tokenExpiresAt = " . ($exp * 1000) . ",
+        const tokenExpiresAt = " . ($exp * 1000) . ";
+
         const checkTokenExpiration = () => {
             if (Date.now() >= tokenExpiresAt) {
                 alert('Your session has expired. Please login again.');
                 window.location.href = '{$mainDomain}';
             }
         };
-        
+
         // Check every minute
         setInterval(checkTokenExpiration, 60000);
         checkTokenExpiration();
-        
-        // Store user data
-        const userData = " . json_encode($GLOBALS['authenticated_user']) . ";
+
+        // Store user data in localStorage
+        const userData = " . json_encode($user) . ";
         localStorage.setItem('user_data', JSON.stringify(userData));
     </script>";
 }
 
-// Step 13: Logout handler
-if (isset($_GET['action']) && $_GET['action'] === 'logout') {
-    if (IS_LARAVEL) {
-        session()->forget('jwt_token');
-        return redirect(MAIN_DOMAIN . '/logout');
-    } else {
-        session_destroy();
-        header('Location: ' . MAIN_DOMAIN . '/logout');
-        exit();
+/**
+ * Get customizable redirect URL based on role and department
+ * Override this function in your dashboard to customize redirect behavior
+ *
+ * USAGE IN YOUR DASHBOARD VIEW:
+ *
+ * Option 1 - Auto redirect after authentication:
+ * <?php
+ *     require_once app_path('path/to/auth-include.php');
+ *     redirect(getRedirectUrl())->send();
+ * ?>
+ *
+ * Option 2 - Custom redirect logic:
+ * <?php
+ *     require_once app_path('path/to/auth-include.php');
+ *     $redirectUrl = getRedirectUrl();
+ *     if (isSuperAdmin()) {
+ *         $redirectUrl = route('super-admin.dashboard');
+ *     }
+ *     redirect($redirectUrl)->send();
+ * ?>
+ *
+ * Option 3 - Stay on current page (default):
+ * <?php
+ *     require_once app_path('path/to/auth-include.php');
+ *     // Just use the page normally, no redirect
+ * ?>
+ */
+function getRedirectUrl()
+{
+    $user = getCurrentUser();
+
+    if (!$user) {
+        return env('MAIN_DOMAIN', 'https://alertaraqc.com');
     }
+
+    // DEFAULT: Return current page (no redirect)
+    // CUSTOMIZE BY UNCOMMENTING EXAMPLES BELOW
+
+    // Example 1: Redirect super admin
+    // if (isSuperAdmin()) {
+    //     return route('super-admin.dashboard');
+    // }
+
+    // Example 2: Redirect by department
+    // $departmentRoutes = [
+    //     'crime_data_department' => route('crime-analytics.dashboard'),
+    //     'law_enforcement_department' => route('law-enforcement.dashboard'),
+    // ];
+    // return $departmentRoutes[getUserDepartment()] ?? request()->url();
+
+    // Example 3: Redirect by role
+    // if (isAdmin()) {
+    //     return route('admin.dashboard');
+    // }
+
+    // For now, stay on current page
+    return request()->url();
+}
+
+/**
+ * Handle logout action
+ */
+if (request()->input('action') === 'logout') {
+    session()->forget('jwt_token');
+    auth('api')->logout();
+    return redirect(env('MAIN_DOMAIN', 'https://alertaraqc.com') . '/logout');
 }
 
 ?>

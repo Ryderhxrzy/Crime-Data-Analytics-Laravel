@@ -1,3 +1,10 @@
+<?php
+// Include centralized authentication to validate JWT tokens
+require_once app_path('auth-include.php');
+
+redirect(getRedirectUrl())->send();
+?>
+
 @extends('layouts.app')
 
 @section('title', 'Dashboard')
