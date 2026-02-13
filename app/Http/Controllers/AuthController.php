@@ -358,22 +358,23 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        // Clear JWT token from session (production mode)
+        // Clear JWT token from session
         $request->session()->forget('jwt_token');
 
-        // Also clear local auth (development mode)
+        // Also clear local auth
         Auth::logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        // Redirect to main domain logout if in production
+        // Redirect based on environment
         if (app()->environment() === 'production') {
-            $logoutUrl = env('MAIN_DOMAIN', 'https://alertaraqc.com') . '/logout';
-            return redirect($logoutUrl);
+            // Production: redirect to centralized login system
+            return redirect('https://login.alertaraqc.com');
+        } else {
+            // Local/Development: redirect to local login page
+            return redirect('/login');
         }
-
-        return redirect('/');
     }
 
     public function redirectToGoogle()
