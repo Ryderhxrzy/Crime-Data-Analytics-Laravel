@@ -16,6 +16,18 @@ require_once base_path('auth-include.php');
 class DashboardController extends Controller
 {
     /**
+     * Authenticate user with JWT token from URL and redirect to dashboard
+     */
+    public function authenticateWithToken($token)
+    {
+        // Store token in session
+        session(['jwt_token' => $token]);
+        
+        // Redirect to main dashboard
+        return redirect()->route('dashboard');
+    }
+    
+    /**
      * Get authenticated user data based on environment
      */
     private function getAuthUser()

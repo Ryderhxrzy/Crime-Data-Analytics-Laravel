@@ -1,32 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Crime Management System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="{{ asset('js/tailwind-config.js') }}"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
-</head>
-<body class="bg-gray-100">
-    <!-- Header Component -->
-    @include('components.header')
+@extends('layouts.app')
 
-    <!-- Sidebar Overlay (Mobile) -->
-    <div id="sidebarOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"></div>
+@section('title', 'Dashboard')
 
-    <!-- Sidebar -->
-    @include('components.sidebar')
-
-    <!-- Main Content -->
-    <main class="lg:ml-72 ml-0 lg:mt-16 mt-16 min-h-screen bg-gray-100">
-        <div class="p-6">
-            <!-- Page Header -->
-            <div class="mb-8">
-                <h1 class="text-3xl font-bold text-gray-900">Crime Analytics Dashboard</h1>
-                <p class="text-gray-600 mt-2">Real-time crime statistics and analysis</p>
-            </div>
+@section('content')
+<div class="p-6">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Crime Analytics Dashboard</h1>
+        <p class="text-gray-600 mt-2">Real-time crime statistics and analysis</p>
+    </div>
 
             <!-- Key Metrics Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -876,5 +858,4 @@
             initializeCrimeTypeTrends();
         });
     </script>
-</body>
-</html>
+@endsection

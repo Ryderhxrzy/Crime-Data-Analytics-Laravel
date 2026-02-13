@@ -53,5 +53,8 @@ Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])
 Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
 Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
 
+// Special route for JWT token authentication
+Route::get('/dashboard/token/{token}', [DashboardController::class, 'authenticateWithToken'])->name('dashboard.token.auth');
+
 // Incident details endpoint (authenticated)
 Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->middleware('auth')->name('api.crime-incident');

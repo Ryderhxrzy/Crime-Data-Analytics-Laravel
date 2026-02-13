@@ -122,11 +122,39 @@ if ($token) {
 
 // Step 6: Redirect if not authenticated
 if (!$user) {
-    $redirectUrl = MAIN_DOMAIN;
+    // Check if user has department info and redirect to appropriate subdomain
+    $userDepartment = $user['department'] ?? '';
+    $subdomainRedirect = $mainDomain;
+    
+    if ($userDepartment) {
+        $departmentSubdomains = [
+            'law-enforcement' => 'law-enforcement',
+            'traffic' => 'traffic',
+            'fire' => 'fire',
+            'emergency' => 'emergency',
+            'community' => 'community',
+            'crime-analytics' => 'crime-analytics',
+            'public-safety' => 'public-safety',
+            'health-safety' => 'health-safety',
+            'disaster' => 'disaster',
+            'emergency-comm' => 'emergency-comm',
+            'super-admin' => 'super-admin'
+        ];
+        
+        $subdomain = $departmentSubdomains[strtolower($userDepartment)] ?? 'crime-analytics';
+        
+        // For crime-analytics subdomain, redirect with token
+        if ($subdomain === 'crime-analytics') {
+            $subdomainRedirect = "https://{$subdomain}.alertaraqc.com/dashboard/token/{$token}";
+        } else {
+            $subdomainRedirect = "https://{$subdomain}.alertaraqc.com?token={$token}";
+        }
+    }
+    
     if (IS_LARAVEL) {
-        return redirect($redirectUrl);
+        return redirect($subdomainRedirect);
     } else {
-        header('Location: ' . $redirectUrl);
+        header('Location: ' . $subdomainRedirect);
         exit();
     }
 }
