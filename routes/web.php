@@ -61,3 +61,15 @@ Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.i
 
 // Incident details endpoint (authenticated)
 Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->middleware('auth')->name('api.crime-incident');
+
+// DEBUG: Session & JWT token check (remove in production)
+Route::get('/debug/session', function () {
+    return response()->json([
+        'session_id' => session()->getId(),
+        'jwt_token_in_session' => session('jwt_token') ? 'YES ✓' : 'NO ✗',
+        'token_preview' => session('jwt_token') ? substr(session('jwt_token'), 0, 50) . '...' : 'No token',
+        'auth_user' => getCurrentUser() ? 'YES ✓ - ' . (getCurrentUser()['email'] ?? 'No email') : 'NO ✗',
+        'app_env' => app()->environment(),
+        'all_session_data' => session()->all(),
+    ]);
+});
