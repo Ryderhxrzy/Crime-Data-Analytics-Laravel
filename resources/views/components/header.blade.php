@@ -60,18 +60,12 @@
                         <a href="#profile" class="block px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
                             <i class="fas fa-user-circle mr-2"></i>My Profile
                         </a>
-                        @if(app()->environment() === 'local')
-                            <form action="{{ route('logout') }}" method="POST" class="m-0">
-                                @csrf
-                                <button type="submit" class="w-full text-left px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
-                                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                                </button>
-                            </form>
-                        @else
-                            <a href="{{ getLogoutUrl() }}" class="block px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
+                        <form action="{{ route('logout') }}" method="POST" class="m-0">
+                            @csrf
+                            <button type="submit" class="w-full text-left px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
                                 <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                            </a>
-                        @endif
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>

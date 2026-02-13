@@ -79,15 +79,16 @@ if ($token) {
         $authUser = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
 
         if ($authUser) {
-            // Get payload for expiration time
+            // Get payload (contains custom claims: department, role, email from getJWTCustomClaims())
             $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
 
+            // Extract from JWT payload - not from $authUser object
             $user = [
-                'sub' => $authUser->id,
+                'sub' => $payload->get('sub') ?? $authUser->id,
                 'id' => $authUser->id,
-                'email' => $authUser->email,
-                'department' => $authUser->department ?? '',
-                'role' => $authUser->role ?? 'admin',
+                'email' => $payload->get('email') ?? $authUser->email,
+                'department' => $payload->get('department') ?? '',
+                'role' => $payload->get('role') ?? 'admin',
                 'iat' => $payload->get('iat') ?? time(),
                 'exp' => $payload->get('exp') ?? (time() + 3600)
             ];
