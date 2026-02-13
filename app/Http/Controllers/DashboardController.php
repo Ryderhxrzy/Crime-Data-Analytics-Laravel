@@ -10,10 +10,67 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
+// Include centralized authentication
+require_once base_path('auth-include.php');
+
 class DashboardController extends Controller
 {
+    /**
+     * Get authenticated user data based on environment
+     */
+    private function getAuthUser()
+    {
+        $environment = app()->environment();
+        $currentUser = null;
+        $userEmail = '';
+        $userRole = '';
+        $userDepartment = '';
+        $departmentName = '';
+        
+        if ($environment === 'local') {
+            // Use Laravel's built-in authentication in local environment
+            if (!auth()->check()) {
+                return null;
+            }
+            
+            $currentUser = auth()->user();
+            $userEmail = $currentUser->email ?? '';
+            $userRole = $currentUser->role ?? 'user';
+            $userDepartment = $currentUser->department ?? '';
+            $departmentName = ucfirst($userDepartment) . ' Department';
+        } else {
+            // Use JWT authentication in production
+            $currentUser = getCurrentUser();
+            
+            if (!$currentUser) {
+                return null;
+            }
+            
+            $userEmail = getUserEmail();
+            $userRole = getUserRole();
+            $userDepartment = getUserDepartment();
+            $departmentName = getDepartmentName();
+        }
+        
+        return [
+            'currentUser' => $currentUser,
+            'userEmail' => $userEmail,
+            'userRole' => $userRole,
+            'userDepartment' => $userDepartment,
+            'departmentName' => $departmentName
+        ];
+    }
+    
     public function index()
     {
+        // Get authenticated user data
+        $authData = $this->getAuthUser();
+        if (!$authData) {
+            $environment = app()->environment();
+            return $environment === 'local' ? redirect()->route('login') : redirect(getMainDomain());
+        }
+        
+        extract($authData);
         // Total Incidents
         $totalIncidents = CrimeIncident::count();
 
@@ -102,6 +159,12 @@ class DashboardController extends Controller
             'activeAlerts' => $activeAlerts,
             'recentIncidents' => $recentIncidents,
             'latestAlerts' => $latestAlerts,
+            // User data from JWT authentication
+            'currentUser' => $currentUser,
+            'userEmail' => getUserEmail(),
+            'userRole' => getUserRole(),
+            'userDepartment' => getUserDepartment(),
+            'departmentName' => getDepartmentName(),
             // Chart data
             'categoryLabels' => json_encode($categoryLabels),
             'categoryData' => json_encode($categoryData),
@@ -123,6 +186,15 @@ class DashboardController extends Controller
      */
     public function timeBasedTrends()
     {
+        // Get authenticated user data
+        $authData = $this->getAuthUser();
+        if (!$authData) {
+            $environment = app()->environment();
+            return $environment === 'local' ? redirect()->route('login') : redirect(getMainDomain());
+        }
+        
+        extract($authData);
+
         // Monthly Trends (Last 12 months)
         $monthlyTrends = CrimeIncident::select(
             DB::raw('DATE_FORMAT(incident_date, "%Y-%m") as month'),
@@ -179,6 +251,12 @@ class DashboardController extends Controller
             'dailyData' => json_encode($dailyData),
             'hourlyLabels' => json_encode($hourlyLabels),
             'hourlyData' => json_encode($hourlyData),
+            // User data from JWT authentication
+            'currentUser' => $currentUser,
+            'userEmail' => getUserEmail(),
+            'userRole' => getUserRole(),
+            'userDepartment' => getUserDepartment(),
+            'departmentName' => getDepartmentName(),
         ]);
     }
 
@@ -323,11 +401,20 @@ class DashboardController extends Controller
      */
      public function locationTrends()
     {
+        // Get authenticated user data
+        $authData = $this->getAuthUser();
+        if (!$authData) {
+            $environment = app()->environment();
+            return $environment === 'local' ? redirect()->route('login') : redirect(getMainDomain());
+        }
+        
+        extract($authData);
+        
         // Get initial data for location trends
         $barangays = Barangay::orderBy('barangay_name')->get();
         $crimeCategories = CrimeCategory::orderBy('category_name')->get();
         
-        return view('location-trends', compact('barangays', 'crimeCategories'));
+        return view('location-trends', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
     }
 
     /**
@@ -335,6 +422,15 @@ class DashboardController extends Controller
      */
     public function crimeTypeTrends()
     {
+        // Get authenticated user data
+        $authData = $this->getAuthUser();
+        if (!$authData) {
+            $environment = app()->environment();
+            return $environment === 'local' ? redirect()->route('login') : redirect(getMainDomain());
+        }
+        
+        extract($authData);
+        
         // Get initial data for crime type trends
         $barangays = \App\Models\Barangay::orderBy('barangay_name')->get();
         $crimeCategories = \App\Models\CrimeCategory::orderBy('category_name')->get();
@@ -406,7 +502,7 @@ class DashboardController extends Controller
             }
         }
 
-        return view('crime-type-trends', compact('barangays', 'crimeCategories', 'crimeTypeStats', 'monthlyTrends', 'locationData'));
+        return view('crime-type-trends', compact('barangays', 'crimeCategories', 'crimeTypeStats', 'monthlyTrends', 'locationData', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
     }
 
     /**
@@ -584,10 +680,19 @@ class DashboardController extends Controller
      */
     public function crimeHotspot()
     {
+        // Get authenticated user data
+        $authData = $this->getAuthUser();
+        if (!$authData) {
+            $environment = app()->environment();
+            return $environment === 'local' ? redirect()->route('login') : redirect(getMainDomain());
+        }
+        
+        extract($authData);
+        
         $barangays = Barangay::orderBy('barangay_name')->get();
         $crimeCategories = CrimeCategory::orderBy('category_name')->get();
         
-        return view('crime-hotspot', compact('barangays', 'crimeCategories'));
+        return view('crime-hotspot', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
     }
 
     /**
@@ -595,10 +700,19 @@ class DashboardController extends Controller
      */
     public function riskForecasting()
     {
+        // Get authenticated user data
+        $authData = $this->getAuthUser();
+        if (!$authData) {
+            $environment = app()->environment();
+            return $environment === 'local' ? redirect()->route('login') : redirect(getMainDomain());
+        }
+        
+        extract($authData);
+        
         $barangays = Barangay::orderBy('barangay_name')->get();
         $crimeCategories = CrimeCategory::orderBy('category_name')->get();
         
-        return view('risk-forecasting', compact('barangays', 'crimeCategories'));
+        return view('risk-forecasting', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
     }
 
     /**
@@ -606,9 +720,18 @@ class DashboardController extends Controller
      */
     public function patternDetection()
     {
+        // Get authenticated user data
+        $authData = $this->getAuthUser();
+        if (!$authData) {
+            $environment = app()->environment();
+            return $environment === 'local' ? redirect()->route('login') : redirect(getMainDomain());
+        }
+        
+        extract($authData);
+        
         $barangays = Barangay::orderBy('barangay_name')->get();
         $crimeCategories = CrimeCategory::orderBy('category_name')->get();
         
-        return view('pattern-detection', compact('barangays', 'crimeCategories'));
+        return view('pattern-detection', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
     }
 }
