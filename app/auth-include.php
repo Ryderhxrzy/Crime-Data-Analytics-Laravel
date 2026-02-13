@@ -136,18 +136,20 @@ foreach ($debugLog as $log) {
 if (!$user) {
     $debugLog[] = '';
     $debugLog[] = '❌ AUTHENTICATION FAILED - REDIRECTING';
-    $debugLog[] = 'Redirect URL: ' . $mainDomain;
+
+    $redirectUrl = app()->environment() === 'production' ? $mainDomain : '/login';
+    $debugLog[] = 'Redirect URL: ' . $redirectUrl;
     $debugLog[] = '===================================';
 
     foreach ($debugLog as $log) {
         \Log::debug($log);
     }
 
-    return redirect($mainDomain);
+    return redirect($redirectUrl);
 }
 
-// Step 5: Check token expiration
-if ($user['exp'] && $user['exp'] < time()) {
+// Step 5: Check token expiration (only in production)
+if (app()->environment() === 'production' && $user['exp'] && $user['exp'] < time()) {
     \Log::warning('JWT token expired', [
         'email' => $user['email'],
         'expired_at' => date('Y-m-d H:i:s', $user['exp'])
@@ -273,22 +275,34 @@ function getTokenRefreshScript()
     $user = getCurrentUser();
     $exp = $user['exp'] ?? 0;
     $mainDomain = env('MAIN_DOMAIN', 'https://alertaraqc.com');
+    $appEnv = app()->environment();
+
+    // In local development, redirect to /login; in production, redirect to main domain
+    $redirectUrl = $appEnv === 'production' ? $mainDomain : '/login';
 
     return "
     <script>
         // Token expiration check
         const tokenExpiresAt = " . ($exp * 1000) . ";
+        const appEnv = '{$appEnv}';
+        const redirectUrl = '{$redirectUrl}';
 
         const checkTokenExpiration = () => {
             if (Date.now() >= tokenExpiresAt) {
-                alert('Your session has expired. Please login again.');
-                window.location.href = '{$mainDomain}';
+                // Only check token expiration if using JWT auth (production)
+                if (appEnv === 'production') {
+                    alert('Your session has expired. Please login again.');
+                    window.location.href = redirectUrl;
+                }
             }
         };
 
-        // Check every minute
-        setInterval(checkTokenExpiration, 60000);
-        checkTokenExpiration();
+        // Only check token expiration in production
+        if (appEnv === 'production') {
+            // Check every minute
+            setInterval(checkTokenExpiration, 60000);
+            checkTokenExpiration();
+        }
 
         // Store user data in localStorage
         const userData = " . json_encode($user) . ";
