@@ -86,8 +86,7 @@ class DashboardController extends Controller
         // Get authenticated user data
         $authData = $this->getAuthUser();
         if (!$authData) {
-            $environment = app()->environment();
-            return $environment === 'local' ? redirect()->route('login') : redirect($this->getMainDomain());
+            return redirect()->route('login');
         }
         
         extract($authData);
@@ -209,8 +208,7 @@ class DashboardController extends Controller
         // Get authenticated user data
         $authData = $this->getAuthUser();
         if (!$authData) {
-            $environment = app()->environment();
-            return $environment === 'local' ? redirect()->route('login') : redirect($this->getMainDomain());
+            return redirect()->route('login');
         }
         
         extract($authData);
@@ -424,8 +422,7 @@ class DashboardController extends Controller
         // Get authenticated user data
         $authData = $this->getAuthUser();
         if (!$authData) {
-            $environment = app()->environment();
-            return $environment === 'local' ? redirect()->route('login') : redirect($this->getMainDomain());
+            return redirect()->route('login');
         }
         
         extract($authData);
@@ -445,8 +442,7 @@ class DashboardController extends Controller
         // Get authenticated user data
         $authData = $this->getAuthUser();
         if (!$authData) {
-            $environment = app()->environment();
-            return $environment === 'local' ? redirect()->route('login') : redirect($this->getMainDomain());
+            return redirect()->route('login');
         }
         
         extract($authData);
@@ -703,8 +699,7 @@ class DashboardController extends Controller
         // Get authenticated user data
         $authData = $this->getAuthUser();
         if (!$authData) {
-            $environment = app()->environment();
-            return $environment === 'local' ? redirect()->route('login') : redirect($this->getMainDomain());
+            return redirect()->route('login');
         }
         
         extract($authData);
@@ -723,8 +718,7 @@ class DashboardController extends Controller
         // Get authenticated user data
         $authData = $this->getAuthUser();
         if (!$authData) {
-            $environment = app()->environment();
-            return $environment === 'local' ? redirect()->route('login') : redirect($this->getMainDomain());
+            return redirect()->route('login');
         }
         
         extract($authData);
@@ -743,8 +737,7 @@ class DashboardController extends Controller
         // Get authenticated user data
         $authData = $this->getAuthUser();
         if (!$authData) {
-            $environment = app()->environment();
-            return $environment === 'local' ? redirect()->route('login') : redirect($this->getMainDomain());
+            return redirect()->route('login');
         }
         
         extract($authData);
