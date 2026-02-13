@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 // Include centralized authentication
-require_once base_path('auth-include.php');
+require_once app_path('auth-include.php');
 
 class DashboardController extends Controller
 {
