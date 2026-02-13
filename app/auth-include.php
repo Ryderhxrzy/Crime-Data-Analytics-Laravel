@@ -72,34 +72,36 @@ if (!$token) {
 $user = null;
 
 if ($token) {
-    $debugLog[] = '🔐 Validating JWT token...';
+    $debugLog[] = '🔐 Validating JWT token using Laravel JWTAuth...';
 
     try {
-        // Validate token signature and get payload (do NOT authenticate from local database)
-        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+        // Use tymon/jwt-auth to validate and authenticate user
+        $authUser = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
 
-        // Extract ALL data from JWT payload (from centralized login system)
-        $user = [
-            'sub' => $payload->get('sub') ?? null,
-            'id' => $payload->get('sub') ?? $payload->get('id') ?? null,
-            'email' => $payload->get('email') ?? '',
-            'department' => $payload->get('department') ?? '',
-            'role' => $payload->get('role') ?? 'admin',
-            'iat' => $payload->get('iat') ?? time(),
-            'exp' => $payload->get('exp') ?? (time() + 3600)
-        ];
+        if ($authUser) {
+            // Get payload for expiration time
+            $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
 
-        // Verify payload has required fields
-        if (!$user['id'] || !$user['email']) {
-            $debugLog[] = '✗ JWT token missing required fields (id or email)';
-            $user = null;
-        } else {
+            $user = [
+                'sub' => $authUser->id,
+                'id' => $authUser->id,
+                'email' => $authUser->email,
+                'department' => $authUser->department ?? '',
+                'role' => $authUser->role ?? 'admin',
+                'iat' => $payload->get('iat') ?? time(),
+                'exp' => $payload->get('exp') ?? (time() + 3600)
+            ];
+
             $debugLog[] = '✓ JWT token validated successfully!';
             $debugLog[] = 'User ID: ' . ($user['id'] ?? 'N/A');
             $debugLog[] = 'User Email: ' . ($user['email'] ?? 'N/A');
             $debugLog[] = 'Department: ' . ($user['department'] ?? 'N/A');
             $debugLog[] = 'Role: ' . ($user['role'] ?? 'N/A');
             $debugLog[] = 'Expires: ' . date('Y-m-d H:i:s', $user['exp'] ?? time());
+
+        } else {
+            $debugLog[] = '✗ JWT token validation FAILED!';
+            $debugLog[] = 'Error: Token invalid or expired';
         }
 
     } catch (\Exception $e) {
@@ -347,10 +349,15 @@ function getRedirectUrl()
 /**
  * Handle logout action
  */
-if (request()->input('action') === 'logout') {
+function logout()
+{
     session()->forget('jwt_token');
-    auth('api')->logout();
-    return redirect(env('MAIN_DOMAIN', 'https://alertaraqc.com') . '/logout');
+    return redirect('https://login.alertaraqc.com');
+}
+
+// Auto logout if requested via query parameter
+if (request()->input('action') === 'logout') {
+    return logout();
 }
 
 ?>
