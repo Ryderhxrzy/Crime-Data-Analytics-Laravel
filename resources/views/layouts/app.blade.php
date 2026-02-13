@@ -1,3 +1,7 @@
+<?php
+// Load JWT authentication functions globally for all views
+require_once app_path('auth-include.php');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>

@@ -10,9 +10,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
-// Include centralized authentication
-require_once app_path('auth-include.php');
-
 class DashboardController extends Controller
 {
     /**
