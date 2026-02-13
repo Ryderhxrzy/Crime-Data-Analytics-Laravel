@@ -45,5 +45,10 @@
         });
     </script>
     @stack('scripts')
+    
+    <!-- JWT Token Management Script -->
+    @if(isset($currentUser) && $currentUser)
+        {!! getTokenRefreshScript() !!}
+    @endif
 </body>
 </html>

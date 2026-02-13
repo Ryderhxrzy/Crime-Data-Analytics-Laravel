@@ -39,8 +39,13 @@
                 <div class="relative">
                     <button id="profileToggle" class="flex items-center space-x-2 pl-4 border-l border-gray-200 hover:bg-gray-50 rounded py-2 px-2 transition-colors">
                         <div class="text-right hidden sm:block">
-                            <p class="text-sm font-medium text-alertara-900">{{ Auth::user()->full_name ?? Auth::user()->name ?? 'User' }}</p>
-                            <p class="text-xs text-alertara-500">{{ Auth::user()->role ?? 'User' }}</p>
+                            @if(app()->environment() === 'local')
+                                <p class="text-sm font-medium text-alertara-900">{{ Auth::user()->full_name ?? Auth::user()->name ?? 'User' }}</p>
+                                <p class="text-xs text-alertara-500">{{ Auth::user()->role ?? 'User' }}</p>
+                            @else
+                                <p class="text-sm font-medium text-alertara-900">{{ $userEmail ?? 'User' }}</p>
+                                <p class="text-xs text-alertara-500">{{ ucfirst($userRole ?? 'User') }} - {{ $departmentName ?? 'Department' }}</p>
+                            @endif
                         </div>
                         <div class="w-9 h-9 bg-gradient-to-br from-alertara-500 to-alertara-700 rounded-full flex items-center justify-center flex-shrink-0">
                             <i class="fas fa-user text-white text-xs"></i>
@@ -53,12 +58,18 @@
                         <a href="#profile" class="block px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
                             <i class="fas fa-user-circle mr-2"></i>My Profile
                         </a>
-                        <form action="{{ route('logout') }}" method="POST" class="m-0">
-                            @csrf
-                            <button type="submit" class="w-full text-left px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
+                        @if(app()->environment() === 'local')
+                            <form action="{{ route('logout') }}" method="POST" class="m-0">
+                                @csrf
+                                <button type="submit" class="w-full text-left px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
+                                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                                </button>
+                            </form>
+                        @else
+                            <a href="{{ getLogoutUrl() }}" class="block px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
                                 <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                            </button>
-                        </form>
+                            </a>
+                        @endif
                     </div>
                 </div>
             </div>
