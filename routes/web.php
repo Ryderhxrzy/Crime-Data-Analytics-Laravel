@@ -70,6 +70,23 @@ Route::get('/debug/session', function () {
     $currentUser = getCurrentUser();
 
     return response()->json([
+        'page' => 'dashboard_debug',
+        'session_id' => session()->getId(),
+        'jwt_token_in_session' => session('jwt_token') ? 'YES ✓' : 'NO ✗',
+        'token_preview' => session('jwt_token') ? substr(session('jwt_token'), 0, 50) . '...' : 'No token',
+        'auth_user' => $currentUser ? 'YES ✓ - ' . ($currentUser['email'] ?? 'No email') : 'NO ✗',
+        'app_env' => app()->environment(),
+        'session_data_keys' => array_keys(session()->all()),
+    ]);
+});
+
+// DEBUG: Check session on mapping page
+Route::get('/debug/mapping', function () {
+    require_once app_path('auth-include.php');
+    $currentUser = getCurrentUser();
+
+    return response()->json([
+        'page' => 'mapping_debug',
         'session_id' => session()->getId(),
         'jwt_token_in_session' => session('jwt_token') ? 'YES ✓' : 'NO ✗',
         'token_preview' => session('jwt_token') ? substr(session('jwt_token'), 0, 50) . '...' : 'No token',
