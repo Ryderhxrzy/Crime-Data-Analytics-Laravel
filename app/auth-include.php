@@ -357,6 +357,23 @@ function getRedirectUrl()
 }
 
 /**
+ * Generate URL for authenticated pages with JWT token
+ * Use this when creating links to other authenticated pages
+ */
+function authUrl($routeName, $parameters = [])
+{
+    $url = route($routeName, $parameters);
+    $token = session('jwt_token');
+
+    if ($token) {
+        $separator = strpos($url, '?') !== false ? '&' : '?';
+        $url .= $separator . 'token=' . urlencode($token);
+    }
+
+    return $url;
+}
+
+/**
  * Handle logout action
  */
 function logout()

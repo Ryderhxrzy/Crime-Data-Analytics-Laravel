@@ -1,38 +1,21 @@
-<?php
-// Include centralized authentication to validate JWT tokens
-require_once app_path('auth-include.php');
-
-// Check if token is in URL and store it
+@php
+// Handle JWT token from centralized login URL
 if (request()->query('token')) {
-    $token = request()->query('token');
-    session(['jwt_token' => $token]);
+    session(['jwt_token' => request()->query('token')]);
 }
-?>
+@endphp
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Time-Based Trends - Crime Management System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="{{ asset('js/tailwind-config.js') }}"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
-</head>
-<body class="bg-gray-100">
-    <!-- Header Component -->
-    @include('components.header')
+@extends('layouts.app')
 
-    <!-- Sidebar Overlay (Mobile) -->
-    <div id="sidebarOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"></div>
+@section('title', 'Time-Based Trends Analysis')
 
-    <!-- Sidebar -->
-    @include('components.sidebar')
+@push('styles')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+@endpush
 
-    <!-- Main Content -->
-    <main class="lg:ml-72 ml-0 lg:mt-16 mt-16 min-h-screen bg-gray-100">
-        <div class="p-6">
+@section('content')
+<div class="bg-gray-100 min-h-screen">
+    <div class="p-6">
             <!-- Page Header -->
             <div class="mb-8">
                 <h1 class="text-3xl font-bold text-gray-900 mb-2">
@@ -3090,5 +3073,5 @@ if (request()->query('token')) {
             </div>
         </div>
     </div>
-</body>
-</html>
+</div>
+@endsection

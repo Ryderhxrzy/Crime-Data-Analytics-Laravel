@@ -50,7 +50,7 @@
 
                 <!-- Crime Mapping -->
                 <div>
-                    <a href="{{ route('mapping') }}"
+                    <a href="{{ authUrl('mapping') }}"
                        class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('mapping') ? 'bg-alertara-700 text-alertara-100' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                         <i class="fas fa-map w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Crime Mapping</span>
@@ -73,17 +73,17 @@
                         <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? 'text-alertara-100' : 'text-gray-400' }}"></i>
                     </button>
                     <div class="trend-content {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? '' : 'hidden' }} space-y-0 ml-3 mt-0">
-                        <a href="{{ route('time-based-trends') }}"
+                        <a href="{{ authUrl('time-based-trends') }}"
                            class="flex items-center px-3 py-2 rounded text-sm text-gray-700 hover:bg-gray-100 transition-colors {{ request()->routeIs('time-based-trends') ? 'bg-alertara-100 text-alertara-700' : '' }}">
                             <i class="fas fa-calendar-days w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Time-Based Trends</span>
                         </a>
-                        <a href="{{ route('location-trends') }}"
+                        <a href="{{ authUrl('location-trends') }}"
                            class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('location-trends') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-map-pin w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Location Trends</span>
                         </a>
-                        <a href="{{ route('crime-type-trends') }}"
+                        <a href="{{ authUrl('crime-type-trends') }}"
                            class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-type-trends') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-chart-bar w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Crime Type Trends</span>
@@ -107,17 +107,17 @@
                         <i class="fas fa-chevron-right w-2 h-2 transition-transform duration-200 chevron-icon {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? 'text-alertara-100' : 'text-gray-400' }}"></i>
                     </button>
                     <div class="predictive-content {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? '' : 'hidden' }} space-y-0 ml-3 mt-0">
-                        <a href="{{ route('crime-hotspot') }}"
+                        <a href="{{ authUrl('crime-hotspot') }}"
                            class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-hotspot') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-location-dot w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Crime Hotspot</span>
                         </a>
-                        <a href="{{ route('risk-forecasting') }}"
+                        <a href="{{ authUrl('risk-forecasting') }}"
                            class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('risk-forecasting') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-triangle-exclamation w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Risk Forecasting</span>
                         </a>
-                        <a href="{{ route('pattern-detection') }}"
+                        <a href="{{ authUrl('pattern-detection') }}"
                            class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('pattern-detection') ? 'bg-alertara-100 text-alertara-700' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                             <i class="fas fa-magnifying-glass w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Pattern Detection</span>
