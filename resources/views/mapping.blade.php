@@ -5,19 +5,35 @@ if (request()->query('token')) {
 }
 @endphp
 
-@extends('layouts.app')
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crime Mapping - Crime Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="{{ asset('js/tailwind-config.js') }}"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-@section('title', 'Crime Mapping')
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
-@push('styles')
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<!-- Leaflet Heatmap Plugin -->
-<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
-@endpush
+    <!-- Leaflet Heatmap Plugin - jsDelivr CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <!-- Header Component -->
+    @include('components.header')
 
-@section('content')
-<div class="bg-gray-100 min-h-screen">
+    <!-- Sidebar Overlay (Mobile) -->
+    <div id="sidebarOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"></div>
+
+    <!-- Sidebar -->
+    @include('components.sidebar')
+
+    <!-- Main Content -->
+    <main class="lg:ml-72 ml-0 lg:mt-20 mt-20 min-h-screen bg-gray-100">
         <div class="p-6">
             <!-- Page Header -->
             <div class="mb-8">
@@ -2215,5 +2231,5 @@ if (request()->query('token')) {
             }
         });
     </script>
-</div>
-@endsection
+</body>
+</html>

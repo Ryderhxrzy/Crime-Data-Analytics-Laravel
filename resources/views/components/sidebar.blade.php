@@ -36,7 +36,7 @@
             <nav class="space-y-1">
                 <!-- System Overview -->
                 <div>
-                    <a href="{{ route('dashboard') }}"
+                    <a href="{{ authUrl('dashboard') }}"
                        class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('dashboard') ? 'bg-alertara-700 text-alertara-100' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                         <i class="fas fa-chart-pie w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Dashboard</span>
@@ -170,7 +170,7 @@
 
                 <!-- Crime Incidents -->
                 <div>
-                    <a href="{{ route('crimes.index') }}"
+                    <a href="{{ authUrl('crimes.index') }}"
                        class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crimes.*') ? 'bg-alertara-700 text-alertara-100' : 'text-gray-700 hover:bg-gray-100' }} transition-colors">
                         <i class="fas fa-file-lines w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Crime</span>
