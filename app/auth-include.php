@@ -36,13 +36,13 @@ $debugLog[] = 'Current Time: ' . now()->format('Y-m-d H:i:s');
 $token = null;
 $user = null;
 
-// Try secure HTTP-only cookie first (most secure, not accessible to JavaScript)
-if (isset($_COOKIE['jwt_token']) && !empty($_COOKIE['jwt_token'])) {
-    $token = $_COOKIE['jwt_token'];
-    $debugLog[] = '✓ Token found in secure HTTP-only cookie';
+// Try URL query parameter first (initial redirect from login)
+if (request()->query('token')) {
+    $token = request()->query('token');
+    $debugLog[] = '✓ Token found in URL (?token parameter)';
     $debugLog[] = 'Token Preview: ' . substr($token, 0, 50) . '...';
 
-    // Also store in session for redundancy
+    // Store in session for subsequent requests
     session(['jwt_token' => $token]);
     $debugLog[] = '✓ Token stored in session';
 } else {
@@ -52,7 +52,7 @@ if (isset($_COOKIE['jwt_token']) && !empty($_COOKIE['jwt_token'])) {
         $debugLog[] = '✓ Token retrieved from session';
         $debugLog[] = 'Token Preview: ' . substr($token, 0, 50) . '...';
     } else {
-        $debugLog[] = '✗ No token found in cookie or session';
+        $debugLog[] = '✗ No token found in URL or session';
     }
 }
 
