@@ -33,49 +33,38 @@ class DashboardController extends Controller
     }
     
     /**
-     * Get authenticated user data based on environment
+     * Get authenticated user data from session (via JWT API middleware)
      */
     private function getAuthUser()
     {
-        $environment = app()->environment();
-        $currentUser = null;
-        $userEmail = '';
-        $userRole = '';
-        $userDepartment = '';
-        $departmentName = '';
-        
-        if ($environment === 'local') {
-            // Use Laravel's built-in authentication in local environment
-            if (!auth()->check()) {
-                return null;
-            }
-            
-            $currentUser = auth()->user();
-            $userEmail = $currentUser->email ?? '';
-            $userRole = $currentUser->role ?? 'user';
-            $userDepartment = $currentUser->department ?? '';
-            $departmentName = ucfirst($userDepartment) . ' Department';
-        } else {
-            // Use JWT authentication in production
-            $currentUser = getCurrentUser();
-            
-            if (!$currentUser) {
-                return null;
-            }
-            
-            $userEmail = getUserEmail();
-            $userRole = getUserRole();
-            $userDepartment = getUserDepartment();
-            $departmentName = getDepartmentName();
+        // Try to get user from JWT API session first (centralized auth)
+        $authUser = session('auth_user');
+
+        if ($authUser) {
+            // User authenticated via JWT API
+            return [
+                'currentUser' => $authUser,
+                'userEmail' => $authUser['email'] ?? '',
+                'userRole' => $authUser['role'] ?? 'user',
+                'userDepartment' => $authUser['department'] ?? '',
+                'departmentName' => $authUser['department_name'] ?? 'Department'
+            ];
         }
-        
-        return [
-            'currentUser' => $currentUser,
-            'userEmail' => $userEmail,
-            'userRole' => $userRole,
-            'userDepartment' => $userDepartment,
-            'departmentName' => $departmentName
-        ];
+
+        // Fall back to local Laravel auth if JWT auth is not available
+        if (auth()->check()) {
+            $currentUser = auth()->user();
+            return [
+                'currentUser' => $currentUser,
+                'userEmail' => $currentUser->email ?? '',
+                'userRole' => $currentUser->role ?? 'user',
+                'userDepartment' => $currentUser->department ?? '',
+                'departmentName' => ucfirst($currentUser->department ?? '') . ' Department'
+            ];
+        }
+
+        // No authentication found
+        return null;
     }
     
     public function index()
