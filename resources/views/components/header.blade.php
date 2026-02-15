@@ -95,12 +95,24 @@
 
     // Perform logout with CSRF token
     function performLogout() {
+        // Clear all client-side storage (localStorage, sessionStorage)
+        localStorage.clear();
+        sessionStorage.clear();
+
+        // Also clear specific auth-related keys if they exist
+        localStorage.removeItem('jwt_token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('otp_timer');
+        sessionStorage.removeItem('jwt_token');
+        sessionStorage.removeItem('auth_user');
+
         // Get CSRF token from meta tag
         const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                       document.querySelector('input[name="_token"]')?.value;
 
         if (!token) {
             console.error('CSRF token not found');
+            console.log('Clearing client-side storage and redirecting to login');
             // Fallback: redirect to login
             window.location.href = '{{ app()->environment() === "production" ? "https://login.alertaraqc.com" : "/login" }}';
             return;
@@ -118,6 +130,7 @@
             redirect: 'follow'  // Follow redirects
         })
         .then(response => {
+            console.log('Logout request successful, clearing client-side storage');
             // If response was redirected, the URL will be in response.url
             if (response.ok || response.redirected) {
                 // Redirect to the final URL (after any server redirects)
@@ -128,6 +141,7 @@
         })
         .catch(error => {
             console.error('Logout error:', error);
+            console.log('Logout failed, but clearing client-side storage anyway');
             // Fallback: redirect to login based on environment
             const redirectUrl = '{{ app()->environment() === "production" ? "https://login.alertaraqc.com" : "/login" }}';
             window.location.href = redirectUrl;
