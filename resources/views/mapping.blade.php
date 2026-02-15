@@ -36,16 +36,21 @@ if (request()->query('token')) {
     <main class="lg:ml-72 ml-0 lg:mt-20 mt-20 min-h-screen bg-gray-100">
         <div class="p-6">
             <!-- Page Header -->
-            <div class="mb-8">
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
                 <h1 class="text-3xl font-bold text-gray-900">Crime Mapping</h1>
                 <p class="text-gray-600 mt-2">Interactive crime data visualization and analysis</p>
             </div>
 
             <!-- Map Container with Right Panel -->
-            <div class="bg-white border border-gray-200 rounded-lg p-6 mb-8 hover:border-alertara-300 transition-colors" style="position: relative; z-index: 1;">
-                <h2 class="text-lg font-bold text-gray-900 mb-4">
-                    <i class="fas fa-map mr-2 text-alertara-600"></i>Crime Incident Map
-                </h2>
+            <div class="bg-white border border-gray-200 rounded-lg p-6 mb-8" style="position: relative; z-index: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h2 class="text-lg font-bold text-gray-900">
+                        <i class="fas fa-map mr-2 text-alertara-600"></i>Crime Incident Map
+                    </h2>
+                    <button id="map3DToggle" style="background: none; border: 1px solid #d1d5db; font-size: 12px; color: #274d4c; cursor: pointer; padding: 6px 12px; border-radius: 6px; transition: all 0.2s; font-weight: 500;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='white'" title="Toggle 3D Map View">
+                        <i class="fas fa-cube mr-1"></i>3D Map
+                    </button>
+                </div>
 
                 <!-- Filter Bar - Single Line -->
                 <div style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap;">
@@ -84,13 +89,28 @@ if (request()->query('token')) {
                         </select>
                     </div>
 
-                    <!-- Case Status -->
+                    <!-- Case Status (Workflow) -->
                     <div style="flex: 1; min-width: 150px;">
                         <label style="display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase;">
-                            <i class="fas fa-check-circle mr-1" style="color: #274d4c;"></i>Status
+                            <i class="fas fa-tasks mr-1" style="color: #274d4c;"></i>Case Status
                         </label>
                         <select id="caseStatus" style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; background-color: white; color: #333; cursor: pointer;">
                             <option value="">All Status</option>
+                            <option value="reported">Reported</option>
+                            <option value="under_investigation">Under Investigation</option>
+                            <option value="solved">Solved</option>
+                            <option value="closed">Closed</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
+
+                    <!-- Clearance Status -->
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase;">
+                            <i class="fas fa-check-circle mr-1" style="color: #274d4c;"></i>Clearance
+                        </label>
+                        <select id="clearanceStatus" style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; background-color: white; color: #333; cursor: pointer;">
+                            <option value="">All Clearance</option>
                             <option value="cleared">Cleared</option>
                             <option value="uncleared">Uncleared</option>
                         </select>
@@ -123,86 +143,14 @@ if (request()->query('token')) {
                     <div id="mapContainer" style="width: 55%; border-radius: 0.5rem; border: 1px solid #e5e7eb; position: relative; z-index: 1; overflow: hidden; flex-shrink: 0;">
                         <div id="map" class="h-96 sm:h-[450px] md:h-[500px] lg:h-[600px]" style="width: 100%; position: relative; z-index: 1;"></div>
 
-                        <!-- Incident Details Modal (Inside Map) -->
-                        <div id="incidentModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); z-index: 99999; padding: 20px; align-items: center; justify-content: center;" onclick="if(event.target === this) closeIncidentModal()">
-                            <div style="position: relative; background: white; border-radius: 16px; max-width: 380px; max-height: 85%; overflow-y: auto; box-shadow: 0 25px 70px rgba(0, 0, 0, 0.35); pointer-events: auto;">
-                                <!-- Close Button -->
-                                <button onclick="closeIncidentModal()" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; color: #999; cursor: pointer; z-index: 10; transition: color 0.2s; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#999'"><i class="fas fa-times"></i></button>
-
-                                <!-- Category Badge Header -->
-                                <div id="modalCategoryBadge" style="padding: 20px 20px 0;">
-                                    <span style="display: inline-block; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; color: white; background-color: #274d4c;">
-                                        <i class="fas fa-tag mr-2"></i><span id="modalCategoryName">Loading...</span>
-                                    </span>
+                        <!-- Map Loading Overlay -->
+                        <div id="mapLoadingOverlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.95); display: none; z-index: 10000; flex-direction: column; align-items: center; justify-content: center; gap: 16px;">
+                            <div style="text-align: center;">
+                                <div style="display: inline-block; margin-bottom: 12px;">
+                                    <i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #274d4c;"></i>
                                 </div>
-
-                                <!-- Title -->
-                                <div style="padding: 16px 20px 0;">
-                                    <h2 id="modalTitle" style="font-size: 18px; font-weight: 700; color: #111; margin: 0; line-height: 1.4;">Loading...</h2>
-                                </div>
-
-                                <!-- Details Grid -->
-                                <div style="padding: 20px;">
-                                    <div style="display: grid; gap: 14px;">
-                                        <!-- Row 1: Date and Time -->
-                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                            <div>
-                                                <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
-                                                    <i class="fas fa-calendar mr-1" style="color: #274d4c;"></i>Date
-                                                </label>
-                                                <div id="modalDate" style="font-size: 14px; font-weight: 600; color: #222;">—</div>
-                                            </div>
-                                            <div>
-                                                <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
-                                                    <i class="fas fa-clock mr-1" style="color: #274d4c;"></i>Time
-                                                </label>
-                                                <div id="modalTime" style="font-size: 14px; font-weight: 600; color: #222;">—</div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Row 2: Location -->
-                                        <div>
-                                            <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
-                                                <i class="fas fa-map-marker-alt mr-1" style="color: #274d4c;"></i>Location
-                                            </label>
-                                            <div id="modalLocation" style="font-size: 14px; color: #333;">—</div>
-                                        </div>
-
-                                        <!-- Row 3: Address -->
-                                        <div>
-                                            <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
-                                                <i class="fas fa-home mr-1" style="color: #274d4c;"></i>Address
-                                            </label>
-                                            <div id="modalAddress" style="font-size: 14px; color: #333;">—</div>
-                                        </div>
-
-                                        <!-- Row 4: Status and Case -->
-                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                            <div>
-                                                <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
-                                                    <i class="fas fa-info-circle mr-1" style="color: #274d4c;"></i>Status
-                                                </label>
-                                                <div id="modalStatus">
-                                                    <span style="display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: white;">—</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
-                                                    <i class="fas fa-hashtag mr-1" style="color: #274d4c;"></i>Case
-                                                </label>
-                                                <div id="modalCaseNumber" style="font-size: 14px; color: #222; font-weight: 600;">—</div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Row 5: Details -->
-                                        <div style="border-top: 1px solid #e5e7eb; padding-top: 14px;">
-                                            <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
-                                                <i class="fas fa-file-alt mr-1" style="color: #274d4c;"></i>Details
-                                            </label>
-                                            <div id="modalDetails" style="font-size: 13px; color: #555; line-height: 1.5;">—</div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <div style="font-size: 14px; font-weight: 600; color: #111; margin-bottom: 4px;">Loading Map Data</div>
+                                <div style="font-size: 12px; color: #666;">Processing visualization...</div>
                             </div>
                         </div>
                     </div>
@@ -316,6 +264,17 @@ if (request()->query('token')) {
                                     </div>
                                 </div>
 
+                                <!-- Analysis Radius Slider -->
+                                <div style="margin-bottom: 14px;">
+                                    <label style="font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                                        <i class="fas fa-search-plus mr-1" style="color: #274d4c;"></i>Analysis Radius
+                                    </label>
+                                    <input type="range" id="analysisRadiusSlider" min="100" max="2000" step="100" value="500" style="width: 100%; cursor: pointer;">
+                                    <div style="font-size: 11px; color: #999; margin-top: 4px;">
+                                        <span id="analysisRadiusValue">500</span>m
+                                    </div>
+                                </div>
+
                                 <!-- Reset Button -->
                                 <button id="heatmapResetBtn" style="width: 100%; background-color: #274d4c; color: white; border: none; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
                                     <i class="fas fa-redo mr-2"></i>Reset Controls
@@ -325,7 +284,7 @@ if (request()->query('token')) {
                             <!-- Area Analysis Results -->
                             <div id="areaAnalysisResults" style="overflow-y: auto; flex-grow: 1; padding: 16px;">
                                 <div style="text-align: center; padding: 40px 20px; color: #999; font-size: 12px;">
-                                    <i class="fas fa-info-circle mr-2"></i>Click on the heatmap to analyze a 500m area
+                                    <i class="fas fa-info-circle mr-2"></i>Click on the heatmap to analyze a <span id="analysisRadiusDisplay">500</span>m area
                                 </div>
                             </div>
                         </div>
@@ -346,7 +305,7 @@ if (request()->query('token')) {
                 </div>
 
                 <!-- Crime Intensity & Density Scale (Floating Panel) -->
-                <div id="crimeIntensityScale" style="position: fixed; bottom: 80px; right: 20px; width: 320px; max-height: 400px; overflow-y: auto; background: rgba(255, 255, 255, 0.99); border: 2px solid #274d4c; border-radius: 10px; padding: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); display: none; z-index: 500;">
+                <div id="crimeIntensityScale" style="margin-top: 16px; margin-bottom: 16px; width: 100%; max-height: 400px; overflow-y: auto; background: rgba(255, 255, 255, 0.99); border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; display: none; z-index: 1;">
                     <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0 0 12px;">
                         <i class="fas fa-palette mr-2" style="color: #274d4c;"></i>Crime Intensity Scale
                     </h3>
@@ -476,7 +435,106 @@ if (request()->query('token')) {
             </div>
 
         </div>
+
+        <!-- Fullscreen Map Container -->
     </main>
+
+    <!-- Incident Details Modal (Full Viewport Overlay) -->
+    <div id="incidentModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); z-index: 99999; padding: 20px; align-items: center; justify-content: center;" onclick="if(event.target === this) closeIncidentModal()">
+        <div style="position: relative; background: white; border-radius: 16px; max-width: 380px; max-height: 85%; overflow-y: auto; box-shadow: 0 25px 70px rgba(0, 0, 0, 0.35); pointer-events: auto;">
+            <!-- Close Button -->
+            <button onclick="closeIncidentModal()" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; color: #999; cursor: pointer; z-index: 10; transition: color 0.2s; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#999'"><i class="fas fa-times"></i></button>
+
+            <!-- Category Badge Header -->
+            <div id="modalCategoryBadge" style="padding: 20px 20px 0;">
+                <span style="display: inline-block; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; color: white; background-color: #274d4c;">
+                    <i class="fas fa-tag mr-2"></i><span id="modalCategoryName">Loading...</span>
+                </span>
+            </div>
+
+            <!-- Title -->
+            <div style="padding: 16px 20px 0;">
+                <h2 id="modalTitle" style="font-size: 18px; font-weight: 700; color: #111; margin: 0; line-height: 1.4;">Loading...</h2>
+            </div>
+
+            <!-- Details Grid -->
+            <div style="padding: 20px;">
+                <div style="display: grid; gap: 14px;">
+                    <!-- Row 1: Date and Time -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                                <i class="fas fa-calendar mr-1" style="color: #274d4c;"></i>Date
+                            </label>
+                            <div id="modalDate" style="font-size: 14px; font-weight: 600; color: #222;">—</div>
+                        </div>
+                        <div>
+                            <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                                <i class="fas fa-clock mr-1" style="color: #274d4c;"></i>Time
+                            </label>
+                            <div id="modalTime" style="font-size: 14px; font-weight: 600; color: #222;">—</div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Location -->
+                    <div>
+                        <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                            <i class="fas fa-map-marker-alt mr-1" style="color: #274d4c;"></i>Location
+                        </label>
+                        <div id="modalLocation" style="font-size: 14px; color: #333;">—</div>
+                    </div>
+
+                    <!-- Row 3: Address -->
+                    <div>
+                        <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                            <i class="fas fa-home mr-1" style="color: #274d4c;"></i>Address
+                        </label>
+                        <div id="modalAddress" style="font-size: 14px; color: #333;">—</div>
+                    </div>
+
+                    <!-- Row 4: Status (Workflow) -->
+                    <div>
+                        <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                            <i class="fas fa-tasks mr-1" style="color: #274d4c;"></i>Case Status
+                        </label>
+                        <div id="modalStatus">
+                            <span style="display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: white;">—</span>
+                        </div>
+                    </div>
+
+                    <!-- Row 5: Clearance Status -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                                <i class="fas fa-check-circle mr-1" style="color: #274d4c;"></i>Clearance
+                            </label>
+                            <div id="modalClearanceStatus">
+                                <span style="display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: white;">—</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                                <i class="fas fa-hashtag mr-1" style="color: #274d4c;"></i>Case
+                            </label>
+                            <div id="modalCaseNumber" style="font-size: 14px; color: #222; font-weight: 600;">—</div>
+                        </div>
+                    </div>
+
+                    <!-- Row 6: Details -->
+                    <div style="border-top: 1px solid #e5e7eb; padding-top: 14px;">
+                        <label style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; display: block; margin-bottom: 6px;">
+                            <i class="fas fa-file-alt mr-1" style="color: #274d4c;"></i>Details
+                        </label>
+                        <div id="modalDetails" style="font-size: 13px; color: #555; line-height: 1.5;">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* Fullscreen map styles */
+    </style>
 
     <script>
         // State variables
@@ -498,8 +556,45 @@ if (request()->query('token')) {
         let heatmapRadius = 40;
         let heatmapBlur = 20;
         let heatmapIntensity = 1;
+        let analysisRadius = 500; // Customizable analysis radius in meters
         let analysisCircle = null;
         let analysisMarker = null;
+
+        // Loading overlay functions
+        function showMapLoading() {
+            const overlay = document.getElementById('mapLoadingOverlay');
+            if (overlay) {
+                overlay.style.display = 'flex';
+            }
+        }
+
+        function hideMapLoading() {
+            const overlay = document.getElementById('mapLoadingOverlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+            }
+        }
+
+        // Helper function to get workflow status color and text
+        function getWorkflowStatusInfo(status) {
+            const statusMap = {
+                'reported': { color: '#3b82f6', text: 'Reported', bgColor: '#dbeafe' },
+                'under_investigation': { color: '#f59e0b', text: 'Under Investigation', bgColor: '#fef3c7' },
+                'solved': { color: '#10b981', text: 'Solved', bgColor: '#d1fae5' },
+                'closed': { color: '#6366f1', text: 'Closed', bgColor: '#e0e7ff' },
+                'archived': { color: '#8b5cf6', text: 'Archived', bgColor: '#ede9fe' }
+            };
+            return statusMap[status] || { color: '#6b7280', text: status || 'Unknown', bgColor: '#f3f4f6' };
+        }
+
+        // Helper function to get clearance status color and text
+        function getClearanceStatusInfo(clearanceStatus) {
+            const statusMap = {
+                'cleared': { color: '#10b981', text: 'Cleared', bgColor: '#d1fae5' },
+                'uncleared': { color: '#f59e0b', text: 'Uncleared', bgColor: '#fef3c7' }
+            };
+            return statusMap[clearanceStatus] || { color: '#6b7280', text: clearanceStatus || 'Unknown', bgColor: '#f3f4f6' };
+        }
 
         // Initialize map
         function initializeMap() {
@@ -888,21 +983,24 @@ if (request()->query('token')) {
             const loadingIndicator = document.getElementById('loadingIndicator');
             loadingIndicator.style.display = 'flex';
             showIncidentSkeleton();
+            showMapLoading();
 
             try {
                 const timePeriod = document.getElementById('timePeriod').value;
                 const visualizationMode = document.getElementById('visualizationMode').value;
                 const crimeType = document.getElementById('crimeType').value;
                 const caseStatus = document.getElementById('caseStatus').value;
+                const clearanceStatus = document.getElementById('clearanceStatus').value;
                 const barangay = document.getElementById('barangay').value;
 
-                console.log('loadCrimeData: timePeriod=', timePeriod, 'mode=', visualizationMode, 'type=', crimeType, 'status=', caseStatus, 'barangay=', barangay);
+                console.log('loadCrimeData: timePeriod=', timePeriod, 'mode=', visualizationMode, 'type=', crimeType, 'status=', caseStatus, 'clearance=', clearanceStatus, 'barangay=', barangay);
 
                 // Build query parameters
                 const params = new URLSearchParams();
                 params.append('range', timePeriod);
                 if (crimeType) params.append('crime_type', crimeType);
                 if (caseStatus) params.append('status', caseStatus);
+                if (clearanceStatus) params.append('clearance_status', clearanceStatus);
                 if (barangay) params.append('barangay', barangay);
 
                 const url = `/api/crime-heatmap?${params}`;
@@ -944,6 +1042,7 @@ if (request()->query('token')) {
                 document.getElementById('incidentListContent').style.display = 'block';
             } finally {
                 loadingIndicator.style.display = 'none';
+                hideMapLoading();
             }
         }
 
@@ -1036,7 +1135,7 @@ if (request()->query('token')) {
                         cursor: pointer;
                         transition: all 0.2s;
                         border-left: 3px solid ${isSelected ? incident.color_code : 'transparent'};
-                    " onmouseover="this.style.backgroundColor='#f9fafb'; createPointerMarker(${incident.latitude}, ${incident.longitude}, ${incident.id});" onmouseout="this.style.backgroundColor='${bgColor}'; clearArrowPointer();" onclick="zoomToIncident(${originalIndex})">
+                    " onmouseover="this.style.backgroundColor='#f9fafb'; createPointerMarker(${incident.latitude}, ${incident.longitude}, ${incident.id});" onmouseout="this.style.backgroundColor='${bgColor}'; if(selectedIncidentId !== ${incident.id}) { clearArrowPointer(); }" onclick="zoomToIncident(${originalIndex})">
                         <div style="display: flex; gap: 8px; align-items: flex-start;">
                             <div style="
                                 width: 12px;
@@ -1056,10 +1155,15 @@ if (request()->query('token')) {
                                 <div style="font-size: 11px; color: #999; margin-top: 2px;">
                                     ${new Date(incident.incident_date).toLocaleDateString()}
                                 </div>
-                                <div style="font-size: 11px; margin-top: 4px;">
-                                    <span style="display: inline-block; padding: 2px 6px; border-radius: 3px; background-color: ${incident.clearance_status === 'cleared' ? '#d4edda' : '#f8d7da'}; color: ${incident.clearance_status === 'cleared' ? '#155724' : '#721c24'};">
-                                        ${incident.clearance_status === 'cleared' ? 'Cleared' : 'Uncleared'}
-                                    </span>
+                                <div style="font-size: 11px; margin-top: 4px; display: flex; gap: 4px;">
+                                    ${(() => {
+                                        const workflowStatusInfo = getWorkflowStatusInfo(incident.status);
+                                        const clearanceStatusInfo = getClearanceStatusInfo(incident.clearance_status);
+                                        return `
+                                            <span style="display: inline-block; padding: 2px 6px; border-radius: 3px; background-color: ${workflowStatusInfo.bgColor}; color: ${workflowStatusInfo.color}; font-weight: 600; font-size: 10px;">${workflowStatusInfo.text}</span>
+                                            <span style="display: inline-block; padding: 2px 6px; border-radius: 3px; background-color: ${clearanceStatusInfo.bgColor}; color: ${clearanceStatusInfo.color}; font-weight: 600; font-size: 10px;">${clearanceStatusInfo.text}</span>
+                                        `;
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -1116,9 +1220,9 @@ if (request()->query('token')) {
         function createPointerMarker(lat, lng, incidentId) {
             console.log('createPointerMarker called with:', lat, lng, incidentId, 'current mode:', currentVisualizationMode);
 
-            // Only show arrow in individual markers mode (not in clusters or heatmap)
-            if (currentVisualizationMode !== 'markers') {
-                console.log('Arrow not shown - visualization mode is:', currentVisualizationMode);
+            // Don't show arrow in heatmap mode (no individual markers in heatmap)
+            if (currentVisualizationMode === 'heatmap') {
+                console.log('Arrow not shown - visualization mode is heatmap');
                 return;
             }
 
@@ -1215,12 +1319,19 @@ if (request()->query('token')) {
                 document.getElementById('modalLocation').textContent = incident.location || '—';
                 document.getElementById('modalAddress').textContent = incident.address || '—';
 
-                // Status badge with better colors
-                const statusColor = incident.clearance_status === 'cleared' ? '#10b981' : '#f59e0b';
-                const statusText = incident.clearance_status === 'cleared' ? 'CLEARED' : 'UNDER INVESTIGATION';
+                // Workflow Status badge
+                const workflowStatusInfo = getWorkflowStatusInfo(incident.status);
                 document.getElementById('modalStatus').innerHTML = `
-                    <span style="display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: white; background-color: ${statusColor};">
-                        ${statusText}
+                    <span style="display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: white; background-color: ${workflowStatusInfo.color};">
+                        ${workflowStatusInfo.text.toUpperCase()}
+                    </span>
+                `;
+
+                // Clearance Status badge
+                const clearanceStatusInfo = getClearanceStatusInfo(incident.clearance_status);
+                document.getElementById('modalClearanceStatus').innerHTML = `
+                    <span style="display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: white; background-color: ${clearanceStatusInfo.color};">
+                        ${clearanceStatusInfo.text.toUpperCase()}
                     </span>
                 `;
 
@@ -1237,7 +1348,11 @@ if (request()->query('token')) {
         // Close incident details modal
         function closeIncidentModal() {
             document.getElementById('incidentModal').style.display = 'none';
-            // Keep arrow visible - don't remove it
+            // Clear selection and arrow when modal closes
+            selectedIncidentId = null;
+            clearArrowPointer();
+            // Refresh incident list to remove selection highlight
+            updateIncidentList(currentData);
         }
 
         // Close modal when clicking outside
@@ -1299,17 +1414,16 @@ if (request()->query('token')) {
             ]);
         }
 
-        // Calculate area analysis (500m radius summary)
+        // Calculate area analysis (customizable radius)
         function analyzeArea(lat, lng) {
-            const radiusInKm = 0.5; // 500m
             const incidents = [];
             let crimeTypeCount = {};
             let statusCount = { cleared: 0, uncleared: 0 };
 
-            // Find all incidents within 500m
+            // Find all incidents within analysis radius
             currentData.forEach(incident => {
                 const distance = L.latLng(lat, lng).distanceTo(L.latLng(incident.latitude, incident.longitude));
-                if (distance <= radiusInKm * 1000) {
+                if (distance <= analysisRadius) {
                     incidents.push(incident);
 
                     // Count by crime type
@@ -1350,7 +1464,7 @@ if (request()->query('token')) {
             resultsDiv.innerHTML = `
                 <div>
                     <div style="text-align: center; margin-bottom: 16px;">
-                        <h4 style="font-size: 13px; font-weight: 700; color: #111; margin: 0 0 4px;">500m Radius Analysis</h4>
+                        <h4 style="font-size: 13px; font-weight: 700; color: #111; margin: 0 0 4px;">${analysisRadius}m Radius Analysis</h4>
                         <p style="font-size: 11px; color: #666; margin: 0;">Latitude: ${lat.toFixed(6)}<br>Longitude: ${lng.toFixed(6)}</p>
                     </div>
 
@@ -1382,7 +1496,7 @@ if (request()->query('token')) {
             if (analysisMarker) map.removeLayer(analysisMarker);
 
             analysisCircle = L.circle([lat, lng], {
-                radius: 500,
+                radius: analysisRadius,
                 color: '#274d4c',
                 weight: 2,
                 opacity: 0.7,
@@ -1852,10 +1966,53 @@ if (request()->query('token')) {
             document.getElementById('timePeriod').value = 'all';
             document.getElementById('crimeType').value = '';
             document.getElementById('caseStatus').value = '';
+            document.getElementById('clearanceStatus').value = '';
             document.getElementById('barangay').value = '';
             document.getElementById('incidentSearch').value = '';
             loadCrimeData();
         });
+
+        // 3D Map Toggle Functionality
+        let is3DMode = false;
+        const map3DToggleBtn = document.getElementById('map3DToggle');
+        const mapContainer = document.getElementById('map');
+
+        map3DToggleBtn.addEventListener('click', function() {
+            is3DMode = !is3DMode;
+
+            if (is3DMode) {
+                // Enable 3D mode
+                map3DToggleBtn.style.backgroundColor = '#274d4c';
+                map3DToggleBtn.style.color = 'white';
+
+                // Apply 3D perspective effect to map
+                mapContainer.style.perspective = '1000px';
+                mapContainer.style.transformStyle = 'preserve-3d';
+                mapContainer.style.transform = 'rotateX(15deg) rotateZ(5deg)';
+                mapContainer.style.transition = 'transform 0.3s ease';
+
+                console.log('3D Mode enabled');
+            } else {
+                // Disable 3D mode (return to 2D)
+                map3DToggleBtn.style.backgroundColor = 'white';
+                map3DToggleBtn.style.color = '#274d4c';
+
+                // Reset perspective effect
+                mapContainer.style.perspective = 'none';
+                mapContainer.style.transform = 'rotateX(0deg) rotateZ(0deg)';
+                mapContainer.style.transition = 'transform 0.3s ease';
+
+                console.log('3D Mode disabled');
+            }
+
+            // Trigger map resize to adjust for perspective changes
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 300);
+        });
+
 
         // Search incident functionality
         try {
@@ -1898,24 +2055,57 @@ if (request()->query('token')) {
             }
         });
 
+        // Analysis radius slider
+        document.getElementById('analysisRadiusSlider').addEventListener('input', function(e) {
+            analysisRadius = parseInt(e.target.value);
+            document.getElementById('analysisRadiusValue').textContent = analysisRadius;
+
+            // Update the instruction message display
+            const display = document.getElementById('analysisRadiusDisplay');
+            if (display) {
+                display.textContent = analysisRadius;
+            }
+
+            // Update the analysis results heading if it exists
+            const resultsDiv = document.getElementById('areaAnalysisResults');
+            if (resultsDiv) {
+                const heading = resultsDiv.querySelector('h4');
+                if (heading) {
+                    heading.textContent = analysisRadius + 'm Radius Analysis';
+                }
+            }
+
+            // If analysis circle exists, update its radius in real-time
+            if (analysisCircle) {
+                analysisCircle.setRadius(analysisRadius);
+            }
+        });
+
         // Reset heatmap controls
         document.getElementById('heatmapResetBtn').addEventListener('click', function() {
             heatmapRadius = 40;
             heatmapBlur = 20;
             heatmapIntensity = 1;
+            analysisRadius = 500;
 
             document.getElementById('heatmapRadius').value = 40;
             document.getElementById('heatmapBlur').value = 20;
             document.getElementById('heatmapIntensity').value = 1;
+            document.getElementById('analysisRadiusSlider').value = 500;
 
             document.getElementById('radiusValue').textContent = '40';
             document.getElementById('blurValue').textContent = '20';
             document.getElementById('intensityValue').textContent = '1.0';
+            document.getElementById('analysisRadiusValue').textContent = '500';
 
             // Refresh heatmap and clear analysis
             if (currentVisualizationMode === 'heatmap') {
                 clearAreaAnalysis();
-                document.getElementById('areaAnalysisResults').innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #999; font-size: 12px;"><i class="fas fa-info-circle mr-2"></i>Click on the heatmap to analyze a 500m area</div>';
+                const display = document.getElementById('analysisRadiusDisplay');
+                if (display) {
+                    display.textContent = analysisRadius;
+                }
+                document.getElementById('areaAnalysisResults').innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #999; font-size: 12px;"><i class="fas fa-info-circle mr-2"></i>Click on the heatmap to analyze a <span id="analysisRadiusDisplay">' + analysisRadius + '</span>m area</div>';
                 displayHeatmap(currentData);
             }
         });
@@ -2049,8 +2239,8 @@ if (request()->query('token')) {
             incidents.forEach(incident => {
                 const severity = getSeverityLevel(incident);
                 const severityColor = getSeverityIcon(severity);
-                const statusColor = incident.clearance_status === 'cleared' ? '#10b981' : '#f59e0b';
-                const statusLabel = incident.clearance_status === 'cleared' ? 'Cleared' : 'Pending';
+                const workflowStatusInfo = getWorkflowStatusInfo(incident.status);
+                const clearanceStatusInfo = getClearanceStatusInfo(incident.clearance_status);
 
                 incidentListHtml += `
                     <div class="cluster-incident-item" data-incident-id="${incident.id}" style="
@@ -2065,23 +2255,34 @@ if (request()->query('token')) {
                         width: 100%;
                         box-sizing: border-box;
                     ">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px; gap: 8px;">
                             <div style="flex: 1; min-width: 0;">
                                 <div style="font-size: 12px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                     ${incident.incident_title}
                                 </div>
                             </div>
-                            <span style="
-                                display: inline-block;
-                                background: ${statusColor};
-                                color: white;
-                                padding: 2px 6px;
-                                border-radius: 3px;
-                                font-size: 10px;
-                                font-weight: 600;
-                                margin-left: 4px;
-                                white-space: nowrap;
-                            ">${statusLabel}</span>
+                            <div style="display: flex; gap: 4px;">
+                                <span style="
+                                    display: inline-block;
+                                    background: ${workflowStatusInfo.bgColor};
+                                    color: ${workflowStatusInfo.color};
+                                    padding: 2px 6px;
+                                    border-radius: 3px;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    white-space: nowrap;
+                                ">${workflowStatusInfo.text}</span>
+                                <span style="
+                                    display: inline-block;
+                                    background: ${clearanceStatusInfo.bgColor};
+                                    color: ${clearanceStatusInfo.color};
+                                    padding: 2px 6px;
+                                    border-radius: 3px;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    white-space: nowrap;
+                                ">${clearanceStatusInfo.text}</span>
+                            </div>
                         </div>
 
                         <div style="display: flex; gap: 12px; font-size: 11px; color: #666; margin-bottom: 6px;">
@@ -2210,12 +2411,14 @@ if (request()->query('token')) {
                 crimeIntensityScale.style.display = 'block';
             } else if (newMode === 'clusters') {
                 toggleRightPanel('clusters');
+                clearAreaAnalysis();
                 // Show Severity Legend in cluster mode
                 document.getElementById('severityLegend').style.display = 'block';
                 // Hide Crime Intensity Scale in cluster mode
                 crimeIntensityScale.style.display = 'none';
             } else {
                 toggleRightPanel('incidents');
+                clearAreaAnalysis();
                 // Hide Crime Intensity Scale in markers mode
                 crimeIntensityScale.style.display = 'none';
             }
