@@ -382,28 +382,34 @@ class AuthController extends Controller
 
         // Clear the session cookie by setting it to expire in the past
         $sessionCookieName = config('session.cookie');
+        $sessionDomain = config('session.domain');
+        $sessionPath = config('session.path', '/');
 
-        // Delete local domain cookie
-        $response->cookie(
-            $sessionCookieName,
-            '',
-            now()->subDays(1),
-            '/',
-            null,
-            false,
-            true
-        );
+        // Delete cookie for configured domain
+        if ($sessionDomain) {
+            $response->cookie(
+                $sessionCookieName,
+                '',
+                now()->subDays(1),
+                $sessionPath,
+                $sessionDomain,
+                false,
+                true
+            );
+        }
 
-        // Delete parent domain (.alertaraqc.com) cookie - THIS IS CRITICAL
-        $response->cookie(
-            $sessionCookieName,
-            '',
-            now()->subDays(1),
-            '/',
-            '.alertaraqc.com',
-            false,
-            true
-        );
+        // Also delete parent domain cookie (.alertaraqc.com) for production cross-domain logout
+        if (app()->environment() === 'production' && $sessionDomain !== '.alertaraqc.com') {
+            $response->cookie(
+                $sessionCookieName,
+                '',
+                now()->subDays(1),
+                '/',
+                '.alertaraqc.com',
+                false,
+                true
+            );
+        }
 
         return $response;
     }
