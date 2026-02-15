@@ -23,6 +23,9 @@ class AuthService
     {
         try {
             $response = Http::timeout(10)
+                ->withHeaders([
+                    'Authorization' => 'Bearer ' . $this->apiToken,
+                ])
                 ->get($this->apiEndpoint, [
                     'token' => $token,
                 ]);
