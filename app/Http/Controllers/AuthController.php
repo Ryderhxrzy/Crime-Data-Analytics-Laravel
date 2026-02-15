@@ -373,12 +373,12 @@ class AuthController extends Controller
             $redirectUrl = '/login';
         }
 
-        // Invalidate session after preparing redirect
-        $request->session()->invalidate();
+        // Regenerate CSRF token BEFORE invalidating session
         $request->session()->regenerateToken();
+        $request->session()->invalidate();
 
         // Return redirect with session invalidation
-        return redirect($redirectUrl)->with('message', 'You have been logged out successfully.');
+        return redirect($redirectUrl);
     }
 
     public function redirectToGoogle()
