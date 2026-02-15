@@ -52,14 +52,18 @@ class ValidateJWTViaAPI
             $cachedUser = $this->authService->getCachedUser();
 
             if (!$cachedUser) {
-                // No token and no cached user - redirect to login
-                return redirect('/login');
-            }
-
-            // Check if cached user token has expired
-            if (!$this->authService->isTokenValid()) {
-                session()->flush();
-                return redirect('/login');
+                // No token and no cached user - check for local Laravel auth (for development)
+                if (!auth()->check()) {
+                    // No token, no cached user, and no local auth - redirect to login
+                    return redirect('/login');
+                }
+                // User is authenticated via local Laravel auth, allow access (for local development)
+            } else {
+                // Check if cached user token has expired
+                if (!$this->authService->isTokenValid()) {
+                    session()->flush();
+                    return redirect('/login');
+                }
             }
         }
 
