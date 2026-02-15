@@ -40,7 +40,7 @@ class LandingController extends Controller
         $dateRange = $request->query('range', 'all'); // default all records
 
         $query = CrimeIncident::with('category', 'barangay')
-            ->select('id', 'latitude', 'longitude', 'incident_date', 'incident_title', 'clearance_status', 'crime_category_id', 'barangay_id')
+            ->select('id', 'latitude', 'longitude', 'incident_date', 'incident_title', 'status', 'clearance_status', 'crime_category_id', 'barangay_id')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude');
 
@@ -55,9 +55,14 @@ class LandingController extends Controller
             $query->where('crime_category_id', $request->query('crime_type'));
         }
 
-        // Apply case status filter (for authenticated users)
+        // Apply case status (workflow) filter (for authenticated users)
         if ($request->has('status') && !empty($request->query('status'))) {
-            $query->where('clearance_status', $request->query('status'));
+            $query->where('status', $request->query('status'));
+        }
+
+        // Apply clearance status filter (for authenticated users)
+        if ($request->has('clearance_status') && !empty($request->query('clearance_status'))) {
+            $query->where('clearance_status', $request->query('clearance_status'));
         }
 
         // Apply barangay filter (for authenticated users)
@@ -73,6 +78,7 @@ class LandingController extends Controller
                     'longitude' => (float) $incident->longitude,
                     'incident_date' => $incident->incident_date->format('Y-m-d'),
                     'incident_title' => $incident->incident_title,
+                    'status' => $incident->status,
                     'clearance_status' => $incident->clearance_status,
                     'crime_category_id' => $incident->crime_category_id,
                     'barangay_id' => $incident->barangay_id,
@@ -106,6 +112,7 @@ class LandingController extends Controller
                 'location' => $incident->barangay ? $incident->barangay->barangay_name : 'Not specified',
                 'address' => $incident->address_details ?? 'Not specified',
                 'barangay_name' => $incident->barangay ? $incident->barangay->barangay_name : 'Unknown',
+                'status' => $incident->status,
                 'clearance_status' => $incident->clearance_status,
                 'case_number' => $incident->incident_code ?? 'N/A',
                 'incident_details' => $incident->incident_description ?? 'No additional details',
