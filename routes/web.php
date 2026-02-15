@@ -39,42 +39,31 @@ Route::post('/otp/resend', [AuthController::class, 'resendOtp'])->name('otp.rese
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('login.google');
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
 
-// Dashboard routes with conditional authentication
-Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-Route::get('/dashboard/charts', [DashboardController::class, 'getChartData'])->name('dashboard.charts');
-Route::get('/time-based-trends', [DashboardController::class, 'timeBasedTrends'])->name('time-based-trends');
-Route::get('/location-trends', [DashboardController::class, 'locationTrends'])->name('location-trends');
-Route::get('/crime-type-trends', [DashboardController::class, 'crimeTypeTrends'])->name('crime-type-trends');
-Route::post('/dashboard/location-charts', [DashboardController::class, 'getLocationChartData'])->name('dashboard.location.charts');
-Route::get('/dashboard/location-trends', [DashboardController::class, 'locationTrends'])->name('dashboard.location.trends');
-// Authenticated mapping page (for users logging in via centralized system)
-Route::get('/mapping', [LandingController::class, 'mapping'])->name('mapping');
-// Note: Authentication is handled via JWT token in session, checked in auth-include.php
-Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');
-Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->name('risk-forecasting');
-Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
-Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
-
-// Note: Token authentication now handled automatically in all authenticated views via query parameter
-// Example: /dashboard?token=xyz or /mapping?token=xyz
-// No special route needed - all views capture token via: @php session(['jwt_token' => request()->query('token')]) @endphp
-
-// Incident details endpoint (authenticated)
-Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->middleware('auth')->name('api.crime-incident');
+// Authenticated routes with JWT API middleware
+Route::middleware('jwt.api')->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/charts', [DashboardController::class, 'getChartData'])->name('dashboard.charts');
+    Route::get('/time-based-trends', [DashboardController::class, 'timeBasedTrends'])->name('time-based-trends');
+    Route::get('/location-trends', [DashboardController::class, 'locationTrends'])->name('location-trends');
+    Route::get('/crime-type-trends', [DashboardController::class, 'crimeTypeTrends'])->name('crime-type-trends');
+    Route::post('/dashboard/location-charts', [DashboardController::class, 'getLocationChartData'])->name('dashboard.location.charts');
+    Route::get('/dashboard/location-trends', [DashboardController::class, 'locationTrends'])->name('dashboard.location.trends');
+    Route::get('/mapping', [LandingController::class, 'mapping'])->name('mapping');
+    Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');
+    Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->name('risk-forecasting');
+    Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
+    Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
+    Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->name('api.crime-incident');
+});
 
 // DEBUG: Session & JWT token check (remove in production)
 Route::get('/debug/session', function () {
-    // Load auth-include for this route
-    require_once app_path('auth-include.php');
-
-    $currentUser = getCurrentUser();
-
     return response()->json([
         'page' => 'dashboard_debug',
         'session_id' => session()->getId(),
         'jwt_token_in_session' => session('jwt_token') ? 'YES ✓' : 'NO ✗',
         'token_preview' => session('jwt_token') ? substr(session('jwt_token'), 0, 50) . '...' : 'No token',
-        'auth_user' => $currentUser ? 'YES ✓ - ' . ($currentUser['email'] ?? 'No email') : 'NO ✗',
+        'auth_user' => session('auth_user') ? 'YES ✓ - ' . (session('auth_user.email') ?? 'No email') : 'NO ✗',
         'app_env' => app()->environment(),
         'session_data_keys' => array_keys(session()->all()),
     ]);
@@ -82,15 +71,12 @@ Route::get('/debug/session', function () {
 
 // DEBUG: Check session on mapping page
 Route::get('/debug/mapping', function () {
-    require_once app_path('auth-include.php');
-    $currentUser = getCurrentUser();
-
     return response()->json([
         'page' => 'mapping_debug',
         'session_id' => session()->getId(),
         'jwt_token_in_session' => session('jwt_token') ? 'YES ✓' : 'NO ✗',
         'token_preview' => session('jwt_token') ? substr(session('jwt_token'), 0, 50) . '...' : 'No token',
-        'auth_user' => $currentUser ? 'YES ✓ - ' . ($currentUser['email'] ?? 'No email') : 'NO ✗',
+        'auth_user' => session('auth_user') ? 'YES ✓ - ' . (session('auth_user.email') ?? 'No email') : 'NO ✗',
         'app_env' => app()->environment(),
         'session_data_keys' => array_keys(session()->all()),
     ]);

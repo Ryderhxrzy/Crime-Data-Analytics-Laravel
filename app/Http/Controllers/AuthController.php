@@ -358,8 +358,8 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        // Clear JWT token from session
-        $request->session()->forget('jwt_token');
+        // Clear JWT token and user data from session
+        $request->session()->forget(['jwt_token', 'auth_user']);
 
         // Also clear local auth
         Auth::logout();
