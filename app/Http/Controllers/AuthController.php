@@ -377,8 +377,22 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
         $request->session()->invalidate();
 
-        // Return redirect with session invalidation
-        return redirect($redirectUrl);
+        // Explicitly delete the session cookie to clear it from browser
+        $response = redirect($redirectUrl);
+
+        // Clear the session cookie by setting it to expire in the past
+        $sessionCookieName = config('session.cookie');
+        $response->cookie(
+            $sessionCookieName,
+            '',
+            now()->subDays(1),
+            '/',
+            null,
+            false,
+            true
+        );
+
+        return $response;
     }
 
     public function redirectToGoogle()
