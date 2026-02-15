@@ -377,17 +377,30 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
         $request->session()->invalidate();
 
-        // Explicitly delete the session cookie to clear it from browser
+        // Explicitly delete the session cookies to clear them from browser
         $response = redirect($redirectUrl);
 
         // Clear the session cookie by setting it to expire in the past
         $sessionCookieName = config('session.cookie');
+
+        // Delete local domain cookie
         $response->cookie(
             $sessionCookieName,
             '',
             now()->subDays(1),
             '/',
             null,
+            false,
+            true
+        );
+
+        // Delete parent domain (.alertaraqc.com) cookie - THIS IS CRITICAL
+        $response->cookie(
+            $sessionCookieName,
+            '',
+            now()->subDays(1),
+            '/',
+            '.alertaraqc.com',
             false,
             true
         );
