@@ -17,6 +17,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CrimeIncidentController;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\AlertsController;
 
 // Public landing page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
@@ -54,6 +56,23 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
     Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
     Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->name('api.crime-incident');
+
+    // Reports routes
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/', [ReportsController::class, 'index'])->name('index');
+        Route::get('/create', [ReportsController::class, 'create'])->name('create');
+        Route::post('/', [ReportsController::class, 'store'])->name('store');
+        Route::get('/{id}', [ReportsController::class, 'show'])->name('show');
+        Route::get('/{id}/download', [ReportsController::class, 'download'])->name('download');
+    });
+
+    // Alerts routes
+    Route::prefix('alerts')->name('alerts.')->group(function () {
+        Route::get('/active', [AlertsController::class, 'activeAlerts'])->name('active');
+        Route::get('/history', [AlertsController::class, 'history'])->name('history');
+        Route::get('/settings', [AlertsController::class, 'settings'])->name('settings');
+        Route::post('/settings', [AlertsController::class, 'updateSettings'])->name('updateSettings');
+    });
 });
 
 // DEBUG: Session & JWT token check (remove in production)
