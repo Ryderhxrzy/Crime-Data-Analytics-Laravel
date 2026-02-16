@@ -33,10 +33,10 @@ if (request()->query('token')) {
     @include('components.sidebar')
 
     <!-- Main Content -->
-    <main class="lg:ml-72 ml-0 lg:mt-20 mt-20 min-h-screen bg-gray-100">
+    <main class="lg:ml-72 ml-0 lg:mt-16 mt-16 min-h-screen bg-gray-100">
         <div class="p-6">
             <!-- Page Header -->
-            <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div class="mb-8">
                 <h1 class="text-3xl font-bold text-gray-900">Crime Mapping</h1>
                 <p class="text-gray-600 mt-2">Interactive crime data visualization and analysis</p>
             </div>
