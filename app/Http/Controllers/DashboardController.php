@@ -725,12 +725,423 @@ class DashboardController extends Controller
         if (!$authData) {
             return redirect()->route('login');
         }
-        
+
         extract($authData);
-        
+
         $barangays = Barangay::orderBy('barangay_name')->get();
         $crimeCategories = CrimeCategory::orderBy('category_name')->get();
-        
+
         return view('pattern-detection', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
+    }
+
+    /**
+     * Get hotspot data with analytics for Crime Hotspot Analysis page
+     */
+    public function getHotspotData(Request $request)
+    {
+        try {
+            // Get filters
+            $timePeriod = $request->query('timePeriod', 'all');
+            $crimeType = $request->query('crimeType', '');
+            $barangay = $request->query('barangay', '');
+
+            // Build base query for getting crimes
+            $crimeQuery = CrimeIncident::with(['category', 'barangay'])
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude');
+
+            // Apply time period filter
+            if ($timePeriod !== 'all') {
+                $days = (int)$timePeriod;
+                $crimeQuery->where('incident_date', '>=', Carbon::now()->subDays($days));
+            }
+
+            // Apply crime type filter
+            if (!empty($crimeType)) {
+                $crimeQuery->where('crime_category_id', $crimeType);
+            }
+
+            // Apply barangay filter
+            if (!empty($barangay)) {
+                $crimeQuery->where('barangay_id', $barangay);
+            }
+
+            // Get all crimes with associated data
+            $crimes = $crimeQuery->get()
+                ->map(function($crime) {
+                    return [
+                        'id' => $crime->id,
+                        'incident_title' => $crime->incident_title,
+                        'incident_date' => $crime->incident_date?->format('Y-m-d'),
+                        'latitude' => (float)$crime->latitude,
+                        'longitude' => (float)$crime->longitude,
+                        'barangay_name' => $crime->barangay?->barangay_name ?? 'Unknown',
+                        'barangay_id' => $crime->barangay_id,
+                        'crime_category_id' => $crime->crime_category_id
+                    ];
+                });
+
+            // Calculate hotspots by barangay
+            $hotspots = [];
+            $barangayGroups = $crimes->groupBy('barangay_name');
+
+            foreach ($barangayGroups as $barangayName => $incidents) {
+                if ($incidents->count() > 0) {
+                    // Calculate density score (0-10)
+                    $incidentCount = $incidents->count();
+                    $densityScore = min(10, ($incidentCount / 50) * 10);
+
+                    // Calculate average coordinates
+                    $avgLat = $incidents->average('latitude');
+                    $avgLng = $incidents->average('longitude');
+
+                    // Determine trend direction
+                    $trendDirection = $this->calculateTrendDirection($incidents->first()['barangay_id'], $timePeriod, $crimeType);
+
+                    $hotspots[] = [
+                        'area_name' => $barangayName,
+                        'incident_count' => $incidentCount,
+                        'density_score' => round($densityScore, 2),
+                        'latitude' => $avgLat,
+                        'longitude' => $avgLng,
+                        'trend_direction' => $trendDirection
+                    ];
+                }
+            }
+
+            // Sort by density score descending
+            usort($hotspots, function($a, $b) {
+                return $b['density_score'] <=> $a['density_score'];
+            });
+
+            // Calculate monthly trends
+            $monthlyTrends = $this->getMonthlyTrends($timePeriod, $crimeType, $barangay);
+
+            // Calculate crime type distribution
+            $typeDistribution = $this->getCrimeTypeDistribution($timePeriod, $crimeType, $barangay);
+
+            return response()->json([
+                'crimes' => $crimes,
+                'hotspots' => $hotspots,
+                'monthly_trends' => $monthlyTrends,
+                'type_distribution' => $typeDistribution
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in getHotspotData: ' . $e->getMessage());
+            return response()->json(['error' => 'Error loading hotspot data', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Calculate trend direction for a barangay
+     */
+    private function calculateTrendDirection($barangayId, $timePeriod, $crimeType)
+    {
+        // Current period count
+        $currentQuery = CrimeIncident::where('barangay_id', $barangayId);
+        if ($timePeriod !== 'all') {
+            $days = (int)$timePeriod;
+            $currentQuery->where('incident_date', '>=', Carbon::now()->subDays($days));
+        }
+        if (!empty($crimeType)) {
+            $currentQuery->where('crime_category_id', $crimeType);
+        }
+        $currentCount = $currentQuery->count();
+
+        // Previous period count
+        $previousQuery = CrimeIncident::where('barangay_id', $barangayId);
+        if ($timePeriod !== 'all') {
+            $days = (int)$timePeriod;
+            $previousQuery->whereBetween('incident_date', [
+                Carbon::now()->subDays($days * 2),
+                Carbon::now()->subDays($days)
+            ]);
+        }
+        if (!empty($crimeType)) {
+            $previousQuery->where('crime_category_id', $crimeType);
+        }
+        $previousCount = $previousQuery->count();
+
+        if ($previousCount === 0 || $currentCount === 0) return 'stable';
+
+        $percentChange = (($currentCount - $previousCount) / $previousCount) * 100;
+
+        if ($percentChange > 10) {
+            return 'increasing';
+        } elseif ($percentChange < -10) {
+            return 'decreasing';
+        } else {
+            return 'stable';
+        }
+    }
+
+    /**
+     * Get monthly trend data for the last 12 months
+     */
+    private function getMonthlyTrends($timePeriod, $crimeType, $barangay)
+    {
+        $months = [];
+        $values = [];
+
+        for ($i = 11; $i >= 0; $i--) {
+            $date = Carbon::now()->subMonths($i);
+            $month = $date->format('M');
+            $months[] = $month;
+
+            $query = CrimeIncident::query()
+                ->whereYear('incident_date', $date->year)
+                ->whereMonth('incident_date', $date->month);
+
+            if ($timePeriod !== 'all') {
+                $days = (int)$timePeriod;
+                $query->where('incident_date', '>=', Carbon::now()->subDays($days));
+            }
+
+            if (!empty($crimeType)) {
+                $query->where('crime_category_id', $crimeType);
+            }
+
+            if (!empty($barangay)) {
+                $query->where('barangay_id', $barangay);
+            }
+
+            $count = $query->count();
+            $values[] = $count;
+        }
+
+        return [
+            'labels' => $months,
+            'values' => $values
+        ];
+    }
+
+    /**
+     * Get crime type distribution in hotspots
+     */
+    private function getCrimeTypeDistribution($timePeriod, $crimeType, $barangay)
+    {
+        $query = CrimeIncident::query();
+
+        if ($timePeriod !== 'all') {
+            $days = (int)$timePeriod;
+            $query->where('incident_date', '>=', Carbon::now()->subDays($days));
+        }
+
+        if (!empty($crimeType)) {
+            $query->where('crime_category_id', $crimeType);
+        }
+
+        if (!empty($barangay)) {
+            $query->where('barangay_id', $barangay);
+        }
+
+        $distribution = $query->select('crime_category_id', DB::raw('COUNT(*) as count'))
+            ->groupBy('crime_category_id')
+            ->get();
+
+        $labels = [];
+        $values = [];
+
+        foreach ($distribution as $item) {
+            $category = CrimeCategory::find($item->crime_category_id);
+            if ($category) {
+                $labels[] = $category->category_name;
+                $values[] = $item->count;
+            }
+        }
+
+        return [
+            'labels' => $labels,
+            'values' => $values
+        ];
+    }
+
+    /**
+     * Get pattern detection data with linked crimes and analysis
+     */
+    public function getPatternData(Request $request)
+    {
+        try {
+            // Get filters
+            $timePeriod = $request->query('timePeriod', 'all');
+            $crimeType = $request->query('crimeType', '');
+            $barangay = $request->query('barangay', '');
+
+            // Build base query
+            $query = CrimeIncident::with(['category', 'barangay'])
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude');
+
+            // Apply time period filter
+            if ($timePeriod !== 'all') {
+                $days = (int)$timePeriod;
+                $query->where('incident_date', '>=', Carbon::now()->subDays($days));
+            }
+
+            // Apply crime type filter
+            if (!empty($crimeType)) {
+                $query->where('crime_category_id', $crimeType);
+            }
+
+            // Apply barangay filter
+            if (!empty($barangay)) {
+                $query->where('barangay_id', $barangay);
+            }
+
+            // Get all crimes
+            $crimes = $query->orderByDesc('incident_date')->get();
+
+            // Detect patterns
+            $patterns = [];
+            $patternId = 0;
+
+            // 1. Group by Modus Operandi (MO Patterns)
+            $moPatterns = $crimes->whereNotNull('modus_operandi')
+                ->groupBy('modus_operandi');
+
+            foreach ($moPatterns as $mo => $crimeGroup) {
+                if ($crimeGroup->count() >= 2) { // Pattern needs at least 2 incidents
+                    $patternId++;
+                    $crimeIds = $crimeGroup->pluck('id')->toArray();
+                    $avgLat = $crimeGroup->average('latitude');
+                    $avgLng = $crimeGroup->average('longitude');
+
+                    $patterns[] = [
+                        'id' => 'mo_' . $patternId,
+                        'type' => 'modus_operandi',
+                        'crime_ids' => $crimeIds,
+                        'strength' => min(100, ($crimeGroup->count() / $crimes->count()) * 100),
+                        'barangay' => $crimeGroup->first()->barangay->barangay_name ?? 'Multiple',
+                        'centroid_lat' => round($avgLat, 6),
+                        'centroid_lng' => round($avgLng, 6),
+                        'description' => substr($mo, 0, 50) . (strlen($mo) > 50 ? '...' : ''),
+                        'incident_count' => $crimeGroup->count()
+                    ];
+                }
+            }
+
+            // 2. Group by Location + Crime Type (Spatial Patterns)
+            $locationPatterns = $crimes->groupBy(function($crime) {
+                return $crime->barangay_id . '_' . $crime->crime_category_id;
+            });
+
+            foreach ($locationPatterns as $key => $crimeGroup) {
+                if ($crimeGroup->count() >= 3) { // Need 3+ incidents for pattern
+                    $patternId++;
+                    $crimeIds = $crimeGroup->pluck('id')->toArray();
+                    $avgLat = $crimeGroup->average('latitude');
+                    $avgLng = $crimeGroup->average('longitude');
+
+                    $patterns[] = [
+                        'id' => 'spatial_' . $patternId,
+                        'type' => 'location_cluster',
+                        'crime_ids' => $crimeIds,
+                        'strength' => min(100, ($crimeGroup->count() / $crimes->count()) * 100),
+                        'barangay' => $crimeGroup->first()->barangay->barangay_name ?? 'Unknown',
+                        'centroid_lat' => round($avgLat, 6),
+                        'centroid_lng' => round($avgLng, 6),
+                        'description' => $crimeGroup->first()->category->category_name . ' Cluster',
+                        'incident_count' => $crimeGroup->count()
+                    ];
+                }
+            }
+
+            // Map crimes with pattern IDs
+            $crimeWithPatterns = $crimes->map(function($crime) use ($patterns) {
+                $patternId = null;
+                foreach ($patterns as $pattern) {
+                    if (in_array($crime->id, $pattern['crime_ids'])) {
+                        $patternId = $pattern['id'];
+                        break;
+                    }
+                }
+
+                return [
+                    'id' => $crime->id,
+                    'incident_title' => $crime->incident_title,
+                    'incident_date' => $crime->incident_date?->format('Y-m-d'),
+                    'incident_time' => $crime->incident_time,
+                    'latitude' => (float)$crime->latitude,
+                    'longitude' => (float)$crime->longitude,
+                    'barangay_name' => $crime->barangay?->barangay_name ?? 'Unknown',
+                    'barangay_id' => $crime->barangay_id,
+                    'crime_category_id' => $crime->crime_category_id,
+                    'category_name' => $crime->category?->category_name ?? 'Unknown',
+                    'category_color' => $crime->category?->color_code ?? '#6B7280',
+                    'modus_operandi' => $crime->modus_operandi ?? 'Not specified',
+                    'status' => $crime->status,
+                    'clearance_status' => $crime->clearance_status,
+                    'pattern_id' => $patternId
+                ];
+            })->toArray();
+
+            // 3. Modus Operandi Statistics
+            $moStats = $crimes->whereNotNull('modus_operandi')
+                ->groupBy('modus_operandi')
+                ->map(function($group) use ($crimes) {
+                    $count = $group->count();
+                    $affectedBarangays = $group->groupBy('barangay_id')->count();
+                    return [
+                        'modus' => $group->first()->modus_operandi,
+                        'count' => $count,
+                        'percentage' => round(($count / $crimes->count()) * 100, 2),
+                        'affected_barangays' => $affectedBarangays,
+                        'severity' => $count > 5 ? 'high' : ($count > 2 ? 'medium' : 'low')
+                    ];
+                })
+                ->sortByDesc('count')
+                ->values()
+                ->toArray();
+
+            // 4. Monthly Trend (Patterns detected over time)
+            $monthlyTrends = [];
+            for ($i = 11; $i >= 0; $i--) {
+                $date = Carbon::now()->subMonths($i);
+                $monthStr = $date->format('M');
+
+                // Get crimes for this month
+                $monthCrimes = $crimes->filter(function($crime) use ($date) {
+                    return $crime->incident_date &&
+                        $crime->incident_date->format('Y-m') === $date->format('Y-m');
+                });
+
+                // Count patterns detected in this month
+                $patternsCount = 0;
+                foreach ($patterns as $pattern) {
+                    foreach ($pattern['crime_ids'] as $crimeId) {
+                        if ($monthCrimes->contains('id', $crimeId)) {
+                            $patternsCount++;
+                        }
+                    }
+                }
+
+                $monthlyTrends[] = [
+                    'month' => $monthStr,
+                    'patterns_detected' => ceil($patternsCount / 2), // Avoid double counting
+                    'incidents' => $monthCrimes->count()
+                ];
+            }
+
+            // 5. Pattern Summary
+            $summary = [
+                'total_incidents' => $crimes->count(),
+                'patterns_detected' => count($patterns),
+                'top_modus' => $moStats[0]['modus'] ?? 'None',
+                'high_risk_areas' => count(array_filter($patterns, fn($p) => $p['strength'] > 50)),
+                'affected_barangays' => $crimes->groupBy('barangay_id')->count()
+            ];
+
+            return response()->json([
+                'crimes' => $crimeWithPatterns,
+                'patterns' => $patterns,
+                'modus_operandi_stats' => $moStats,
+                'monthly_trends' => $monthlyTrends,
+                'summary' => $summary
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in getPatternData: ' . $e->getMessage());
+            return response()->json(['error' => 'Error loading pattern data', 'message' => $e->getMessage()], 500);
+        }
     }
 }

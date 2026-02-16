@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Api\MobileUserController;
 
 /*
@@ -35,6 +36,16 @@ Route::get('/crime-categories', function() {
 Route::get('/barangays', function() {
     return \App\Models\Barangay::select('id', 'barangay_name')->get();
 })->middleware('throttle:60,1');
+
+// Crime hotspot data endpoint
+Route::get('/crime-hotspots', [DashboardController::class, 'getHotspotData'])
+    ->middleware('throttle:60,1')
+    ->name('api.crime-hotspots');
+
+// Pattern detection data endpoint
+Route::get('/pattern-detection', [DashboardController::class, 'getPatternData'])
+    ->middleware('throttle:60,1')
+    ->name('api.pattern-detection');
 
 // Mobile User API endpoints
 Route::post('/mobile-users/register', [MobileUserController::class, 'register'])
