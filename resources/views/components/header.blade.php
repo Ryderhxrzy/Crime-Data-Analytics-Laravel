@@ -2,17 +2,21 @@
 <nav class="bg-white border-b border-gray-200 fixed left-0 lg:left-72 right-0 top-0 z-[60] h-16">
     <div class="px-4 sm:px-6 lg:px-8 h-full">
         <div class="flex justify-between items-center h-full gap-8">
-            <!-- Left: Hamburger Menu & Date/Time -->
-            <div class="flex items-center space-x-4">
-                <!-- Hamburger Menu Button (Mobile) -->
-                <button id="sidebarToggle" class="lg:hidden p-2 rounded-md text-alertara-600 hover:bg-alertara-50">
+            <!-- Left: Hamburger Menu -->
+            <div class="lg:hidden flex-shrink-0">
+                <!-- Hamburger Menu Button (Mobile Only) -->
+                <button id="sidebarToggle" class="p-2 rounded-md text-alertara-600 hover:bg-alertara-50">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
+            </div>
 
-                <!-- Date & Time -->
-                <div class="text-left hidden sm:block">
-                    <p class="text-sm font-medium text-alertara-900" id="currentDate"></p>
-                    <p class="text-xs text-alertara-500" id="currentTime"></p>
+            <!-- Search Box - Constrained width -->
+            <div class="hidden sm:flex flex-1 max-w-md">
+                <div class="relative w-full">
+                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+                    <input type="text"
+                           placeholder="Search... (Ctrl K)"
+                           class="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-alertara-500 focus:border-transparent">
                 </div>
             </div>
 
@@ -21,7 +25,7 @@
 
                 <!-- Messages -->
                 <div class="relative">
-                    <button class="p-2 text-alertara-600 hover:bg-alertara-50 rounded-md relative">
+                    <button class="p-2 text-gray-600 hover:bg-gray-100 rounded-md relative">
                         <i class="fas fa-envelope text-lg"></i>
                         <span class="absolute top-1 right-1 w-2 h-2 bg-danger-500 rounded-full"></span>
                     </button>
@@ -29,11 +33,16 @@
 
                 <!-- Notifications -->
                 <div class="relative">
-                    <button class="p-2 text-alertara-600 hover:bg-alertara-50 rounded-md relative">
+                    <button class="p-2 text-gray-600 hover:bg-gray-100 rounded-md relative">
                         <i class="fas fa-bell text-lg"></i>
                         <span class="absolute top-1 right-1 w-2 h-2 bg-danger-500 rounded-full"></span>
                     </button>
                 </div>
+
+                <!-- Fullscreen Toggle -->
+                <button id="fullscreenToggle" class="p-2 text-gray-600 hover:bg-gray-100 rounded-md">
+                    <i class="fas fa-expand text-lg"></i>
+                </button>
 
                 <!-- Profile Dropdown -->
                 <div class="relative">
@@ -79,20 +88,6 @@
 </nav>
 
 <script>
-    // Update date and time
-    function updateDateTime() {
-        const now = new Date();
-        const options = { year: 'numeric', month: 'short', day: 'numeric' };
-        const dateStr = now.toLocaleDateString('en-US', options);
-        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-
-        document.getElementById('currentDate').textContent = dateStr;
-        document.getElementById('currentTime').textContent = timeStr;
-    }
-
-    updateDateTime();
-    setInterval(updateDateTime, 1000); // Update every second
-
     // Perform logout with CSRF token
     function performLogout() {
         // Clear all client-side storage (localStorage, sessionStorage)
@@ -148,15 +143,52 @@
         });
     }
 
+    // Fullscreen toggle
+    function toggleFullscreen() {
+        const fullscreenToggle = document.getElementById('fullscreenToggle');
+        const icon = fullscreenToggle.querySelector('i');
+
+        if (!document.fullscreenElement) {
+            // Enter fullscreen
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+            icon.classList.remove('fa-expand');
+            icon.classList.add('fa-compress');
+        } else {
+            // Exit fullscreen
+            document.exitFullscreen();
+            icon.classList.remove('fa-compress');
+            icon.classList.add('fa-expand');
+        }
+    }
+
+    // Update fullscreen button when fullscreen state changes
+    document.addEventListener('fullscreenchange', function() {
+        const fullscreenToggle = document.getElementById('fullscreenToggle');
+        const icon = fullscreenToggle.querySelector('i');
+
+        if (document.fullscreenElement) {
+            icon.classList.remove('fa-expand');
+            icon.classList.add('fa-compress');
+        } else {
+            icon.classList.remove('fa-compress');
+            icon.classList.add('fa-expand');
+        }
+    });
+
     // Profile dropdown toggle
     document.addEventListener('DOMContentLoaded', function() {
         const profileToggle = document.getElementById('profileToggle');
         const profileMenu = document.getElementById('profileMenu');
+        const fullscreenToggle = document.getElementById('fullscreenToggle');
 
         profileToggle.addEventListener('click', function(e) {
             e.stopPropagation();
             profileMenu.classList.toggle('hidden');
         });
+
+        fullscreenToggle.addEventListener('click', toggleFullscreen);
 
         // Close dropdown when clicking outside
         document.addEventListener('click', function(e) {
