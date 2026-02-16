@@ -358,95 +358,90 @@ class AuthController extends Controller
     }
 
     public function logout(Request $request)
-    {
-        // Get JWT token before clearing session
-        $jwtToken = session('jwt_token');
+        {
+            // Get JWT token before clearing session
+            $jwtToken = session('jwt_token');
 
-        // Call centralized logout API endpoint if token exists
-        if ($jwtToken) {
-            try {
-                $response = Http::withToken($jwtToken)
-                    ->timeout(10)
-                    ->post('https://login.alertaraqc.com/api/logout');
+            // Call centralized logout API endpoint if token exists
+            if ($jwtToken) {
+                try {
+                    $response = Http::withToken($jwtToken)
+                        ->timeout(10)
+                        ->post('https://login.alertaraqc.com/api/logout');
 
-                if ($response->successful()) {
-                    $data = $response->json();
-
-                    if ($data['success'] ?? false) {
-                        \Log::info('Centralized logout successful');
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        if ($data['success'] ?? false) {
+                            \Log::info('Centralized logout successful');
+                        } else {
+                            \Log::warning('Centralized logout failed: ' . ($data['message'] ?? 'Unknown error'));
+                        }
                     } else {
-                        $message = $data['message'] ?? 'Unknown error';
-                        \Log::warning('Centralized logout failed: ' . $message);
+                        \Log::error('Centralized logout API error', [
+                            'status_code' => $response->status(),
+                            'message' => $response->json('message', 'Unknown error')
+                        ]);
                     }
-                } else {
-                    $error = $response->json('message', 'Unknown error');
-                    \Log::error('Centralized logout API error: ' . $error, [
-                        'status_code' => $response->status()
-                    ]);
+                } catch (\Exception $e) {
+                    \Log::error('Centralized logout request failed: ' . $e->getMessage());
                 }
-            } catch (\Exception $e) {
-                \Log::error('Centralized logout request failed: ' . $e->getMessage(), [
-                    'exception' => \get_class($e),
-                    'code' => $e->getCode(),
-                ]);
             }
-        }
 
-        // Clear JWT token and user data from session
-        $request->session()->forget(['jwt_token', 'auth_user']);
+            // Clear session completely
+            $request->session()->forget(['jwt_token', 'auth_user']);
+            Auth::logout();
+            $request->session()->regenerateToken();
+            $request->session()->invalidate();
 
-        // Also clear local auth
-        Auth::logout();
+            // Determine redirect URL
+            $redirectUrl = app()->environment() === 'production' 
+                ? 'https://login.alertaraqc.com'
+                : '/login';
 
-        // Determine redirect URL based on environment
-        if (app()->environment() === 'production') {
-            // Production: redirect to centralized login system
-            $redirectUrl = 'https://login.alertaraqc.com';
-        } else {
-            // Local/Development: redirect to local login page
-            $redirectUrl = '/login';
-        }
+            $response = redirect($redirectUrl);
 
-        // Regenerate CSRF token BEFORE invalidating session
-        $request->session()->regenerateToken();
-        $request->session()->invalidate();
+            // Get cookie configuration
+            $sessionCookieName = config('session.cookie');
+            $sessionDomain = config('session.domain');
+            $sessionPath = config('session.path', '/');
 
-        // Explicitly delete the session cookies to clear them from browser
-        $response = redirect($redirectUrl);
-
-        // Clear the session cookie by setting it to expire in the past
-        $sessionCookieName = config('session.cookie');
-        $sessionDomain = config('session.domain');
-        $sessionPath = config('session.path', '/');
-
-        // Delete cookie for configured domain
-        if ($sessionDomain) {
-            $response->cookie(
+            // All cookies to clear
+            $cookiesToClear = [
+                'laravel_session',
                 $sessionCookieName,
-                '',
-                now()->subDays(1),
-                $sessionPath,
-                $sessionDomain,
-                false,
-                true
-            );
-        }
+                'XSRF-TOKEN',
+                'jwt_token',
+                'remember_me',
+                'auth_token'
+            ];
 
-        // Also delete parent domain cookie (.alertaraqc.com) for production cross-domain logout
-        if (app()->environment() === 'production' && $sessionDomain !== '.alertaraqc.com') {
-            $response->cookie(
-                $sessionCookieName,
-                '',
-                now()->subDays(1),
-                '/',
+            // Domains to clear from
+            $domains = [
+                null,  // Current domain
                 '.alertaraqc.com',
-                false,
-                true
-            );
-        }
+                'login.alertaraqc.com',
+                $sessionDomain
+            ];
 
-        return $response;
-    }
+            // Clear all cookie combinations
+            foreach ($cookiesToClear as $cookieName) {
+                foreach ($domains as $domain) {
+                    if ($domain) {
+                        $response->cookie(
+                            $cookieName,
+                            '',
+                            -1,  // ✅ Expires immediately
+                            $sessionPath ?? '/',
+                            $domain,
+                            false,
+                            true
+                        );
+                    }
+                }
+            }
+
+            return $response;
+        }
 
     public function redirectToGoogle()
     {
