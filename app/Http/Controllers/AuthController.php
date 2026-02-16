@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use GuzzleHttp\Client;
 use App\Models\User;
@@ -358,6 +359,39 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        // Get JWT token before clearing session
+        $jwtToken = session('jwt_token');
+
+        // Call centralized logout API endpoint if token exists
+        if ($jwtToken) {
+            try {
+                $response = Http::withToken($jwtToken)
+                    ->timeout(10)
+                    ->post('https://login.alertaraqc.com/api/logout');
+
+                if ($response->successful()) {
+                    $data = $response->json();
+
+                    if ($data['success'] ?? false) {
+                        \Log::info('Centralized logout successful');
+                    } else {
+                        $message = $data['message'] ?? 'Unknown error';
+                        \Log::warning('Centralized logout failed: ' . $message);
+                    }
+                } else {
+                    $error = $response->json('message', 'Unknown error');
+                    \Log::error('Centralized logout API error: ' . $error, [
+                        'status_code' => $response->status()
+                    ]);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Centralized logout request failed: ' . $e->getMessage(), [
+                    'exception' => \get_class($e),
+                    'code' => $e->getCode(),
+                ]);
+            }
+        }
+
         // Clear JWT token and user data from session
         $request->session()->forget(['jwt_token', 'auth_user']);
 
