@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use App\Models\CrimeIncident;
 use App\Models\CrimeTip;
+use App\Services\CacheService;
 
 class LandingController extends Controller
 {
@@ -33,61 +35,76 @@ class LandingController extends Controller
      * Get crime location data as JSON for the heatmap
      * Can be used by: Web landing page, authenticated mapping page
      * Supports filtering by crime type, status, barangay, and date range
+     * Data is cached for 10 minutes per filter combination
      */
     public function getCrimeData(Request $request)
     {
         // Determine date range filter
         $dateRange = $request->query('range', 'all'); // default all records
 
-        $query = CrimeIncident::with('category', 'barangay')
-            ->select('id', 'latitude', 'longitude', 'incident_date', 'incident_title', 'status', 'clearance_status', 'crime_category_id', 'barangay_id')
-            ->whereNotNull('latitude')
-            ->whereNotNull('longitude');
+        // Generate cache key from filter parameters
+        $cacheKey = CacheService::generateCacheKey('crime_heatmap', [
+            'range' => $dateRange,
+            'crime_type' => $request->query('crime_type', ''),
+            'status' => $request->query('status', ''),
+            'clearance_status' => $request->query('clearance_status', ''),
+            'barangay' => $request->query('barangay', ''),
+        ]);
 
-        // Apply date filter
-        if ($dateRange !== 'all') {
-            $days = intval($dateRange);
-            $query->where('incident_date', '>=', now()->subDays($days));
-        }
+        // Return cached data if available, otherwise fetch from database
+        $crimeData = Cache::remember($cacheKey, now()->addMinutes(CacheService::SEARCH_FILTER_TTL), function() use ($request, $dateRange) {
+            $query = CrimeIncident::with('category', 'barangay')
+                ->select('id', 'latitude', 'longitude', 'incident_date', 'incident_title', 'status', 'clearance_status', 'crime_category_id', 'barangay_id')
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude');
 
-        // Apply crime type filter (for authenticated users)
-        if ($request->has('crime_type') && !empty($request->query('crime_type'))) {
-            $query->where('crime_category_id', $request->query('crime_type'));
-        }
+            // Apply date filter
+            if ($dateRange !== 'all') {
+                $days = intval($dateRange);
+                $query->where('incident_date', '>=', now()->subDays($days));
+            }
 
-        // Apply case status (workflow) filter (for authenticated users)
-        if ($request->has('status') && !empty($request->query('status'))) {
-            $query->where('status', $request->query('status'));
-        }
+            // Apply crime type filter
+            if ($request->has('crime_type') && !empty($request->query('crime_type'))) {
+                $query->where('crime_category_id', $request->query('crime_type'));
+            }
 
-        // Apply clearance status filter (for authenticated users)
-        if ($request->has('clearance_status') && !empty($request->query('clearance_status'))) {
-            $query->where('clearance_status', $request->query('clearance_status'));
-        }
+            // Apply case status (workflow) filter
+            if ($request->has('status') && !empty($request->query('status'))) {
+                $query->where('status', $request->query('status'));
+            }
 
-        // Apply barangay filter (for authenticated users)
-        if ($request->has('barangay') && !empty($request->query('barangay'))) {
-            $query->where('barangay_id', $request->query('barangay'));
-        }
+            // Apply clearance status filter
+            if ($request->has('clearance_status') && !empty($request->query('clearance_status'))) {
+                $query->where('clearance_status', $request->query('clearance_status'));
+            }
 
-        $crimeData = $query->get()
-            ->map(function($incident) {
-                return [
-                    'id' => $incident->id,
-                    'latitude' => (float) $incident->latitude,
-                    'longitude' => (float) $incident->longitude,
-                    'incident_date' => $incident->incident_date->format('Y-m-d'),
-                    'incident_title' => $incident->incident_title,
-                    'status' => $incident->status,
-                    'clearance_status' => $incident->clearance_status,
-                    'crime_category_id' => $incident->crime_category_id,
-                    'barangay_id' => $incident->barangay_id,
-                    'location' => $incident->barangay ? $incident->barangay->barangay_name : 'Unknown Barangay',
-                    'category_name' => $incident->category ? $incident->category->category_name : 'Unknown',
-                    'color_code' => $incident->category ? $incident->category->color_code : '#274d4c',
-                    'icon' => $incident->category ? $incident->category->icon : 'fa-exclamation-circle'
-                ];
-            });
+            // Apply barangay filter
+            if ($request->has('barangay') && !empty($request->query('barangay'))) {
+                $query->where('barangay_id', $request->query('barangay'));
+            }
+
+            return $query->get()
+                ->map(function($incident) {
+                    return [
+                        'id' => $incident->id,
+                        'latitude' => (float) $incident->latitude,
+                        'longitude' => (float) $incident->longitude,
+                        'incident_date' => $incident->incident_date->format('Y-m-d'),
+                        'incident_title' => $incident->incident_title,
+                        'status' => $incident->status,
+                        'clearance_status' => $incident->clearance_status,
+                        'crime_category_id' => $incident->crime_category_id,
+                        'barangay_id' => $incident->barangay_id,
+                        'location' => $incident->barangay ? $incident->barangay->barangay_name : 'Unknown Barangay',
+                        'category_name' => $incident->category ? $incident->category->category_name : 'Unknown',
+                        'color_code' => $incident->category ? $incident->category->color_code : '#274d4c',
+                        'icon' => $incident->category ? $incident->category->icon : 'fa-exclamation-circle'
+                    ];
+                })
+                ->values()  // Re-index array keys after mapping
+                ->toArray(); // Convert collection to array for caching
+        });
 
         return response()->json($crimeData);
     }
