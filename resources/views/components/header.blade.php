@@ -1,5 +1,5 @@
 <!-- Top Navigation Header -->
-<nav class="bg-white border-b border-gray-200 fixed left-0 lg:left-72 right-0 top-0 z-[60] h-16">
+<nav class="bg-white border-b border-gray-200 fixed left-0 lg:left-72 right-0 top-0 z-30 h-16">
     <div class="px-4 sm:px-6 lg:px-8 h-full">
         <div class="flex justify-between items-center h-full gap-8">
             <!-- Left: Hamburger Menu -->
