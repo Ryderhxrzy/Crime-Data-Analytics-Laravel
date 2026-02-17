@@ -10,13 +10,13 @@
                 </button>
             </div>
 
-            <!-- Search Box - Constrained width -->
+            <!-- Search Box - Icon only on right -->
             <div class="hidden sm:flex flex-1 max-w-md">
                 <div class="relative w-full">
-                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
                     <input type="text"
                            placeholder="Search... (Ctrl K)"
-                           class="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-alertara-500 focus:border-transparent">
+                           class="w-full pl-3 pr-9 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-alertara-500 focus:border-transparent">
+                    <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-alertara-600 text-sm cursor-pointer hover:text-alertara-700 transition-colors"></i>
                 </div>
             </div>
 
@@ -69,7 +69,7 @@
                         <div class="w-9 h-9 bg-gradient-to-br from-alertara-500 to-alertara-700 rounded-full flex items-center justify-center flex-shrink-0">
                             <i class="fas fa-user text-white text-xs"></i>
                         </div>
-                        <i class="fas fa-chevron-down text-alertara-600 text-xs"></i>
+                        <i class="fas fa-chevron-down text-alertara-600 text-xs" style="transition: transform 0.3s ease;"></i>
                     </button>
 
                     <!-- Dropdown Menu -->
@@ -182,10 +182,18 @@
         const profileToggle = document.getElementById('profileToggle');
         const profileMenu = document.getElementById('profileMenu');
         const fullscreenToggle = document.getElementById('fullscreenToggle');
+        const chevron = profileToggle.querySelector('.fa-chevron-down');
 
         profileToggle.addEventListener('click', function(e) {
             e.stopPropagation();
             profileMenu.classList.toggle('hidden');
+
+            // Rotate chevron
+            if (profileMenu.classList.contains('hidden')) {
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                chevron.style.transform = 'rotate(180deg)';
+            }
         });
 
         fullscreenToggle.addEventListener('click', toggleFullscreen);
@@ -194,6 +202,7 @@
         document.addEventListener('click', function(e) {
             if (!profileToggle.contains(e.target) && !profileMenu.contains(e.target)) {
                 profileMenu.classList.add('hidden');
+                chevron.style.transform = 'rotate(0deg)';
             }
         });
     });
