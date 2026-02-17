@@ -21,12 +21,15 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        // Verify CAPTCHA
-        $captchaToken = $request->input('cf-turnstile-response');
-        $captchaValid = $this->verifyCaptcha($captchaToken);
-        if (!$captchaValid) {
-            return back()->withErrors(['cf-turnstile-response' => 'Security verification failed. Please try again.']);
-        }
+        // TODO: Fix Cloudflare Turnstile widget - temporarily disabled for Reverb testing
+        // The widget is not generating tokens due to Cloudflare challenge interference
+
+        // // Verify CAPTCHA
+        // $captchaToken = $request->input('cf-turnstile-response');
+        // $captchaValid = $this->verifyCaptcha($captchaToken);
+        // if (!$captchaValid) {
+        //     return back()->withErrors(['cf-turnstile-response' => 'Security verification failed. Please try again.']);
+        // }
 
         $credentials = $request->validate([
             'email' => 'required|email',
