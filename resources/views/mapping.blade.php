@@ -21,6 +21,19 @@ if (request()->query('token')) {
 
     <!-- Leaflet Heatmap Plugin - jsDelivr CDN -->
     <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
+
+    <!-- Reverb Configuration (passed from server) -->
+    <script>
+        window.reverbConfig = {
+            key: '{{ config("broadcasting.connections.pusher.key") }}',
+            cluster: '{{ config("broadcasting.connections.pusher.options.cluster") }}'
+        };
+    </script>
+
+    <!-- Laravel Echo - Real-Time WebSocket Client
+    Note: Using npm build instead of CDN for proper module support
+    Run: npm run build to enable real-time updates -->
+    @vite(['resources/js/app.js'])
 </head>
 <body class="bg-gray-100">
     <!-- Header Component -->
@@ -2514,30 +2527,42 @@ if (request()->query('token')) {
         // ============================================================
         // REAL-TIME WEBSOCKET INTEGRATION (Laravel Reverb)
         // ============================================================
-        // Initialize Laravel Echo for real-time crime incident updates via Reverb
-        if (typeof window.Echo !== 'undefined') {
-            console.log('✅ Real-Time Reverb Connected');
+        // Listen for real-time crime incident updates (Echo initialized in app.js)
+        // Wait for Echo to be fully initialized before setting up listeners
+        function setupReverbListeners() {
+            try {
+                if (typeof window.Echo !== 'undefined' && window.Echo && typeof window.Echo.channel === 'function') {
+                    console.log('✅ Real-Time Reverb Listeners Connected');
 
-            // Listen for real-time crime events on the public channel
-            window.Echo.channel('crime-incidents')
-                .listen('.incident.created', (data) => {
-                    console.log('📍 New incident received:', data);
-                    handleNewIncident(data);
-                    showRealtimeNotification('🔴 New crime incident reported!');
-                })
-                .listen('.incident.updated', (data) => {
-                    console.log('📝 Incident updated:', data);
-                    handleUpdatedIncident(data);
-                    showRealtimeNotification('📝 Crime incident updated');
-                })
-                .listen('.incident.deleted', (data) => {
-                    console.log('🗑️ Incident deleted:', data.id);
-                    handleDeletedIncident(data.id);
-                    showRealtimeNotification('🗑️ Crime incident deleted');
-                });
-        } else {
-            console.warn('⚠️ Laravel Echo library not loaded. Real-time updates disabled.');
+                    // Listen for real-time crime events on the public channel
+                    window.Echo.channel('crime-incidents')
+                        .listen('.incident.created', (data) => {
+                            console.log('📍 New incident received:', data);
+                            handleNewIncident(data);
+                            showRealtimeNotification('🔴 New crime incident reported!');
+                        })
+                        .listen('.incident.updated', (data) => {
+                            console.log('📝 Incident updated:', data);
+                            handleUpdatedIncident(data);
+                            showRealtimeNotification('📝 Crime incident updated');
+                        })
+                        .listen('.incident.deleted', (data) => {
+                            console.log('🗑️ Incident deleted:', data.id);
+                            handleDeletedIncident(data.id);
+                            showRealtimeNotification('🗑️ Crime incident deleted');
+                        });
+                } else {
+                    console.warn('⚠️ Echo not yet ready. Retrying in 500ms...');
+                    setTimeout(setupReverbListeners, 500);
+                }
+            } catch (error) {
+                console.error('❌ Error setting up Reverb listeners:', error);
+                console.warn('⚠️ Real-time updates disabled. Make sure Reverb is running and npm build is complete.');
+            }
         }
+
+        // Start setup after a small delay to ensure app.js has executed
+        setTimeout(setupReverbListeners, 100);
 
         // Handle new incident added in real-time
         function handleNewIncident(incident) {
