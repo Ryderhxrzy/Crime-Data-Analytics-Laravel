@@ -57,7 +57,7 @@
             </div>
             
             <!-- Cloudflare Turnstile CAPTCHA -->
-            <div class="cf-turnstile" data-sitekey="0x4AAAAAACXojZBmrLtVaz3n" data-theme="light" data-callback="onCaptchaSuccess" style="margin: 10px 0;"></div>
+            <div class="cf-turnstile" data-sitekey="{{ $cloudflare_sitekey }}" data-theme="light" data-callback="onCaptchaSuccess" style="margin: 10px 0;"></div>
             <input type="hidden" name="cf-turnstile-response" id="cf-turnstile-response" value="">
             @if ($errors->has('cf-turnstile-response'))
                 <p class="text-sm text-red-600 mt-2">{{ $errors->first('cf-turnstile-response') }}</p>
@@ -86,8 +86,13 @@
     @include('partials.toastr')
 
     <script>
+        // Debug: Check if Turnstile is loaded
+        console.log('Turnstile API available:', typeof turnstile !== 'undefined');
+        console.log('Sitekey:', '{{ $cloudflare_sitekey }}');
+
         // Cloudflare Turnstile callback
         function onCaptchaSuccess(token) {
+            console.log('✓ Turnstile token generated:', token.substring(0, 20) + '...');
             document.getElementById('cf-turnstile-response').value = token;
         }
 
@@ -112,6 +117,14 @@
             const submitBtn = document.getElementById('submitBtn');
 
             loginForm.addEventListener('submit', function(e) {
+                const token = document.getElementById('cf-turnstile-response').value;
+                console.log('Form submitted. Turnstile token present:', token.length > 0);
+                console.log('Token value:', token.substring(0, 20) + '...');
+
+                if (!token) {
+                    console.error('❌ No Turnstile token! Widget may not have completed.');
+                }
+
                 // Disable the button to prevent double submission
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Signing In...';
