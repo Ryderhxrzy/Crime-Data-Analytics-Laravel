@@ -14,12 +14,12 @@ class SecurityHeaders
     {
         $response = $next($request);
 
-        // Add CSP headers for Cloudflare Turnstile, Leaflet Maps, and other resources
+        // Add CSP headers for Cloudflare Turnstile, Leaflet Maps, Reverb WebSocket, and other resources
         $response->header('Content-Security-Policy',
             "default-src 'self'; " .
             "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://code.jquery.com https://cdn.jsdelivr.net https://cdn.datatables.net https://unpkg.com; " .
             "frame-src https://challenges.cloudflare.com; " .
-            "connect-src 'self' https://challenges.cloudflare.com https://cdnjs.cloudflare.com https://oauth2.googleapis.com https://www.googleapis.com https://cdn.jsdelivr.net https://cdn.datatables.net https://tile.openstreetmap.org https://unpkg.com; " .
+            "connect-src 'self' ws: wss: https://challenges.cloudflare.com https://cdnjs.cloudflare.com https://oauth2.googleapis.com https://www.googleapis.com https://cdn.jsdelivr.net https://cdn.datatables.net https://tile.openstreetmap.org https://unpkg.com; " .
             "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://cdn.datatables.net https://unpkg.com; " .
             "img-src 'self' data: https: https://tile.openstreetmap.org; " .
             "font-src 'self' https://cdnjs.cloudflare.com; " .
