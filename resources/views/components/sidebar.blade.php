@@ -1,7 +1,7 @@
 <link rel="stylesheet" href="{{ asset('css/sidebar.css') }}">
 
 <!-- Sidebar -->
-<aside class="w-72 bg-white border-r border-gray-200 fixed left-0 top-0 bottom-0 transition-transform duration-300 ease-in-out -translate-x-full lg:translate-x-0 z-30 flex flex-col overflow-hidden">
+<aside class="w-72 border-r border-gray-200 fixed left-0 top-0 bottom-0 transition-transform duration-300 ease-in-out -translate-x-full lg:translate-x-0 z-30 flex flex-col overflow-hidden">
 
     <div class="border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-8 flex-shrink-0">
         @php
@@ -32,7 +32,7 @@
                 <!-- System Overview -->
                 <div class="nav-section">
                     <a href="{{ authUrl('dashboard') }}"
-                       class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('dashboard') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                       class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('dashboard') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                         <i class="fas fa-chart-pie w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Dashboard</span>
                     </a>
@@ -45,7 +45,7 @@
                     <!-- Crime Mapping -->
                     <div class="tree-node mt-0.5">
                         <a href="{{ authUrl('mapping') }}"
-                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('mapping') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('mapping') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                             <i class="fas fa-map w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Crime Mapping</span>
                         </a>
@@ -58,27 +58,27 @@
 
                     <!-- Trend Analytics (Collapsible) -->
                     <div class="mt-0.5">
-                        <button class="crime-trend-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? 'active-nav-item is-open-trigger' : 'text-gray-600 hover:bg-gray-100' }}"
+                        <button class="crime-trend-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? 'active-nav-item is-open-trigger' : 'text-alertara-800 hover:bg-alertara-200' }}"
                                 type="button">
                             <span class="flex items-center">
                                 <i class="fas fa-chart-line w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Trend Analytics</span>
                             </span>
-                            <i class="fas fa-chevron-right text-xs chevron-icon {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? 'text-alertara-100' : 'text-gray-400' }}"></i>
+                            <i class="fas fa-chevron-right text-xs chevron-icon {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? 'text-alertara-100' : 'text-alertara-600' }}"></i>
                         </button>
                         <div class="crime-trend-content dropdown-menu submenu-tree {{ (request()->routeIs('time-based-trends') || request()->routeIs('location-trends') || request()->routeIs('crime-type-trends')) ? 'is-open' : '' }}">
                             <a href="{{ authUrl('time-based-trends') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('time-based-trends') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('time-based-trends') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-calendar-days w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Time-Based Trends</span>
                             </a>
                             <a href="{{ authUrl('location-trends') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('location-trends') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('location-trends') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-map-pin w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Location Trends</span>
                             </a>
                             <a href="{{ authUrl('crime-type-trends') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-type-trends') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-type-trends') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-chart-bar w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Crime Type Trends</span>
                             </a>
@@ -92,27 +92,27 @@
 
                     <!-- Predictive Analytics (Collapsible) -->
                     <div class="mt-0.5">
-                        <button class="crime-predictive-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? 'active-nav-item is-open-trigger' : 'text-gray-600 hover:bg-gray-100' }}"
+                        <button class="crime-predictive-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? 'active-nav-item is-open-trigger' : 'text-alertara-800 hover:bg-alertara-200' }}"
                                 type="button">
                             <span class="flex items-center">
                                 <i class="fas fa-brain w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Predictive Analytics</span>
                             </span>
-                            <i class="fas fa-chevron-right text-xs chevron-icon {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? 'text-alertara-100' : 'text-gray-400' }}"></i>
+                            <i class="fas fa-chevron-right text-xs chevron-icon {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? 'text-alertara-100' : 'text-alertara-600' }}"></i>
                         </button>
                         <div class="crime-predictive-content dropdown-menu submenu-tree {{ (request()->routeIs('crime-hotspot') || request()->routeIs('risk-forecasting') || request()->routeIs('pattern-detection')) ? 'is-open' : '' }}">
                             <a href="{{ authUrl('crime-hotspot') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-hotspot') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-hotspot') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-location-dot w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Crime Hotspot</span>
                             </a>
                             <a href="{{ authUrl('risk-forecasting') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('risk-forecasting') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('risk-forecasting') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-triangle-exclamation w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Risk Forecasting</span>
                             </a>
                             <a href="{{ authUrl('pattern-detection') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('pattern-detection') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('pattern-detection') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-magnifying-glass w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Pattern Detection</span>
                             </a>
@@ -126,22 +126,22 @@
 
                     <!-- Reports (Collapsible) -->
                     <div class="mt-0.5">
-                        <button class="crime-reports-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+                        <button class="crime-reports-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors"
                                 type="button">
                             <span class="flex items-center">
                                 <i class="fas fa-file-pdf w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Reports</span>
                             </span>
-                            <i class="fas fa-chevron-right text-xs chevron-icon text-gray-400"></i>
+                            <i class="fas fa-chevron-right text-xs chevron-icon text-alertara-600"></i>
                         </button>
                         <div class="crime-reports-content dropdown-menu submenu-tree">
                             <a href="#reports"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
                                 <i class="fas fa-eye w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>View Reports</span>
                             </a>
                             <a href="#reports-download"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
                                 <i class="fas fa-download w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Download Report</span>
                             </a>
@@ -153,27 +153,27 @@
                     <span class="section-label">Alerts</span>
                     <!-- Alerts (Collapsible) -->
                     <div class="mt-0.5">
-                        <button class="crime-alerts-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+                        <button class="crime-alerts-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors"
                                 type="button">
                             <span class="flex items-center">
                                 <i class="fas fa-bell w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Alerts</span>
                             </span>
-                            <i class="fas fa-chevron-right text-xs chevron-icon text-gray-400"></i>
+                            <i class="fas fa-chevron-right text-xs chevron-icon text-alertara-600"></i>
                         </button>
                         <div class="crime-alerts-content dropdown-menu submenu-tree">
                             <a href="{{ authUrl('alerts.active') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
                                 <i class="fas fa-circle-dot w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Active Alerts</span>
                             </a>
                             <a href="{{ authUrl('alerts.history') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
                                 <i class="fas fa-clock-rotate-left w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Alert History</span>
                             </a>
                             <a href="{{ authUrl('alerts.settings') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
                                 <i class="fas fa-sliders-h w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Threshold Settings</span>
                             </a>
@@ -188,7 +188,7 @@
                     <!-- Crime Incidents -->
                     <div class="tree-node mt-0.5">
                         <a href="{{ authUrl('crimes.index') }}"
-                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crimes.*') ? 'active-nav-item' : 'text-gray-600 hover:bg-gray-100' }} transition-colors">
+                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crimes.*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                             <i class="fas fa-file-lines w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Crime</span>
                         </a>
@@ -198,19 +198,19 @@
                 <!-- Account Section -->
                 <div class="nav-section">
                     <a href="#profile"
-                       class="tree-node flex items-center px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                       class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
                         <i class="fas fa-user w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Profile</span>
                     </a>
                     <a href="#settings"
-                       class="tree-node flex items-center px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                       class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
                         <i class="fas fa-sliders-h w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Settings</span>
                     </a>
                     <form action="{{ route('logout') }}" method="POST" class="m-0">
                         @csrf
                         <button type="submit"
-                                class="w-full tree-node flex items-center px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                                class="w-full tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
                             <i class="fas fa-arrow-right-from-bracket w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Logout</span>
                         </button>
