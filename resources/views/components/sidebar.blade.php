@@ -1,9 +1,45 @@
 <link rel="stylesheet" href="{{ asset('css/sidebar.css') }}">
 
 <!-- Sidebar -->
-<aside class="w-72 border-r border-gray-200 fixed left-0 top-0 bottom-0 transition-transform duration-300 ease-in-out -translate-x-full lg:translate-x-0 z-30 flex flex-col overflow-hidden">
+<aside class="w-72 border-r border-gray-200 fixed left-0 top-0 bottom-0 transition-transform duration-300 ease-in-out -translate-x-full lg:translate-x-0 z-50 flex flex-col overflow-hidden">
 
-    <div class="border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-8 flex-shrink-0">
+    <div class="bg-gradient-to-r from-alertara-50 to-alertara-100 border-b-2 border-alertara-200 px-4 sm:px-6 lg:px-8 py-5 flex-shrink-0 relative overflow-hidden">
+        <!-- Decorative Pattern -->
+        <div class="absolute top-0 right-0 w-20 h-20 bg-alertara-200 rounded-full opacity-20 -mr-10 -mt-10"></div>
+        <div class="absolute bottom-0 left-0 w-16 h-16 bg-alertara-200 rounded-full opacity-20 -ml-8 -mb-8"></div>
+
+        <!-- Close Button (Mobile Only) - Top Right -->
+        <div class="absolute top-3 right-3 z-20 lg:hidden">
+            <button id="sidebarClose" class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-alertara-700 text-white hover:bg-alertara-800 shadow-md hover:shadow-lg transition-all hover:scale-110"
+                    title="Close Sidebar">
+                <i class="fas fa-times text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Logout Icon Top Left (Mobile Only) -->
+        <div class="absolute top-3 left-3 z-20 lg:hidden">
+            <form action="{{ route('logout') }}" method="POST" class="m-0">
+                @csrf
+                <button type="submit"
+                        class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-alertara-700 text-white hover:bg-alertara-800 shadow-md hover:shadow-lg transition-all hover:scale-110"
+                        title="Logout">
+                    <i class="fas fa-arrow-right-from-bracket text-sm"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- Logout Icon Top Right (Desktop Only) -->
+        <div class="absolute top-3 right-3 z-20 hidden lg:block">
+            <form action="{{ route('logout') }}" method="POST" class="m-0">
+                @csrf
+                <button type="submit"
+                        class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-alertara-700 text-white hover:bg-alertara-800 shadow-md hover:shadow-lg transition-all hover:scale-110"
+                        title="Logout">
+                    <i class="fas fa-arrow-right-from-bracket text-sm"></i>
+                </button>
+            </form>
+        </div>
+
         @php
             $authUser = session('auth_user');
             $localUser = Auth::user();
@@ -14,12 +50,12 @@
             $userRole = $authUser['role'] ?? $localUser?->role ?? 'User';
         @endphp
         @if($isAuthenticated)
-            <div class="flex flex-col items-center text-center">
-                <div class="w-20 h-20 bg-gradient-to-br from-alertara-500 to-alertara-700 rounded-full flex items-center justify-center flex-shrink-0 mb-4 shadow-lg ring-4 ring-alertara-100">
-                    <i class="fas fa-user text-white text-3xl"></i>
+            <div class="flex flex-col items-center text-center relative z-10">
+                <div class="w-16 h-16 bg-gradient-to-br from-alertara-500 to-alertara-700 rounded-full flex items-center justify-center flex-shrink-0 mb-3 shadow-lg ring-4 ring-alertara-100">
+                    <i class="fas fa-user text-white text-2xl"></i>
                 </div>
-                <p class="text-base font-bold text-alertara-900 truncate w-full">{{ $userName }}</p>
-                <p class="text-xs text-alertara-600 font-medium truncate w-full mt-1">{{ ucfirst($userRole) }}</p>
+                <p class="text-sm font-bold text-alertara-900 truncate w-full">{{ $userName }}</p>
+                <p class="text-xs text-alertara-600 font-medium truncate w-full mt-0.5">{{ ucfirst($userRole) }}</p>
             </div>
         @endif
     </div>
