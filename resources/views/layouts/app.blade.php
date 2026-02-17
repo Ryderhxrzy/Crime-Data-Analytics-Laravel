@@ -16,7 +16,7 @@
     <!-- Header Component -->
     @include('components.header')
 
-    <!-- Sidebar Overlay (Mobile) -->
+    <!-- Sidebar Overlay (Mobile) - Covers entire screen including header -->
     <div id="sidebarOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"></div>
 
     <!-- Sidebar -->
@@ -31,18 +31,31 @@
     <script>
         // Sidebar toggle functionality
         const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebarClose = document.getElementById('sidebarClose');
         const sidebar = document.querySelector('aside');
         const sidebarOverlay = document.getElementById('sidebarOverlay');
 
-        sidebarToggle?.addEventListener('click', function() {
-            sidebar?.classList.toggle('-translate-x-full');
-            sidebarOverlay?.classList.toggle('hidden');
-        });
-
-        sidebarOverlay?.addEventListener('click', function() {
+        function closeSidebar() {
             sidebar?.classList.add('-translate-x-full');
             sidebarOverlay?.classList.add('hidden');
+        }
+
+        function openSidebar() {
+            sidebar?.classList.remove('-translate-x-full');
+            sidebarOverlay?.classList.remove('hidden');
+        }
+
+        sidebarToggle?.addEventListener('click', function() {
+            if (sidebar?.classList.contains('-translate-x-full')) {
+                openSidebar();
+            } else {
+                closeSidebar();
+            }
         });
+
+        sidebarClose?.addEventListener('click', closeSidebar);
+
+        sidebarOverlay?.addEventListener('click', closeSidebar);
     </script>
     @stack('scripts')
 </body>
