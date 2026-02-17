@@ -65,30 +65,36 @@ class CrimeIncident extends Model
     protected static function booted(): void
     {
         static::created(function (CrimeIncident $incident) {
-            // Broadcast new incident event
+            // FIRST: Clear cache immediately (synchronous) - MUST happen before broadcast
+            CacheService::invalidateHeatmap();
+            CacheService::invalidateFilters();
+
+            // THEN: Broadcast new incident event (queued to queue worker)
             broadcast(new CrimeIncidentUpdated(
                 $incident->load(['category', 'barangay']),
                 'created'
             ));
-            // Invalidate filter cache so next page load gets fresh data
-            CacheService::invalidateFilters();
         });
 
         static::updated(function (CrimeIncident $incident) {
-            // Broadcast updated incident event
+            // FIRST: Clear cache immediately (synchronous)
+            CacheService::invalidateHeatmap();
+            CacheService::invalidateFilters();
+
+            // THEN: Broadcast updated incident event
             broadcast(new CrimeIncidentUpdated(
                 $incident->load(['category', 'barangay']),
                 'updated'
             ));
-            // Invalidate filter cache
-            CacheService::invalidateFilters();
         });
 
         static::deleted(function (CrimeIncident $incident) {
-            // Broadcast deleted incident event
-            broadcast(new CrimeIncidentDeleted($incident->id));
-            // Invalidate filter cache
+            // FIRST: Clear cache immediately (synchronous)
+            CacheService::invalidateHeatmap();
             CacheService::invalidateFilters();
+
+            // THEN: Broadcast deleted incident event
+            broadcast(new CrimeIncidentDeleted($incident->id));
         });
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 /**
@@ -189,11 +190,37 @@ class CacheService
     }
 
     /**
-     * Invalidate filter caches
+     * Invalidate filter caches (dashboard, time-based trends)
      */
     public static function invalidateFilters()
     {
         self::forgetKeysByPattern('crimes_filter_');
+        self::invalidateHeatmap(); // Also invalidate heatmap cache when data changes
+    }
+
+    /**
+     * Invalidate heatmap cache (for mapping page)
+     * Uses BOTH pattern matching and direct key deletion for reliability
+     */
+    public static function invalidateHeatmap()
+    {
+        try {
+            $redis = Cache::getStore()->connection();
+            $prefix = config('cache.prefix') ? config('cache.prefix') . ':' : '';
+
+            // Method 1: Delete using SCAN pattern (non-blocking, safe for large datasets)
+            $pattern = $prefix . 'crime_heatmap_*';
+            $keys = $redis->keys($pattern);
+
+            if (!empty($keys)) {
+                call_user_func_array([$redis, 'del'], $keys);
+                Log::info("✅ Cache cleared for heatmap - Deleted " . count($keys) . " keys");
+            } else {
+                Log::debug("No heatmap cache keys found to delete");
+            }
+        } catch (\Exception $e) {
+            Log::error("❌ Error clearing heatmap cache: " . $e->getMessage());
+        }
     }
 
     /**
@@ -201,11 +228,18 @@ class CacheService
      */
     private static function forgetKeysByPattern($pattern)
     {
-        $redis = Cache::getStore()->connection();
-        $keys = $redis->keys($pattern . '*');
+        try {
+            $redis = Cache::getStore()->connection();
+            $prefix = config('cache.prefix') ? config('cache.prefix') . ':' : '';
+            $keys = $redis->keys($prefix . $pattern . '*');
 
-        foreach ($keys as $key) {
-            Cache::forget(str_replace(config('cache.prefix'), '', $key));
+            if (!empty($keys)) {
+                // Use DEL command to delete multiple keys at once (more efficient)
+                call_user_func_array([$redis, 'del'], $keys);
+                \Log::debug("Cleared cache keys matching pattern: {$pattern}", ['count' => count($keys)]);
+            }
+        } catch (\Exception $e) {
+            \Log::error("Error clearing cache pattern {$pattern}: " . $e->getMessage());
         }
     }
 

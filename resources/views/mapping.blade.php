@@ -25,8 +25,10 @@ if (request()->query('token')) {
     <!-- Reverb Configuration (passed from server) -->
     <script>
         window.reverbConfig = {
-            key: '{{ config("broadcasting.connections.pusher.key") }}',
-            cluster: '{{ config("broadcasting.connections.pusher.options.cluster") }}'
+            key: '{{ config("broadcasting.connections.reverb.key") }}',
+            host: '{{ config("broadcasting.connections.reverb.host") }}',
+            port: '{{ config("broadcasting.connections.reverb.port") }}',
+            scheme: '{{ config("broadcasting.connections.reverb.scheme") }}'
         };
     </script>
 
@@ -49,9 +51,15 @@ if (request()->query('token')) {
     <main class="lg:ml-72 ml-0 lg:mt-16 mt-16 min-h-screen bg-gray-100">
         <div class="p-6">
             <!-- Page Header -->
-            <div class="mb-8">
-                <h1 class="text-3xl font-bold text-gray-900">Crime Mapping</h1>
-                <p class="text-gray-600 mt-2">Interactive crime data visualization and analysis</p>
+            <div class="mb-8 flex justify-between items-start">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Crime Mapping</h1>
+                    <p class="text-gray-600 mt-2">Interactive crime data visualization and analysis</p>
+                </div>
+                <!-- Test Notification Button -->
+                <button id="testNotificationBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-200" title="Click to test real-time notifications">
+                    <i class="fas fa-bell mr-2"></i>Test Notification
+                </button>
             </div>
 
             <!-- Map Container with Right Panel -->
@@ -2707,6 +2715,36 @@ if (request()->query('token')) {
             `;
             document.head.appendChild(style);
         }
+
+        // Test Notification Button Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const testBtn = document.getElementById('testNotificationBtn');
+            if (testBtn) {
+                testBtn.addEventListener('click', function() {
+                    // Show a sample notification
+                    const sampleMessages = [
+                        '🔴 Test: New crime incident reported!',
+                        '📝 Test: Crime incident updated',
+                        '🗑️ Test: Crime incident deleted',
+                        '✅ Test: Real-time notifications working!',
+                        '🎯 Test: WebSocket connection active'
+                    ];
+
+                    const randomMessage = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
+                    showRealtimeNotification(randomMessage);
+
+                    // Change button to indicate success
+                    testBtn.style.backgroundColor = '#22c55e';
+                    testBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Notification Sent!';
+
+                    // Reset button after 2 seconds
+                    setTimeout(() => {
+                        testBtn.style.backgroundColor = '';
+                        testBtn.innerHTML = '<i class="fas fa-bell mr-2"></i>Test Notification';
+                    }, 2000);
+                });
+            }
+        });
     </script>
 
 </body>

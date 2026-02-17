@@ -6,18 +6,21 @@ import Pusher from 'pusher-js';
 window.Pusher = Pusher;
 
 // Initialize Laravel Echo for Reverb
-// Key is passed from server via window.reverbConfig to avoid hardcoding
-const reverbKey = window.reverbConfig?.key || 'jyfymj6zqd8jx44rcwsh'; // Fallback if not set
+// Config is passed from server via window.reverbConfig (set in blade template)
+const config = window.reverbConfig || {};
+const reverbKey = config.key || 'jyfymj6zqd8jx44rcwsh'; // Fallback if not set
+const reverbHost = config.host || window.location.hostname;
+const reverbPort = config.port || 8080;
+const reverbScheme = config.scheme || 'http';
 
 window.Echo = new Echo({
     broadcaster: 'pusher',
     key: reverbKey,
-    cluster: 'mt1',
-    wsHost: window.location.hostname,
-    wsPort: 8080,
-    wssPort: 8080,
-    forceTLS: false,
-    encrypted: false,
+    wsHost: reverbHost,
+    wsPort: reverbPort,
+    wssPort: reverbScheme === 'https' ? 443 : reverbPort,
+    forceTLS: reverbScheme === 'https',
+    encrypted: reverbScheme === 'https',
     enabledTransports: ['ws', 'wss'],
 });
 
