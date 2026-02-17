@@ -78,7 +78,7 @@ aside {
 .submenu-tree {
     margin-left: 1.125rem;
     padding-left: 0.875rem;
-    border-left: 1.5px solid #e2e8f0;
+    border-left: 1.5px solid #718096;
     padding-bottom: 0.125rem;
 }
 
@@ -86,7 +86,7 @@ aside {
 .submenu-tree-l2 {
     margin-left: 0.875rem;
     padding-left: 0.75rem;
-    border-left: 1.5px solid #e2e8f0;
+    border-left: 1.5px solid #718096;
     padding-bottom: 0.125rem;
 }
 
@@ -117,8 +117,8 @@ a i {
     left: -0.875rem;      /* reaches the border-left of .submenu-tree */
     top: 50%;
     width: 0.6rem;
-    height: 1px;
-    background: var(--alertara-300);
+    height: 1.5px;
+    background: #718096;
     transform: translateY(-50%);
     pointer-events: none;
 }
@@ -131,8 +131,8 @@ a i {
     left: -0.75rem;       /* reaches the border-left of .submenu-tree-l2 */
     top: 50%;
     width: 0.5rem;
-    height: 1px;
-    background: var(--alertara-200);
+    height: 1.5px;
+    background: #718096;
     transform: translateY(-50%);
     pointer-events: none;
 }
