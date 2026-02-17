@@ -6,6 +6,7 @@ use App\Models\CrimeIncident;
 use App\Models\Barangay;
 use App\Models\CrimeCategory;
 use App\Models\CrimeAlert;
+use App\Services\CacheService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
@@ -74,18 +75,16 @@ class DashboardController extends Controller
         if (!$authData) {
             return redirect()->route('login');
         }
-        
+
         extract($authData);
-        // Total Incidents
-        $totalIncidents = CrimeIncident::count();
 
-        // Total Cleared/Uncleared
-        $clearedIncidents = CrimeIncident::where('clearance_status', 'cleared')->count();
-        $unclearedIncidents = CrimeIncident::where('clearance_status', 'uncleared')->count();
-        $clearanceRate = $totalIncidents > 0 ? round(($clearedIncidents / $totalIncidents) * 100, 2) : 0;
-
-        // Active Alerts
-        $activeAlerts = CrimeAlert::where('alert_status', 'active')->count();
+        // Get cached dashboard analytics
+        $analytics = CacheService::getDashboardAnalytics();
+        $totalIncidents = $analytics['totalIncidents'];
+        $clearedIncidents = $analytics['clearedIncidents'];
+        $unclearedIncidents = $analytics['unclearedIncidents'];
+        $clearanceRate = $analytics['clearanceRate'];
+        $activeAlerts = $analytics['activeAlerts'];
 
         // Incidents by Category
         $incidentsByCategory = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as count'))
@@ -265,7 +264,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get filtered chart data via AJAX
+     * Get filtered chart data via AJAX (with Redis caching)
      */
     public function getChartData(Request $request)
     {
@@ -273,6 +272,20 @@ class DashboardController extends Controller
         $month = $request->get('month', null);
         $dayOfWeek = $request->get('day_of_week', null);
         $timeOfDay = $request->get('time_of_day', null);
+
+        // Generate cache key
+        $cacheKey = CacheService::generateCacheKey('chart_data', [
+            'year' => $year,
+            'month' => $month,
+            'day_of_week' => $dayOfWeek,
+            'time_of_day' => $timeOfDay,
+        ]);
+
+        // Try to get from cache first
+        $cachedData = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if ($cachedData) {
+            return response()->json($cachedData);
+        }
 
         // 1. Monthly Crime Trend (by month for the selected year)
         $monthlyTrend = CrimeIncident::select(
@@ -338,7 +351,7 @@ class DashboardController extends Controller
         // 5. Generate Heatmap Data (Day vs Hour)
         $heatmapData = $this->generateHeatmapData($query);
 
-        return response()->json([
+        $response = [
             'monthlyTrend' => [
                 'labels' => $monthlyTrend->pluck('month')->values(),
                 'data'   => $monthlyTrend->pluck('count')->values(),
@@ -353,7 +366,18 @@ class DashboardController extends Controller
             ],
             // Time-focused features data
             'heatmapData' => $heatmapData,
-        ]);
+        ];
+
+        // Cache the result for 30 minutes
+        \Illuminate\Support\Facades\Cache::remember(
+            $cacheKey,
+            now()->addMinutes(CacheService::CHART_TTL),
+            function () use ($response) {
+                return $response;
+            }
+        );
+
+        return response()->json($response);
     }
 
     /**
@@ -410,13 +434,13 @@ class DashboardController extends Controller
         if (!$authData) {
             return redirect()->route('login');
         }
-        
+
         extract($authData);
-        
-        // Get initial data for location trends
-        $barangays = Barangay::orderBy('barangay_name')->get();
-        $crimeCategories = CrimeCategory::orderBy('category_name')->get();
-        
+
+        // Get cached hot data
+        $barangays = CacheService::getBarangays();
+        $crimeCategories = CacheService::getCrimeCategories();
+
         return view('location-trends', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
     }
 
@@ -430,12 +454,12 @@ class DashboardController extends Controller
         if (!$authData) {
             return redirect()->route('login');
         }
-        
+
         extract($authData);
-        
-        // Get initial data for crime type trends
-        $barangays = \App\Models\Barangay::orderBy('barangay_name')->get();
-        $crimeCategories = \App\Models\CrimeCategory::orderBy('category_name')->get();
+
+        // Get cached hot data
+        $barangays = CacheService::getBarangays();
+        $crimeCategories = CacheService::getCrimeCategories();
         
         // Get crime type statistics
         $crimeTypeStats = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as total'))
@@ -735,7 +759,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get hotspot data with analytics for Crime Hotspot Analysis page
+     * Get hotspot data with analytics for Crime Hotspot Analysis page (with Redis caching)
      */
     public function getHotspotData(Request $request)
     {
@@ -744,6 +768,19 @@ class DashboardController extends Controller
             $timePeriod = $request->query('timePeriod', 'all');
             $crimeType = $request->query('crimeType', '');
             $barangay = $request->query('barangay', '');
+
+            // Generate cache key
+            $cacheKey = CacheService::generateCacheKey('hotspot_data', [
+                'timePeriod' => $timePeriod,
+                'crimeType' => $crimeType,
+                'barangay' => $barangay,
+            ]);
+
+            // Try to get from cache first
+            $cachedData = \Illuminate\Support\Facades\Cache::get($cacheKey);
+            if ($cachedData) {
+                return response()->json($cachedData);
+            }
 
             // Build base query for getting crimes
             $crimeQuery = CrimeIncident::with(['category', 'barangay'])
@@ -820,12 +857,23 @@ class DashboardController extends Controller
             // Calculate crime type distribution
             $typeDistribution = $this->getCrimeTypeDistribution($timePeriod, $crimeType, $barangay);
 
-            return response()->json([
+            $response = [
                 'crimes' => $crimes,
                 'hotspots' => $hotspots,
                 'monthly_trends' => $monthlyTrends,
                 'type_distribution' => $typeDistribution
-            ]);
+            ];
+
+            // Cache the result for 20 minutes
+            \Illuminate\Support\Facades\Cache::remember(
+                $cacheKey,
+                now()->addMinutes(CacheService::HOTSPOT_TTL),
+                function () use ($response) {
+                    return $response;
+                }
+            );
+
+            return response()->json($response);
         } catch (\Exception $e) {
             \Log::error('Error in getHotspotData: ' . $e->getMessage());
             return response()->json(['error' => 'Error loading hotspot data', 'message' => $e->getMessage()], 500);
