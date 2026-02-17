@@ -2510,6 +2510,179 @@ if (request()->query('token')) {
                 }
             }
         });
+
+        // ============================================================
+        // REAL-TIME WEBSOCKET INTEGRATION (Laravel Reverb)
+        // ============================================================
+        // Initialize Laravel Echo for real-time crime incident updates via Reverb
+        if (typeof window.Echo !== 'undefined') {
+            console.log('✅ Real-Time Reverb Connected');
+
+            // Listen for real-time crime events on the public channel
+            window.Echo.channel('crime-incidents')
+                .listen('.incident.created', (data) => {
+                    console.log('📍 New incident received:', data);
+                    handleNewIncident(data);
+                    showRealtimeNotification('🔴 New crime incident reported!');
+                })
+                .listen('.incident.updated', (data) => {
+                    console.log('📝 Incident updated:', data);
+                    handleUpdatedIncident(data);
+                    showRealtimeNotification('📝 Crime incident updated');
+                })
+                .listen('.incident.deleted', (data) => {
+                    console.log('🗑️ Incident deleted:', data.id);
+                    handleDeletedIncident(data.id);
+                    showRealtimeNotification('🗑️ Crime incident deleted');
+                });
+        } else {
+            console.warn('⚠️ Laravel Echo library not loaded. Real-time updates disabled.');
+        }
+
+        // Handle new incident added in real-time
+        function handleNewIncident(incident) {
+            // Add to current data array
+            currentData.push(incident);
+
+            // Add marker/point to current visualization
+            if (currentVisualizationMode === 'heatmap') {
+                // Re-render heatmap with updated data
+                clearCurrentVisualization();
+                displayHeatmap(currentData);
+            } else if (currentVisualizationMode === 'markers') {
+                // Add single marker to existing display
+                addSingleMarkerRealtime(incident);
+            } else if (currentVisualizationMode === 'clusters') {
+                // Re-render clusters (cluster grouping may change)
+                clearCurrentVisualization();
+                displayClusters(currentData);
+            }
+
+            // Update statistics and incident list
+            updateStatistics(currentData);
+            currentListData = currentData;
+            currentListPage = 1; // Reset to first page
+            renderIncidentPage(document.getElementById('incidentSearch').value);
+        }
+
+        // Handle updated incident
+        function handleUpdatedIncident(incident) {
+            const index = currentData.findIndex(i => i.id === incident.id);
+            if (index !== -1) {
+                currentData[index] = incident;
+                // Re-render
+                clearCurrentVisualization();
+                if (currentVisualizationMode === 'heatmap') displayHeatmap(currentData);
+                else if (currentVisualizationMode === 'markers') displayMarkers(currentData);
+                else displayClusters(currentData);
+                updateStatistics(currentData);
+                renderIncidentPage(document.getElementById('incidentSearch').value);
+            }
+        }
+
+        // Handle deleted incident
+        function handleDeletedIncident(id) {
+            currentData = currentData.filter(i => i.id !== id);
+            clearCurrentVisualization();
+            if (currentVisualizationMode === 'heatmap') displayHeatmap(currentData);
+            else if (currentVisualizationMode === 'markers') displayMarkers(currentData);
+            else displayClusters(currentData);
+            updateStatistics(currentData);
+            renderIncidentPage(document.getElementById('incidentSearch').value);
+        }
+
+        // Add a single marker without re-rendering all markers
+        function addSingleMarkerRealtime(incident) {
+            if (!incident.latitude || !incident.longitude) return;
+
+            // Check if within QC bounds
+            if (qcBounds && !qcBounds.contains([incident.latitude, incident.longitude])) {
+                return;
+            }
+
+            const marker = L.circleMarker(
+                [incident.latitude, incident.longitude],
+                {
+                    radius: 8,
+                    fillColor: incident.color_code,
+                    color: incident.color_code,
+                    weight: 2,
+                    opacity: 0.8,
+                    fillOpacity: 0.8,
+                    className: 'crime-marker'
+                }
+            );
+
+            marker.bindPopup(`
+                <div style="font-size: 12px;">
+                    <strong>${incident.incident_title}</strong><br>
+                    ${incident.category_name}<br>
+                    ${incident.location}<br>
+                    <em>${incident.incident_date}</em>
+                </div>
+            `);
+
+            marker.on('click', function() {
+                openIncidentModal(incident.id);
+            });
+
+            marker.addTo(markerLayer);
+        }
+
+        // Real-time notification badge
+        function showRealtimeNotification(message) {
+            let notif = document.getElementById('realtimeNotification');
+            if (!notif) {
+                // Create the notification element if it doesn't exist
+                const div = document.createElement('div');
+                div.id = 'realtimeNotification';
+                div.style.cssText = `
+                    display: block;
+                    position: fixed;
+                    top: 80px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #274d4c 0%, #3a6b6a 100%);
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    z-index: 9999;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    animation: slideIn 0.3s ease;
+                `;
+                document.body.appendChild(div);
+                notif = div;
+            }
+
+            notif.textContent = message;
+            notif.style.display = 'block';
+            setTimeout(() => { notif.style.display = 'none'; }, 4000);
+        }
+
+        // CSS animation for notification
+        if (!document.getElementById('realtimeNotificationStyle')) {
+            const style = document.createElement('style');
+            style.id = 'realtimeNotificationStyle';
+            style.textContent = `
+                @keyframes slideIn {
+                    from {
+                        transform: translateX(400px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.7; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
     </script>
+
 </body>
 </html>
