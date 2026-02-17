@@ -550,6 +550,15 @@ if (request()->query('token')) {
         let selectedIncidentId = null;
         let pointerMarker = null;
         let selectedIncidentCoords = null;
+
+        // Pagination state variables
+        const MAX_VISIBLE_INCIDENTS = 100;
+        let currentListData = [];
+        let currentListPage = 1;
+        let searchTimeout = null;
+
+        // Store cluster zoom handler to remove old listeners
+        let clusterZoomHandler = null;
         let highlightCircle = null;
 
         // Heatmap analysis state
@@ -1060,6 +1069,11 @@ if (request()->query('token')) {
                 map.removeLayer(markerClusterGroup);
                 markerClusterGroup = null;
             }
+            // Remove cluster zoom handler to prevent stale references
+            if (clusterZoomHandler) {
+                map.off('zoomend', clusterZoomHandler);
+                clusterZoomHandler = null;
+            }
         }
 
         // Update statistics on the right panel
@@ -1077,9 +1091,9 @@ if (request()->query('token')) {
             document.getElementById('statCategories').textContent = uniqueCategories;
         }
 
-        // Update incident list on the right panel
+        // Update incident list on the right panel (with virtual rendering)
         function updateIncidentList(data, searchQuery = '') {
-            console.log('updateIncidentList called with data:', data, 'searchQuery:', searchQuery);
+            console.log('updateIncidentList called with data:', data.length, 'items, searchQuery:', searchQuery);
             const skeletonLoader = document.getElementById('incidentSkeletonLoader');
             const listContent = document.getElementById('incidentListContent');
 
@@ -1108,8 +1122,26 @@ if (request()->query('token')) {
                 return;
             }
 
+            // Store filtered data and reset pagination
+            currentListData = filteredData;
+            currentListPage = 1;
+
+            // Render first page of results
+            renderIncidentPage(searchQuery);
+
+            skeletonLoader.style.display = 'none';
+            listContent.style.display = 'block';
+        }
+
+        // Helper function to render a page of incidents
+        function renderIncidentPage(searchQuery = '') {
+            const listContent = document.getElementById('incidentListContent');
+            const start = 0;
+            const end = currentListPage * MAX_VISIBLE_INCIDENTS;
+            const visible = currentListData.slice(start, end);
+
             let html = '';
-            filteredData.forEach((incident, index) => {
+            visible.forEach((incident) => {
                 // Find original index in currentData
                 const originalIndex = currentData.indexOf(incident);
                 const isSelected = incident.id === selectedIncidentId;
@@ -1171,9 +1203,35 @@ if (request()->query('token')) {
                 `;
             });
 
-            skeletonLoader.style.display = 'none';
-            listContent.style.display = 'block';
+            // Add "Show More" button if there are more incidents to display
+            if (currentListData.length > end) {
+                const remaining = currentListData.length - end;
+                html += `
+                    <div style="padding: 12px; text-align: center; border-top: 1px solid #e5e7eb;">
+                        <button onclick="loadMoreIncidents()" style="
+                            padding: 8px 16px;
+                            background-color: #274d4c;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 12px;
+                            font-weight: 500;
+                            transition: background-color 0.2s;
+                        " onmouseover="this.style.backgroundColor='#1a3535'" onmouseout="this.style.backgroundColor='#274d4c'">
+                            Show More (${remaining} remaining)
+                        </button>
+                    </div>
+                `;
+            }
+
             listContent.innerHTML = html;
+        }
+
+        // Load more incidents
+        function loadMoreIncidents() {
+            currentListPage++;
+            renderIncidentPage(document.getElementById('incidentSearch').value);
         }
 
         // Show skeleton loader
@@ -1898,8 +1956,16 @@ if (request()->query('token')) {
             markerLayer.addTo(map);
 
             // Handle zoom-based cluster/individual marker visibility
-            map.on('zoomend', function() {
+            // Remove old zoom handler if it exists to prevent duplicate handlers
+            if (clusterZoomHandler) {
+                map.off('zoomend', clusterZoomHandler);
+            }
+
+            clusterZoomHandler = function() {
                 const currentZoom = map.getZoom();
+                // Check if markerLayer still exists (in case it was cleared)
+                if (!markerLayer) return;
+
                 markerLayer.eachLayer(function(layer) {
                     if (layer instanceof L.Marker && layer.options.icon.options.className === 'cluster-marker') {
                         // Show cluster markers only when zoomed out (zoom < 15)
@@ -1917,7 +1983,9 @@ if (request()->query('token')) {
                         }
                     }
                 });
-            });
+            };
+
+            map.on('zoomend', clusterZoomHandler);
 
             // Trigger initial zoom-based visibility
             const currentZoom = map.getZoom();
@@ -1945,6 +2013,7 @@ if (request()->query('token')) {
                 'timePeriod',
                 'crimeType',
                 'caseStatus',
+                'clearanceStatus',
                 'barangay'
             ];
 
@@ -2014,13 +2083,21 @@ if (request()->query('token')) {
         });
 
 
-        // Search incident functionality
+        // Search incident functionality (with debounce to prevent lag on every keystroke)
         try {
             let searchInputElement = document.getElementById('incidentSearch');
             if (searchInputElement) {
                 searchInputElement.addEventListener('input', function() {
+                    // Clear previous timeout
+                    if (searchTimeout) {
+                        clearTimeout(searchTimeout);
+                    }
+
+                    // Set new timeout for debounced search (300ms)
                     const searchQuery = this.value;
-                    updateIncidentList(currentData, searchQuery);
+                    searchTimeout = setTimeout(() => {
+                        updateIncidentList(currentData, searchQuery);
+                    }, 300);
                 });
             }
         } catch(e) {
