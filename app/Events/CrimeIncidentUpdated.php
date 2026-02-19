@@ -6,6 +6,7 @@ use App\Models\CrimeIncident;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class CrimeIncidentUpdated implements ShouldBroadcast
 {
@@ -18,21 +19,34 @@ class CrimeIncidentUpdated implements ShouldBroadcast
     {
         $this->incident = $incident;
         $this->eventType = $eventType;
+        
+        // Debug logging
+        Log::info('🔌 CrimeIncidentUpdated event created', [
+            'event_type' => $eventType,
+            'incident_id' => $incident->id,
+            'incident_title' => $incident->incident_title,
+            'latitude' => $incident->latitude,
+            'longitude' => $incident->longitude,
+            'broadcast_when' => $this->broadcastWhen()
+        ]);
     }
 
     public function broadcastOn(): Channel
     {
+        Log::info('📡 Setting up broadcast channel: crime-incidents');
         return new Channel('crime-incidents');
     }
 
     public function broadcastAs(): string
     {
-        return 'incident.' . $this->eventType;
+        $eventName = 'incident.' . $this->eventType;
+        Log::info('📢 Broadcast event name: ' . $eventName);
+        return $eventName;
     }
 
     public function broadcastWith(): array
     {
-        return [
+        $data = [
             'id' => $this->incident->id,
             'latitude' => (float) $this->incident->latitude,
             'longitude' => (float) $this->incident->longitude,
@@ -48,11 +62,26 @@ class CrimeIncidentUpdated implements ShouldBroadcast
             'icon' => $this->incident->category?->icon ?? 'fa-exclamation-circle',
             'event_type' => $this->eventType,
         ];
+        
+        Log::info('📦 Broadcast data prepared', $data);
+        return $data;
     }
 
     public function broadcastWhen(): bool
     {
-        // Only broadcast if incident has valid coordinates
-        return !empty($this->incident->latitude) && !empty($this->incident->longitude);
+        // Always broadcast for debugging - remove coordinate restriction
+        $shouldBroadcast = true;
+        
+        Log::info('🔍 broadcastWhen check', [
+            'should_broadcast' => $shouldBroadcast,
+            'incident_id' => $this->incident->id,
+            'latitude' => $this->incident->latitude,
+            'longitude' => $this->incident->longitude
+        ]);
+        
+        return $shouldBroadcast;
+        
+        // Original code (commented out for debugging):
+        // return !empty($this->incident->latitude) && !empty($this->incident->longitude);
     }
 }
