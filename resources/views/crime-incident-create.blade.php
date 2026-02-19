@@ -21,6 +21,9 @@ if (request()->query('token')) {
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="{{ asset('js/tailwind-config.js') }}"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Echo JavaScript for real-time status -->
+    @vite(['resources/js/app.js'])
 </head>
 <body class="bg-gray-100">
     <!-- Header Component -->
@@ -225,10 +228,12 @@ if (request()->query('token')) {
                             <strong>Testing Real-Time Updates:</strong>
                         </p>
                         <ol class="text-sm text-blue-700 mt-2 ml-6 list-decimal">
-                            <li>Fill in all the fields below</li>
+                            <li>Fill in all fields below</li>
                             <li>Click "Create Incident"</li>
-                            <li>Switch to the <strong>Mapping Page</strong> in another tab</li>
+                            <li>Switch to <strong>Mapping Page</strong> in another tab</li>
                             <li>Watch the map update in real-time! 🎯</li>
+                            <li>Check browser console for debug logs</li>
+                            <li>Check header status should show 🟢 Live</li>
                         </ol>
                     </div>
 
@@ -245,5 +250,31 @@ if (request()->query('token')) {
             </div>
         </div>
     </main>
+
+    <!-- Debug JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+            
+            if (form && submitBtn) {
+                form.addEventListener('submit', function(e) {
+                    console.log('🚨 Form submission started...');
+                    console.log('📝 Form data:', new FormData(form));
+                    
+                    // Show loading state
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+                    
+                    // Log after submission (for debugging)
+                    setTimeout(() => {
+                        console.log('✅ Form submitted - Check mapping page for real-time updates');
+                        console.log('🔍 Expected: New incident should appear on mapping page');
+                        console.log('📊 Expected: Statistics should update in real-time');
+                    }, 1000);
+                });
+            }
+        });
+    </script>
 </body>
 </html>
