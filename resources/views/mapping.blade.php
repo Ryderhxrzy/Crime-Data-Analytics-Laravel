@@ -26,9 +26,9 @@ if (request()->query('token')) {
     <script>
         window.reverbConfig = {
             key: '{{ config("broadcasting.connections.reverb.key") }}',
-            host: '{{ config("broadcasting.connections.reverb.host") }}',
-            port: '{{ config("broadcasting.connections.reverb.port") }}',
-            scheme: '{{ config("broadcasting.connections.reverb.scheme") }}'
+            host: '{{ config("broadcasting.connections.reverb.options.host") ?? "localhost" }}',
+            port: '{{ config("broadcasting.connections.reverb.options.port") ?? "8080" }}',
+            scheme: '{{ config("broadcasting.connections.reverb.options.scheme") ?? "http" }}'
         };
     </script>
 
