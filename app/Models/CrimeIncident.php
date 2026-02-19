@@ -4,9 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Log;
 use App\Events\CrimeIncidentUpdated;
 use App\Events\CrimeIncidentDeleted;
-use App\Services\CacheService;
 
 class CrimeIncident extends Model
 {
@@ -65,23 +66,32 @@ class CrimeIncident extends Model
     protected static function booted(): void
     {
         static::created(function (CrimeIncident $incident) {
-            // FIRST: Clear cache immediately (synchronous) - MUST happen before broadcast
-            CacheService::invalidateHeatmap();
-            CacheService::invalidateFilters();
-
-            // THEN: Broadcast new incident event (queued to queue worker)
+            Log::info('🚨 CrimeIncident.created model event triggered', [
+                'incident_id' => $incident->id,
+                'incident_title' => $incident->incident_title,
+                'latitude' => $incident->latitude,
+                'longitude' => $incident->longitude,
+                'category_id' => $incident->crime_category_id,
+                'barangay_id' => $incident->barangay_id
+            ]);
+            
+            // Broadcast new incident event
+            Log::info('📡 Broadcasting CrimeIncidentUpdated event...');
             broadcast(new CrimeIncidentUpdated(
                 $incident->load(['category', 'barangay']),
                 'created'
             ));
+            
+            Log::info('✅ CrimeIncidentUpdated event broadcasted successfully');
         });
 
         static::updated(function (CrimeIncident $incident) {
-            // FIRST: Clear cache immediately (synchronous)
-            CacheService::invalidateHeatmap();
-            CacheService::invalidateFilters();
-
-            // THEN: Broadcast updated incident event
+            Log::info('🔄 CrimeIncident.updated model event triggered', [
+                'incident_id' => $incident->id,
+                'incident_title' => $incident->incident_title
+            ]);
+            
+            // Broadcast updated incident event
             broadcast(new CrimeIncidentUpdated(
                 $incident->load(['category', 'barangay']),
                 'updated'
@@ -89,11 +99,11 @@ class CrimeIncident extends Model
         });
 
         static::deleted(function (CrimeIncident $incident) {
-            // FIRST: Clear cache immediately (synchronous)
-            CacheService::invalidateHeatmap();
-            CacheService::invalidateFilters();
-
-            // THEN: Broadcast deleted incident event
+            Log::info('🗑️ CrimeIncident.deleted model event triggered', [
+                'incident_id' => $incident->id
+            ]);
+            
+            // Broadcast deleted incident event
             broadcast(new CrimeIncidentDeleted($incident->id));
         });
     }
