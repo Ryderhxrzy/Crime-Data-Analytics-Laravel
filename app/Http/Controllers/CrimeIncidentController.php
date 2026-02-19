@@ -45,7 +45,20 @@ class CrimeIncidentController extends Controller
         // Auto-generate incident code
         $validated['incident_code'] = 'INC-' . date('YmdHis') . '-' . rand(100, 999);
 
+        \Log::info('📝 Creating crime incident', [
+            'incident_title' => $validated['incident_title'],
+            'category_id' => $validated['crime_category_id'],
+            'barangay_id' => $validated['barangay_id'],
+            'coords' => $validated['latitude'] . ',' . $validated['longitude']
+        ]);
+
         $incident = CrimeIncident::create($validated);
+
+        \Log::info('✅ Crime incident created successfully', [
+            'incident_id' => $incident->id,
+            'incident_code' => $incident->incident_code,
+            'broadcast_ready' => true
+        ]);
 
         return redirect()->back()->with('success', 'Crime incident created successfully! Check the mapping page for real-time update.');
     }
