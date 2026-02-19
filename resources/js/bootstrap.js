@@ -10,7 +10,7 @@ window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
 /**
- * Echo/Reverb has been disabled - using file-based sessions and null broadcaster
+ * Echo is configured to use Pusher for real-time broadcasting
  */
 
 import './echo';
