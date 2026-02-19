@@ -7,6 +7,8 @@ use App\Models\Barangay;
 use App\Models\CrimeCategory;
 use App\Models\CrimeAlert;
 use App\Services\CacheService;
+use App\Events\CrimeIncidentUpdated;
+use App\Events\CrimeIncidentDeleted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
