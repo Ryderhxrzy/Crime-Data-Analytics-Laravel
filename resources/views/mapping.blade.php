@@ -36,55 +36,18 @@ if (request()->query('token')) {
     @include('components.sidebar')
 
     <!-- Main Content -->
-    <main class="lg:ml-72 ml-0 lg:mt-16 mt-16 min-h-screen bg-gray-100">
-        <div class="p-6">
+    <main class="lg:ml-72 ml-0 lg:mt-16 mt-16 min-h-screen">
+        <div class="p-4 lg:p-6 pt-0 lg:pt-0 pb-12">
             <!-- Page Header -->
-            <div class="mb-8 flex justify-between items-start">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Crime Mapping</h1>
-                    <p class="text-gray-600 mt-2">Interactive crime data visualization and analysis</p>
-                </div>
-                <div class="flex gap-2">
-                    <!-- Test Notification Button -->
-                    <button id="testNotificationBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-200" title="Click to test real-time notifications">
-                        <i class="fas fa-bell mr-2"></i>Test Notification
-                    </button>
-                    <!-- Debug Real-time Button -->
-                    <button id="debugRealtimeBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-200" title="Debug real-time connection">
-                        <i class="fas fa-bug mr-2"></i>Debug Real-time
-                    </button>
+            <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                        <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Crime Mapping</h1>
+                        <p class="text-gray-600 mt-1 text-sm lg:text-base">Interactive crime data visualization and analysis</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Debug Panel -->
-            <div id="debugPanel" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg hidden">
-                <h3 class="text-lg font-bold text-yellow-800 mb-2">🔍 Real-time Debug Panel</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <strong>Echo Available:</strong> <span id="echoStatus" class="text-red-600">Checking...</span>
-                    </div>
-                    <div>
-                        <strong>Pusher Connected:</strong> <span id="pusherStatus" class="text-red-600">Checking...</span>
-                    </div>
-                    <div>
-                        <strong>Channel Subscribed:</strong> <span id="channelStatus" class="text-red-600">Checking...</span>
-                    </div>
-                    <div>
-                        <strong>Events Received:</strong> <span id="eventCount" class="text-red-600">0</span>
-                    </div>
-                    <div>
-                        <strong>Last Event:</strong> <span id="lastEvent" class="text-red-600">None</span>
-                    </div>
-                    <div>
-                        <strong>Current Data Count:</strong> <span id="dataCount" class="text-red-600">0</span>
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <button id="toggleDebugBtn" class="bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded">
-                        Hide Debug Panel
-                    </button>
-                </div>
-            </div>
 
             <!-- Map Container with Right Panel -->
             <div class="bg-white border border-gray-200 rounded-lg p-6 mb-8" style="position: relative; z-index: 1;">
@@ -92,133 +55,129 @@ if (request()->query('token')) {
                     <h2 class="text-lg font-bold text-gray-900">
                         <i class="fas fa-map mr-2 text-alertara-600"></i>Crime Incident Map
                     </h2>
-                    <button id="map3DToggle" style="background: none; border: 1px solid #d1d5db; font-size: 12px; color: #274d4c; cursor: pointer; padding: 6px 12px; border-radius: 6px; transition: all 0.2s; font-weight: 500;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='white'" title="Toggle 3D Map View">
-                        <i class="fas fa-cube mr-1"></i>3D Map
+                    <button id="mapFullscreenBtn" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm" title="Toggle Fullscreen Map">
+                        <i class="fas fa-expand"></i>
+                        <span class="hidden sm:inline">Fullscreen</span>
                     </button>
                 </div>
 
-                <!-- Filter Bar - Single Line -->
-                <div style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap;">
-                    <!-- Visualization Mode -->
-                    <div style="flex: 1; min-width: 150px;">
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase;">
-                            <i class="fas fa-chart-pie mr-1" style="color: #274d4c;"></i>View
-                        </label>
-                        <select id="visualizationMode" style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; background-color: white; color: #333; cursor: pointer;">
-                            <option value="markers" selected>Individual Markers</option>
-                            <option value="heatmap">Heat Map</option>
-                            <option value="clusters">Cluster View</option>
-                        </select>
+                <!-- Filters Section -->
+                <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <!-- Visualization Mode -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">View Mode</label>
+                            <select id="visualizationMode" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="markers" selected>Individual Markers</option>
+                                <option value="heatmap">Heat Map</option>
+                                <option value="clusters">Cluster View</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Time Period -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Time Period</label>
+                            <select id="timePeriod" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="30">Last 30 Days</option>
+                                <option value="90">Last 90 Days</option>
+                                <option value="180">Last 6 Months</option>
+                                <option value="all" selected>All Time</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Crime Type -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Category</label>
+                            <select id="crimeType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="">All Categories</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Case Status -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Case Status</label>
+                            <select id="caseStatus" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="">All Status</option>
+                                <option value="reported">Reported</option>
+                                <option value="under_investigation">Under Investigation</option>
+                                <option value="solved">Solved</option>
+                                <option value="closed">Closed</option>
+                                <option value="archived">Archived</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Clearance Status -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Clearance Status</label>
+                            <select id="clearanceStatus" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="">All Clearance</option>
+                                <option value="cleared">Cleared</option>
+                                <option value="uncleared">Uncleared</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Barangay -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Barangay</label>
+                            <select id="barangay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="">All Barangays</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Date Range -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Date Range</label>
+                            <input type="date" id="dateFilter" 
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        </div>
+                        
+                        <!-- Reset Button -->
+                        <div class="flex items-end">
+                            <button id="resetFilterBtn" class="w-full px-4 py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
+                                <i class="fas fa-redo"></i>
+                                <span>Reset</span>
+                            </button>
+                        </div>
                     </div>
-
-                    <!-- Time Period -->
-                    <div style="flex: 1; min-width: 150px;">
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase;">
-                            <i class="fas fa-calendar mr-1" style="color: #274d4c;"></i>Period
-                        </label>
-                        <select id="timePeriod" style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; background-color: white; color: #333; cursor: pointer;">
-                            <option value="30">Last 30 Days</option>
-                            <option value="90">Last 90 Days</option>
-                            <option value="180">Last 6 Months</option>
-                            <option value="all" selected>All Time</option>
-                        </select>
-                    </div>
-
-                    <!-- Crime Type -->
-                    <div style="flex: 1; min-width: 150px;">
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase;">
-                            <i class="fas fa-tags mr-1" style="color: #274d4c;"></i>Type
-                        </label>
-                        <select id="crimeType" style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; background-color: white; color: #333; cursor: pointer;">
-                            <option value="">All Types</option>
-                        </select>
-                    </div>
-
-                    <!-- Case Status (Workflow) -->
-                    <div style="flex: 1; min-width: 150px;">
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase;">
-                            <i class="fas fa-tasks mr-1" style="color: #274d4c;"></i>Case Status
-                        </label>
-                        <select id="caseStatus" style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; background-color: white; color: #333; cursor: pointer;">
-                            <option value="">All Status</option>
-                            <option value="reported">Reported</option>
-                            <option value="under_investigation">Under Investigation</option>
-                            <option value="solved">Solved</option>
-                            <option value="closed">Closed</option>
-                            <option value="archived">Archived</option>
-                        </select>
-                    </div>
-
-                    <!-- Clearance Status -->
-                    <div style="flex: 1; min-width: 150px;">
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase;">
-                            <i class="fas fa-check-circle mr-1" style="color: #274d4c;"></i>Clearance
-                        </label>
-                        <select id="clearanceStatus" style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; background-color: white; color: #333; cursor: pointer;">
-                            <option value="">All Clearance</option>
-                            <option value="cleared">Cleared</option>
-                            <option value="uncleared">Uncleared</option>
-                        </select>
-                    </div>
-
-                    <!-- Barangay -->
-                    <div style="flex: 1; min-width: 150px;">
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase;">
-                            <i class="fas fa-map-pin mr-1" style="color: #274d4c;"></i>Area
-                        </label>
-                        <select id="barangay" style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; background-color: white; color: #333; cursor: pointer;">
-                            <option value="">All Areas</option>
-                        </select>
-                    </div>
-
-                    <!-- Reset Button -->
-                    <button id="resetFilterBtn" style="background-color: #f3f4f6; border: 1px solid #d1d5db; color: #374151; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; white-space: nowrap; margin-top: 20px;" onmouseover="this.style.backgroundColor='#e5e7eb'" onmouseout="this.style.backgroundColor='#f3f4f6'">
-                        <i class="fas fa-redo mr-1"></i>Reset
-                    </button>
-
-                    <!-- Loading Indicator -->
-                    <span id="loadingIndicator" style="display: none; align-items: center; font-size: 12px; color: #666; margin-top: 20px;">
-                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
-                    </span>
                 </div>
 
                 <!-- Map and Right Panel Side-by-Side -->
-                <div style="display: flex; gap: 16px; height: auto;">
+                <div class="flex flex-col lg:flex-row gap-6">
                     <!-- LEFT: Map -->
-                    <div id="mapContainer" style="width: 55%; border-radius: 0.5rem; border: 1px solid #e5e7eb; position: relative; z-index: 1; overflow: hidden; flex-shrink: 0;">
-                        <div id="map" class="h-96 sm:h-[450px] md:h-[500px] lg:h-[600px]" style="width: 100%; position: relative; z-index: 1;"></div>
+                    <div id="mapContainer" class="w-full lg:w-3/5 border border-gray-200 rounded-lg overflow-hidden relative">
+                        <div id="map" class="h-96 lg:h-[600px] w-full"></div>
 
                         <!-- Map Loading Overlay -->
-                        <div id="mapLoadingOverlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.95); display: none; z-index: 10000; flex-direction: column; align-items: center; justify-content: center; gap: 16px;">
-                            <div style="text-align: center;">
-                                <div style="display: inline-block; margin-bottom: 12px;">
-                                    <i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #274d4c;"></i>
+                        <div id="mapLoadingOverlay" class="absolute inset-0 bg-white bg-opacity-95 hidden z-[10000] flex flex-col items-center justify-center gap-4">
+                            <div class="text-center">
+                                <div class="inline-block mb-3">
+                                    <i class="fas fa-spinner fa-spin text-3xl text-alertara-700"></i>
                                 </div>
-                                <div style="font-size: 14px; font-weight: 600; color: #111; margin-bottom: 4px;">Loading Map Data</div>
-                                <div style="font-size: 12px; color: #666;">Processing visualization...</div>
+                                <div class="text-sm font-semibold text-gray-900 mb-1">Loading Map Data</div>
+                                <div class="text-xs text-gray-600">Processing visualization...</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- RIGHT: Statistics and Incident List -->
-                    <div style="width: 45%; display: flex; flex-direction: column; gap: 16px; flex-shrink: 0;">
+                    <div class="w-full lg:w-2/5 flex flex-col gap-4">
                         <!-- Statistics Cards -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <div style="background: linear-gradient(135deg, #274d4c 0%, #3a6b69 100%); color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
-                                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Total Incidents</div>
-                                <div id="statTotal" style="font-size: 28px; font-weight: bold;">0</div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-gradient-to-br from-alertara-700 to-alertara-600 text-white p-4 rounded-lg shadow-sm">
+                                <div class="text-xs opacity-90 mb-1">Total Incidents</div>
+                                <div id="statTotal" class="text-2xl font-bold">0</div>
                             </div>
-                            <div style="background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%); color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
-                                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Cleared Cases</div>
-                                <div id="statCleared" style="font-size: 28px; font-weight: bold;">0</div>
+                            <div class="bg-gradient-to-br from-green-600 to-green-500 text-white p-4 rounded-lg shadow-sm">
+                                <div class="text-xs opacity-90 mb-1">Cleared Cases</div>
+                                <div id="statCleared" class="text-2xl font-bold">0</div>
                             </div>
-                            <div style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
-                                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Uncleared Cases</div>
-                                <div id="statUncleared" style="font-size: 28px; font-weight: bold;">0</div>
+                            <div class="bg-gradient-to-br from-red-600 to-red-500 text-white p-4 rounded-lg shadow-sm">
+                                <div class="text-xs opacity-90 mb-1">Uncleared Cases</div>
+                                <div id="statUncleared" class="text-2xl font-bold">0</div>
                             </div>
-                            <div style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
-                                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Categories</div>
-                                <div id="statCategories" style="font-size: 28px; font-weight: bold;">0</div>
+                            <div class="bg-gradient-to-br from-blue-600 to-blue-500 text-white p-4 rounded-lg shadow-sm">
+                                <div class="text-xs opacity-90 mb-1">Categories</div>
+                                <div id="statCategories" class="text-2xl font-bold">0</div>
                             </div>
                         </div>
 
@@ -350,9 +309,9 @@ if (request()->query('token')) {
                 </div>
 
                 <!-- Crime Intensity & Density Scale (Floating Panel) -->
-                <div id="crimeIntensityScale" style="margin-top: 16px; margin-bottom: 16px; width: 100%; max-height: 400px; overflow-y: auto; background: rgba(255, 255, 255, 0.99); border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; display: none; z-index: 1;">
-                    <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0 0 12px;">
-                        <i class="fas fa-palette mr-2" style="color: #274d4c;"></i>Crime Intensity Scale
+                <div id="crimeIntensityScale" class="mt-4 mb-4 w-full max-h-[400px] overflow-y-auto bg-white bg-opacity-99 border border-gray-200 rounded-lg p-4 hidden" style="z-index: 1;">
+                    <h3 class="text-sm font-bold text-gray-900 mb-3">
+                        <i class="fas fa-palette mr-2 text-alertara-700"></i>Crime Intensity Scale
                     </h3>
 
                     <!-- Gradient Bar -->
@@ -576,10 +535,6 @@ if (request()->query('token')) {
             </div>
         </div>
     </div>
-
-    <style>
-        /* Fullscreen map styles */
-    </style>
 
     <script>
         // State variables
@@ -2148,7 +2103,8 @@ if (request()->query('token')) {
                 'crimeType',
                 'caseStatus',
                 'clearanceStatus',
-                'barangay'
+                'barangay',
+                'dateFilter'
             ];
 
             filterElements.forEach(elementId => {
@@ -2171,53 +2127,161 @@ if (request()->query('token')) {
             document.getElementById('caseStatus').value = '';
             document.getElementById('clearanceStatus').value = '';
             document.getElementById('barangay').value = '';
+            document.getElementById('dateFilter').value = '';
             document.getElementById('incidentSearch').value = '';
             loadCrimeData();
         });
 
-        // 3D Map Toggle Functionality
-        let is3DMode = false;
-        const map3DToggleBtn = document.getElementById('map3DToggle');
-        const mapContainer = document.getElementById('map');
+        // Fullscreen Map Functionality
+        const mapFullscreenBtn = document.getElementById('mapFullscreenBtn');
+        const mapMainContainer = document.getElementById('mapContainer').parentElement; // Get the parent container that includes both map and right panel
+        let isFullscreen = false;
+        let originalParentStyles = {};
 
-        map3DToggleBtn.addEventListener('click', function() {
-            is3DMode = !is3DMode;
+        mapFullscreenBtn.addEventListener('click', function() {
+            if (!isFullscreen) {
+                // Store original styles
+                originalParentStyles = {
+                    position: mapMainContainer.style.position,
+                    top: mapMainContainer.style.top,
+                    left: mapMainContainer.style.left,
+                    width: mapMainContainer.style.width,
+                    height: mapMainContainer.style.height,
+                    zIndex: mapMainContainer.style.zIndex,
+                    borderRadius: mapMainContainer.style.borderRadius,
+                    backgroundColor: mapMainContainer.style.backgroundColor,
+                    padding: mapMainContainer.style.padding,
+                    margin: mapMainContainer.style.margin
+                };
 
-            if (is3DMode) {
-                // Enable 3D mode
-                map3DToggleBtn.style.backgroundColor = '#274d4c';
-                map3DToggleBtn.style.color = 'white';
-
-                // Apply 3D perspective effect to map
-                mapContainer.style.perspective = '1000px';
-                mapContainer.style.transformStyle = 'preserve-3d';
-                mapContainer.style.transform = 'rotateX(15deg) rotateZ(5deg)';
-                mapContainer.style.transition = 'transform 0.3s ease';
-
-                console.log('3D Mode enabled');
-            } else {
-                // Disable 3D mode (return to 2D)
-                map3DToggleBtn.style.backgroundColor = 'white';
-                map3DToggleBtn.style.color = '#274d4c';
-
-                // Reset perspective effect
-                mapContainer.style.perspective = 'none';
-                mapContainer.style.transform = 'rotateX(0deg) rotateZ(0deg)';
-                mapContainer.style.transition = 'transform 0.3s ease';
-
-                console.log('3D Mode disabled');
-            }
-
-            // Trigger map resize to adjust for perspective changes
-            setTimeout(() => {
-                if (map) {
-                    map.invalidateSize();
+                // Enter fullscreen
+                if (mapMainContainer.requestFullscreen) {
+                    mapMainContainer.requestFullscreen();
+                } else if (mapMainContainer.webkitRequestFullscreen) {
+                    mapMainContainer.webkitRequestFullscreen();
+                } else if (mapMainContainer.msRequestFullscreen) {
+                    mapMainContainer.msRequestFullscreen();
                 }
-            }, 300);
+                
+                // Update button styling
+                mapFullscreenBtn.innerHTML = '<i class="fas fa-compress"></i><span class="hidden sm:inline">Exit Fullscreen</span>';
+                mapFullscreenBtn.classList.add('bg-alertara-600', 'text-white', 'border-alertara-600');
+                mapFullscreenBtn.classList.remove('bg-white', 'text-gray-700', 'border-gray-300');
+                
+                // Make main container take full screen with proper spacing
+                mapMainContainer.style.position = 'fixed';
+                mapMainContainer.style.top = '0';
+                mapMainContainer.style.left = '0';
+                mapMainContainer.style.width = '100vw';
+                mapMainContainer.style.height = '100vh';
+                mapMainContainer.style.zIndex = '9999';
+                mapMainContainer.style.borderRadius = '0';
+                mapMainContainer.style.backgroundColor = 'white';
+                mapMainContainer.style.padding = '20px';
+                mapMainContainer.style.margin = '0';
+                mapMainContainer.style.boxSizing = 'border-box';
+                mapMainContainer.style.overflow = 'auto';
+                
+                // Adjust the inner layout for fullscreen
+                setTimeout(() => {
+                    // Update flex container to use full height
+                    const flexContainer = mapMainContainer.querySelector('.flex.flex-col.lg\\:flex-row');
+                    const filtersSection = mapMainContainer.querySelector('.bg-white.rounded-xl.p-4.mb-6.border.border-gray-200');
+                    
+                    if (flexContainer && filtersSection) {
+                        const filtersHeight = filtersSection.offsetHeight + parseInt(window.getComputedStyle(filtersSection).marginBottom); // Get actual height including margin
+                        flexContainer.style.height = `calc(100vh - 40px - ${filtersHeight}px)`; // Account for padding and filters height
+                        flexContainer.style.maxHeight = `calc(100vh - 40px - ${filtersHeight}px)`;
+                    }
+                    
+                    // Update map container to take more space in fullscreen
+                    const mapContainer = document.getElementById('mapContainer');
+                    if (mapContainer) {
+                        mapContainer.style.flex = '1';
+                        mapContainer.style.maxWidth = '70%';
+                    }
+                    
+                    // Update right panel to take remaining space
+                    const rightPanel = mapContainer.nextElementSibling;
+                    if (rightPanel) {
+                        rightPanel.style.flex = '1';
+                        rightPanel.style.maxWidth = '30%';
+                    }
+                    
+                    // Resize map to fit new container
+                    if (map) {
+                        map.invalidateSize();
+                    }
+                }, 100);
+                
+                isFullscreen = true;
+            } else {
+                // Exit fullscreen
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                
+                // Reset button styling
+                mapFullscreenBtn.innerHTML = '<i class="fas fa-expand"></i><span class="hidden sm:inline">Fullscreen</span>';
+                mapFullscreenBtn.classList.remove('bg-alertara-600', 'text-white', 'border-alertara-600');
+                mapFullscreenBtn.classList.add('bg-white', 'text-gray-700', 'border-gray-300');
+                
+                // Restore original styles
+                Object.keys(originalParentStyles).forEach(prop => {
+                    mapMainContainer.style[prop] = originalParentStyles[prop];
+                });
+                
+                // Reset the inner layout
+                setTimeout(() => {
+                    // Restore flex container
+                    const flexContainer = mapMainContainer.querySelector('.flex.flex-col.lg\\:flex-row');
+                    if (flexContainer) {
+                        flexContainer.style.height = '';
+                        flexContainer.style.maxHeight = '';
+                    }
+                    
+                    // Restore map container
+                    const mapContainer = document.getElementById('mapContainer');
+                    if (mapContainer) {
+                        mapContainer.style.flex = '';
+                        mapContainer.style.maxWidth = '';
+                    }
+                    
+                    // Restore right panel
+                    const rightPanel = mapContainer.nextElementSibling;
+                    if (rightPanel) {
+                        rightPanel.style.flex = '';
+                        rightPanel.style.maxWidth = '';
+                    }
+                    
+                    // Resize map to fit original container
+                    if (map) {
+                        map.invalidateSize();
+                    }
+                }, 100);
+                
+                isFullscreen = false;
+            }
         });
 
+        // Handle fullscreen change events
+        document.addEventListener('fullscreenchange', function() {
+            if (!document.fullscreenElement && isFullscreen) {
+                // User exited fullscreen via ESC key
+                mapFullscreenBtn.click();
+            }
+        });
 
-        // Search incident functionality (with debounce to prevent lag on every keystroke)
+        document.addEventListener('webkitfullscreenchange', function() {
+            if (!document.webkitFullscreenElement && isFullscreen) {
+                mapFullscreenBtn.click();
+            }
+        });
+                // Search incident functionality (with debounce to prevent lag on every keystroke)
         try {
             let searchInputElement = document.getElementById('incidentSearch');
             if (searchInputElement) {
