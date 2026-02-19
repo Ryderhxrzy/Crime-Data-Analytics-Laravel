@@ -44,10 +44,46 @@ if (request()->query('token')) {
                     <h1 class="text-3xl font-bold text-gray-900">Crime Mapping</h1>
                     <p class="text-gray-600 mt-2">Interactive crime data visualization and analysis</p>
                 </div>
-                <!-- Test Notification Button -->
-                <button id="testNotificationBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-200" title="Click to test real-time notifications">
-                    <i class="fas fa-bell mr-2"></i>Test Notification
-                </button>
+                <div class="flex gap-2">
+                    <!-- Test Notification Button -->
+                    <button id="testNotificationBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-200" title="Click to test real-time notifications">
+                        <i class="fas fa-bell mr-2"></i>Test Notification
+                    </button>
+                    <!-- Debug Real-time Button -->
+                    <button id="debugRealtimeBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-200" title="Debug real-time connection">
+                        <i class="fas fa-bug mr-2"></i>Debug Real-time
+                    </button>
+                </div>
+            </div>
+
+            <!-- Debug Panel -->
+            <div id="debugPanel" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg hidden">
+                <h3 class="text-lg font-bold text-yellow-800 mb-2">🔍 Real-time Debug Panel</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <strong>Echo Available:</strong> <span id="echoStatus" class="text-red-600">Checking...</span>
+                    </div>
+                    <div>
+                        <strong>Pusher Connected:</strong> <span id="pusherStatus" class="text-red-600">Checking...</span>
+                    </div>
+                    <div>
+                        <strong>Channel Subscribed:</strong> <span id="channelStatus" class="text-red-600">Checking...</span>
+                    </div>
+                    <div>
+                        <strong>Events Received:</strong> <span id="eventCount" class="text-red-600">0</span>
+                    </div>
+                    <div>
+                        <strong>Last Event:</strong> <span id="lastEvent" class="text-red-600">None</span>
+                    </div>
+                    <div>
+                        <strong>Current Data Count:</strong> <span id="dataCount" class="text-red-600">0</span>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <button id="toggleDebugBtn" class="bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded">
+                        Hide Debug Panel
+                    </button>
+                </div>
             </div>
 
             <!-- Map Container with Right Panel -->
@@ -996,10 +1032,97 @@ if (request()->query('token')) {
             }
         }
 
+        // Debug variables
+        let eventCounter = 0;
+        let debugVisible = false;
+
+        // Debug panel functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const debugBtn = document.getElementById('debugRealtimeBtn');
+            const toggleDebugBtn = document.getElementById('toggleDebugBtn');
+            const debugPanel = document.getElementById('debugPanel');
+            
+            if (debugBtn && toggleDebugBtn && debugPanel) {
+                // Toggle debug panel
+                debugBtn.addEventListener('click', function() {
+                    debugVisible = !debugVisible;
+                    if (debugPanel) {
+                        debugPanel.classList.toggle('hidden');
+                    }
+                    if (toggleDebugBtn) {
+                        toggleDebugBtn.textContent = debugVisible ? 'Hide Debug Panel' : 'Show Debug Panel';
+                    }
+                    updateDebugInfo();
+                });
+                
+                if (toggleDebugBtn) {
+                    toggleDebugBtn.addEventListener('click', function() {
+                        debugVisible = false;
+                        if (debugPanel) {
+                            debugPanel.classList.add('hidden');
+                        }
+                        toggleDebugBtn.textContent = 'Show Debug Panel';
+                    });
+                }
+            }
+        });
+
+        // Update debug information
+        function updateDebugInfo() {
+            const echoStatus = document.getElementById('echoStatus');
+            const pusherStatus = document.getElementById('pusherStatus');
+            const channelStatus = document.getElementById('channelStatus');
+            const eventCount = document.getElementById('eventCount');
+            const lastEvent = document.getElementById('lastEvent');
+            const dataCount = document.getElementById('dataCount');
+            
+            if (echoStatus) {
+                echoStatus.textContent = (typeof window.Echo !== 'undefined' && window.Echo) ? '✅ Available' : '❌ Not Available';
+                echoStatus.className = (typeof window.Echo !== 'undefined' && window.Echo) ? 'text-green-600' : 'text-red-600';
+            }
+            
+            if (pusherStatus) {
+                try {
+                    const pusher = window.Echo?.connector?.pusher;
+                    const state = pusher?.connection?.state;
+                    pusherStatus.textContent = state === 'connected' ? '✅ Connected' : `❌ ${state || 'Unknown'}`;
+                    pusherStatus.className = state === 'connected' ? 'text-green-600' : 'text-red-600';
+                } catch (error) {
+                    pusherStatus.textContent = '❌ Error';
+                    pusherStatus.className = 'text-red-600';
+                }
+            }
+            
+            if (channelStatus) {
+                channelStatus.textContent = '✅ Subscribed to crime-incidents';
+                channelStatus.className = 'text-green-600';
+            }
+            
+            if (eventCount) {
+                eventCount.textContent = eventCounter;
+                eventCount.className = eventCounter > 0 ? 'text-green-600' : 'text-red-600';
+            }
+            
+            if (lastEvent) {
+                lastEvent.textContent = eventCounter > 0 ? '✅ Events Received' : '❌ No Events';
+                lastEvent.className = eventCounter > 0 ? 'text-green-600' : 'text-red-600';
+            }
+            
+            if (dataCount) {
+                dataCount.textContent = currentData.length;
+                dataCount.className = currentData.length > 0 ? 'text-green-600' : 'text-red-600';
+            }
+        }
+
+        // Update debug info every 2 seconds
+        setInterval(updateDebugInfo, 2000);
+
         // Load and display crime data
         async function loadCrimeData() {
             const loadingIndicator = document.getElementById('loadingIndicator');
-            loadingIndicator.style.display = 'flex';
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'flex';
+            }
             showIncidentSkeleton();
             showMapLoading();
 
@@ -1059,7 +1182,9 @@ if (request()->query('token')) {
                 document.getElementById('incidentSkeletonLoader').style.display = 'none';
                 document.getElementById('incidentListContent').style.display = 'block';
             } finally {
-                loadingIndicator.style.display = 'none';
+                if (loadingIndicator) {
+                    loadingIndicator.style.display = 'none';
+                }
                 hideMapLoading();
             }
         }
@@ -2521,12 +2646,188 @@ if (request()->query('token')) {
         });
 
         // ============================================================
-        // REAL-TIME FEATURES DISABLED
+        // REAL-TIME FEATURES ENABLED - PUSHER
         // ============================================================
-        // Real-time updates have been disabled - using file-based sessions and null broadcaster
-        console.log('🔌 Real-time features disabled - Reverb/Echo not active');
+        console.log('🔌 Real-time features enabled - Using Pusher');
 
-        // Handle new incident added in real-time (function kept for compatibility but not used)
+        // Desktop notification function
+        function showDesktopNotification(incident, action = 'created') {
+            // Check if browser supports notifications
+            if (!('Notification' in window)) {
+                console.log('❌ Browser does not support notifications');
+                return;
+            }
+            
+            // Request permission if not granted
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        createNotification(incident, action);
+                    }
+                });
+            } else if (Notification.permission === 'granted') {
+                createNotification(incident, action);
+            }
+        }
+
+        // Create and show notification
+        function createNotification(incident, action) {
+            try {
+                let title, body;
+                
+                switch(action) {
+                    case 'created':
+                        title = 'New Crime Incident Reported';
+                        body = `${incident.incident_title} - ${incident.location ?? 'Unknown Barangay'}`;
+                        break;
+                    case 'updated':
+                        title = 'Crime Incident Updated';
+                        body = `${incident.incident_title} - ${incident.location ?? 'Unknown Barangay'}`;
+                        break;
+                    case 'deleted':
+                        title = 'Crime Incident Deleted';
+                        body = `Incident ID: ${incident.id} has been removed`;
+                        break;
+                }
+                
+                const notification = new Notification(title, {
+                    body: body,
+                    icon: '/images/alertara.png',
+                    tag: `crime-incident-${incident.id}-${action}`,
+                    requireInteraction: false,
+                    silent: false
+                });
+                
+                // Auto-close after 10 seconds
+                setTimeout(() => {
+                    notification.close();
+                }, 10000);
+                
+                // Click to open mapping page
+                notification.onclick = function() {
+                    window.focus();
+                };
+                
+            } catch (error) {
+                console.error('❌ Failed to create notification:', error);
+            }
+        }
+
+        // Initialize real-time listeners after DOM is loaded and Echo is ready
+        function initializeRealtimeListeners() {
+            console.log('🔍 Initializing real-time listeners...');
+            console.log('Echo available:', typeof window.Echo !== 'undefined' && window.Echo);
+            
+            if (typeof window.Echo !== 'undefined' && window.Echo) {
+                console.log('🔌 Echo available - Setting up real-time listeners...');
+                
+                // Add connection debugging
+                window.Echo.connector.pusher.connection.bind('connected', function() {
+                    console.log('✅ Pusher connected successfully');
+                    updateDebugInfo();
+                });
+                
+                window.Echo.connector.pusher.connection.bind('disconnected', function() {
+                    console.log('❌ Pusher disconnected - attempting to reconnect...');
+                    updateDebugInfo();
+                    // Attempt to reconnect after 3 seconds
+                    setTimeout(() => {
+                        if (window.Echo.connector.pusher.connection.state === 'disconnected') {
+                            console.log('🔄 Attempting to reconnect to Pusher...');
+                            window.Echo.connector.pusher.connect();
+                        }
+                    }, 3000);
+                });
+                
+                window.Echo.connector.pusher.connection.bind('error', function(err) {
+                    console.error('❌ Pusher connection error:', err);
+                    updateDebugInfo();
+                    
+                    // Handle specific error codes
+                    if (err.data && err.data.code) {
+                        switch(err.data.code) {
+                            case 4201: // Pong reply not received
+                                console.log('🔄 Connection timeout - reconnecting...');
+                                setTimeout(() => {
+                                    window.Echo.connector.pusher.connect();
+                                }, 2000);
+                                break;
+                            case 4000: // Internal client error
+                            case 4200: // Application error
+                                console.error('💥 Pusher application error - check configuration');
+                                break;
+                            default:
+                                console.log('🔄 Unknown error - attempting reconnection...');
+                                setTimeout(() => {
+                                    window.Echo.connector.pusher.connect();
+                                }, 5000);
+                        }
+                    }
+                });
+                
+                // Add connection state monitoring
+                window.Echo.connector.pusher.connection.bind('state_change', function(states) {
+                    console.log('🔄 Pusher connection state changed:', states.current);
+                    updateDebugInfo();
+                });
+                
+                const channel = window.Echo.channel('crime-incidents');
+                
+                // Add channel debugging
+                channel.subscribed(function() {
+                    console.log('✅ Successfully subscribed to crime-incidents channel');
+                    updateDebugInfo();
+                });
+                
+                channel.error(function(err) {
+                    console.error('❌ Failed to subscribe to crime-incidents channel:', err);
+                    updateDebugInfo();
+                });
+                
+                channel.listen('.incident.created', function(e) {
+                    console.log('📍 New incident received:', e);
+                    eventCounter++;
+                    handleNewIncident(e);
+                    showDesktopNotification(e, 'created');
+                    updateDebugInfo();
+                });
+                
+                channel.listen('.incident.updated', function(e) {
+                    console.log('🔄 Incident updated:', e);
+                    eventCounter++;
+                    handleUpdatedIncident(e);
+                    showDesktopNotification(e, 'updated');
+                    updateDebugInfo();
+                });
+
+                window.Echo.channel('crime-incidents')
+                    .listen('.incident.deleted', function(e) {
+                        console.log('🗑️ Incident deleted:', e);
+                        eventCounter++;
+                        handleDeletedIncident(e.id);
+                        showDesktopNotification(e, 'deleted');
+                        updateDebugInfo();
+                    });
+                    
+                console.log('✅ Real-time listeners setup complete');
+            } else {
+                console.warn('⚠️ Echo not available - real-time features disabled');
+                console.log('Checking Echo availability:', typeof window.Echo);
+                console.log('Window object keys:', Object.keys(window));
+                
+                // Retry after 2 seconds
+                setTimeout(initializeRealtimeListeners, 2000);
+            }
+        }
+
+        // Initialize when DOM is loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeRealtimeListeners);
+        } else {
+            initializeRealtimeListeners();
+        }
+
+        // Handle new incident added in real-time
         function handleNewIncident(incident) {
             // Add to current data array
             currentData.push(incident);
@@ -2650,29 +2951,100 @@ if (request()->query('token')) {
             if (testBtn) {
                 testBtn.addEventListener('click', function() {
                     // Show a sample notification
-                    const sampleMessages = [
-                        '🔴 Test: New crime incident reported!',
-                        '📝 Test: Crime incident updated',
-                        '🗑️ Test: Crime incident deleted',
-                        '✅ Test: Real-time notifications working!',
-                        '🎯 Test: WebSocket connection active'
+                    const sampleNotifications = [
+                        {
+                            title: 'New Crime Incident Reported',
+                            body: 'Test: A new crime incident has been reported in Quezon City',
+                            icon: '/images/alertara.png'
+                        },
+                        {
+                            title: 'Crime Incident Updated',
+                            body: 'Test: An existing crime incident has been updated',
+                            icon: '/images/alertara.png'
+                        },
+                        {
+                            title: 'Crime Incident Deleted',
+                            body: 'Test: A crime incident has been removed from the system',
+                            icon: '/images/alertara.png'
+                        },
+                        {
+                            title: 'Real-time Notifications Working',
+                            body: 'Test: Your real-time notification system is functioning properly',
+                            icon: '/images/alertara.png'
+                        },
+                        {
+                            title: 'WebSocket Connection Active',
+                            body: 'Test: You are connected to real-time crime data stream',
+                            icon: '/images/alertara.png'
+                        }
                     ];
 
-                    const randomMessage = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
-                    console.log('🔌 Test notification disabled:', randomMessage);
-
-                    // Change button to indicate success
-                    testBtn.style.backgroundColor = '#22c55e';
-                    testBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Notification Sent!';
-
-                    // Reset button after 2 seconds
-                    setTimeout(() => {
-                        testBtn.style.backgroundColor = '';
-                        testBtn.innerHTML = '<i class="fas fa-bell mr-2"></i>Test Notification';
-                    }, 2000);
+                    const randomNotification = sampleNotifications[Math.floor(Math.random() * sampleNotifications.length)];
+                    
+                    // Check if browser supports notifications
+                    if (!('Notification' in window)) {
+                        console.log('❌ Browser does not support notifications');
+                        alert('Your browser does not support desktop notifications');
+                        return;
+                    }
+                    
+                    // Request permission if not granted
+                    if (Notification.permission === 'default') {
+                        Notification.requestPermission().then(permission => {
+                            if (permission === 'granted') {
+                                createTestNotification(randomNotification, testBtn);
+                            } else {
+                                alert('Please allow notifications to test this feature');
+                            }
+                        });
+                    } else if (Notification.permission === 'granted') {
+                        createTestNotification(randomNotification, testBtn);
+                    } else {
+                        alert('Notifications are blocked. Please enable them in your browser settings.');
+                    }
                 });
             }
         });
+
+        // Create test notification function
+        function createTestNotification(notificationData, button) {
+            try {
+                const notification = new Notification(notificationData.title, {
+                    body: notificationData.body,
+                    icon: notificationData.icon,
+                    tag: 'test-notification-' + Date.now(),
+                    requireInteraction: true,
+                    silent: false
+                });
+                
+                console.log('✅ Test notification sent:', notificationData);
+                
+                // Auto-close after 5 seconds
+                setTimeout(() => {
+                    notification.close();
+                }, 5000);
+                
+                // Click to focus window
+                notification.onclick = function() {
+                    window.focus();
+                    notification.close();
+                };
+                
+                // Change button to indicate success
+                button.style.backgroundColor = '#22c55e';
+                button.innerHTML = '<i class="fas fa-check mr-2"></i>Notification Sent!';
+                
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    button.style.backgroundColor = '';
+                    button.innerHTML = '<i class="fas fa-bell mr-2"></i>Test Notification';
+                }, 2000);
+                
+            } catch (error) {
+                console.error('❌ Failed to create test notification:', error);
+                alert('Failed to create notification: ' + error.message);
+            }
+        }
     </script>
 
 </body>
