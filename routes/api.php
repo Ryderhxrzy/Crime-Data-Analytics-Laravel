@@ -37,6 +37,22 @@ Route::get('/barangays', function() {
     return \App\Models\Barangay::select('id', 'barangay_name')->get();
 })->middleware('throttle:60,1');
 
+// Crimes data endpoint for crime page
+Route::get('/crimes', function() {
+    $crimes = \App\Models\CrimeIncident::with(['category', 'barangay'])
+        ->orderBy('created_at', 'desc')
+        ->get();
+    
+    $categories = \App\Models\CrimeCategory::select('id', 'category_name', 'color_code', 'icon')->get();
+    $barangays = \App\Models\Barangay::select('id', 'barangay_name')->get();
+    
+    return response()->json([
+        'incidents' => $crimes,
+        'categories' => $categories,
+        'barangays' => $barangays
+    ]);
+})->middleware('throttle:60,1');
+
 // Crime hotspot data endpoint
 Route::get('/crime-hotspots', [DashboardController::class, 'getHotspotData'])
     ->middleware('throttle:60,1')
