@@ -39,6 +39,17 @@
                     </button>
                 </div>
 
+                <!-- Real-time Status -->
+                <div class="flex items-center space-x-2 px-3 py-1 rounded-full bg-gray-100 border border-gray-200">
+                    <i id="header-realtime-icon" class="fas fa-circle text-xs text-gray-400"></i>
+                    <span id="header-realtime-text" class="text-xs text-gray-600 font-medium">Checking...</span>
+                </div>
+
+                <!-- Connect Sample Data -->
+                <button id="connect-sample-btn" class="p-2 text-gray-600 hover:bg-gray-100 rounded-md relative" title="Connect to Real-time Crime Data">
+                    <i class="fas fa-plug text-lg"></i>
+                </button>
+
                 <!-- Fullscreen Toggle -->
                 <button id="fullscreenToggle" class="p-2 text-gray-600 hover:bg-gray-100 rounded-md">
                     <i class="fas fa-expand text-lg"></i>
@@ -67,6 +78,138 @@
                             @endif
                         </div>
                         <div class="w-9 h-9 bg-gradient-to-br from-alertara-500 to-alertara-700 rounded-full flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-user text-white text-xs"></i>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Real-time Status Scripts -->
+<script>
+// Real-time status indicator
+function updateRealtimeStatus(connected, message = '') {
+    // Update header status
+    const headerIcon = document.getElementById('header-realtime-icon');
+    const headerText = document.getElementById('header-realtime-text');
+    
+    if (headerIcon && headerText) {
+        if (connected) {
+            headerIcon.className = 'fas fa-circle text-xs text-green-500';
+            headerText.textContent = 'Live';
+            headerText.className = 'text-xs text-green-600 font-medium';
+            headerText.setAttribute('title', 'Connected to real-time crime data - receiving live updates');
+        } else {
+            headerIcon.className = 'fas fa-circle text-xs text-yellow-500';
+            headerText.textContent = 'Offline';
+            headerText.className = 'text-xs text-red-600 font-medium';
+            headerText.setAttribute('title', 'Not connected to real-time crime data - click plug button to connect');
+        }
+    }
+}
+
+// Auto-connect to real-time channel
+function autoConnectRealtime() {
+    if (typeof window.Echo !== 'undefined' && window.Echo) {
+        try {
+            console.log('🔌 Auto-connecting to real-time channel...');
+            
+            // Update status to connecting
+            updateRealtimeStatus(false);
+            
+            // Subscribe to crime-incidents channel automatically
+            const channel = window.Echo.channel('crime-incidents');
+            
+            // Set up event listeners
+            channel.subscribed(function() {
+                console.log('✅ Auto-connected to crime-incidents channel');
+                updateRealtimeStatus(true);
+            });
+            
+            channel.error(function(error) {
+                console.error('❌ Real-time connection error:', error);
+                updateRealtimeStatus(false);
+            });
+            
+            // Also check Pusher connection directly
+            setTimeout(() => {
+                checkRealtimeConnection();
+            }, 2000);
+            
+        } catch (error) {
+            console.error('❌ Failed to auto-connect:', error);
+            updateRealtimeStatus(false);
+        }
+    } else {
+        console.warn('⚠️ Echo not available - real-time features disabled');
+        updateRealtimeStatus(false);
+    }
+}
+
+// Check real-time connection status
+function checkRealtimeConnection() {
+    if (typeof window.Echo !== 'undefined' && window.Echo) {
+        try {
+            const pusher = window.Echo.connector.pusher;
+            if (pusher && pusher.connection) {
+                const state = pusher.connection.state;
+                updateRealtimeStatus(state === 'connected');
+            }
+        } catch (error) {
+            updateRealtimeStatus(false);
+        }
+    } else {
+        updateRealtimeStatus(false);
+    }
+}
+
+// Auto-connect immediately when page loads
+setTimeout(() => {
+    updateRealtimeStatus(false); // Show checking status first
+    autoConnectRealtime();
+}, 500);
+
+// Check connection every 5 seconds
+setInterval(checkRealtimeConnection, 5000);
+
+// Connect sample data button functionality
+const connectSampleBtn = document.getElementById('connect-sample-btn');
+if (connectSampleBtn) {
+    // Add hover effect
+    connectSampleBtn.addEventListener('mouseenter', function() {
+        this.setAttribute('title', 'Connect to Real-time Crime Data - Click to establish connection');
+    });
+    
+    connectSampleBtn.addEventListener('mouseleave', function() {
+        this.setAttribute('title', 'Connect to Real-time Crime Data');
+    });
+    
+    connectSampleBtn.addEventListener('click', function() {
+        // Toggle button state
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin text-lg"></i>';
+        this.setAttribute('title', 'Connecting to real-time crime data...');
+        
+        // Force reconnection
+        console.log('🔌 Manual connection triggered...');
+        updateRealtimeStatus(false);
+        
+        // Re-attempt connection
+        setTimeout(() => {
+            autoConnectRealtime();
+            
+            // Reset button after 3 seconds
+            setTimeout(() => {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-plug text-lg"></i>';
+                this.setAttribute('title', 'Connect to Real-time Crime Data - Click to establish connection');
+            }, 3000);
+        }, 1000);
+    });
+}
+</script>
                             <i class="fas fa-user text-white text-xs"></i>
                         </div>
                         <i class="fas fa-chevron-down text-alertara-600 text-xs" style="transition: transform 0.3s ease;"></i>
