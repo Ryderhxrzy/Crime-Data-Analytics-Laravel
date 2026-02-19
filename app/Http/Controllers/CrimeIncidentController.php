@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CrimeIncident;
 use App\Models\CrimeCategory;
 use App\Models\Barangay;
+use App\Events\CrimeIncidentUpdated;
 use Illuminate\Http\Request;
 
 class CrimeIncidentController extends Controller
@@ -57,8 +58,15 @@ class CrimeIncidentController extends Controller
         \Log::info('✅ Crime incident created successfully', [
             'incident_id' => $incident->id,
             'incident_code' => $incident->incident_code,
+            'incident_title' => $incident->incident_title,
+            'latitude' => $incident->latitude,
+            'longitude' => $incident->longitude,
+            'category_id' => $incident->crime_category_id,
+            'barangay_id' => $incident->barangay_id,
             'broadcast_ready' => true
         ]);
+
+        \Log::info('🔄 Model events should trigger now - check Laravel logs for broadcast events');
 
         return redirect()->back()->with('success', 'Crime incident created successfully! Check the mapping page for real-time update.');
     }
