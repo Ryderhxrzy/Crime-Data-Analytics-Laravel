@@ -95,6 +95,15 @@
                             <span>Add Crime Incident</span>
                         </a>
                     </div>
+
+                    <!-- Real-Time Test -->
+                    <div class="tree-node">
+                        <a href="{{ authUrl('realtime-test') }}"
+                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('realtime-test') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
+                            <i class="fas fa-wifi w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>Real-Time Test</span>
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Analytics Section -->

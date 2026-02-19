@@ -22,19 +22,7 @@ if (request()->query('token')) {
     <!-- Leaflet Heatmap Plugin - jsDelivr CDN -->
     <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
 
-    <!-- Reverb Configuration (passed from server) -->
-    <script>
-        window.reverbConfig = {
-            key: '{{ config("broadcasting.connections.reverb.key") }}',
-            host: '{{ config("broadcasting.connections.reverb.options.host") ?? "localhost" }}',
-            port: '{{ config("broadcasting.connections.reverb.options.port") ?? "8080" }}',
-            scheme: '{{ config("broadcasting.connections.reverb.options.scheme") ?? "http" }}'
-        };
-    </script>
-
-    <!-- Laravel Echo - Real-Time WebSocket Client
-    Note: Using npm build instead of CDN for proper module support
-    Run: npm run build to enable real-time updates -->
+    <!-- Laravel App - Real-time features disabled -->
     @vite(['resources/js/app.js'])
 </head>
 <body class="bg-gray-100">
@@ -2533,46 +2521,12 @@ if (request()->query('token')) {
         });
 
         // ============================================================
-        // REAL-TIME WEBSOCKET INTEGRATION (Laravel Reverb)
+        // REAL-TIME FEATURES DISABLED
         // ============================================================
-        // Listen for real-time crime incident updates (Echo initialized in app.js)
-        // Wait for Echo to be fully initialized before setting up listeners
-        function setupReverbListeners() {
-            try {
-                if (typeof window.Echo !== 'undefined' && window.Echo && typeof window.Echo.channel === 'function') {
-                    console.log('✅ Real-Time Reverb Listeners Connected');
+        // Real-time updates have been disabled - using file-based sessions and null broadcaster
+        console.log('🔌 Real-time features disabled - Reverb/Echo not active');
 
-                    // Listen for real-time crime events on the public channel
-                    window.Echo.channel('crime-incidents')
-                        .listen('.incident.created', (data) => {
-                            console.log('📍 New incident received:', data);
-                            handleNewIncident(data);
-                            showRealtimeNotification('🔴 New crime incident reported!');
-                        })
-                        .listen('.incident.updated', (data) => {
-                            console.log('📝 Incident updated:', data);
-                            handleUpdatedIncident(data);
-                            showRealtimeNotification('📝 Crime incident updated');
-                        })
-                        .listen('.incident.deleted', (data) => {
-                            console.log('🗑️ Incident deleted:', data.id);
-                            handleDeletedIncident(data.id);
-                            showRealtimeNotification('🗑️ Crime incident deleted');
-                        });
-                } else {
-                    console.warn('⚠️ Echo not yet ready. Retrying in 500ms...');
-                    setTimeout(setupReverbListeners, 500);
-                }
-            } catch (error) {
-                console.error('❌ Error setting up Reverb listeners:', error);
-                console.warn('⚠️ Real-time updates disabled. Make sure Reverb is running and npm build is complete.');
-            }
-        }
-
-        // Start setup after a small delay to ensure app.js has executed
-        setTimeout(setupReverbListeners, 100);
-
-        // Handle new incident added in real-time
+        // Handle new incident added in real-time (function kept for compatibility but not used)
         function handleNewIncident(incident) {
             // Add to current data array
             currentData.push(incident);
@@ -2662,35 +2616,9 @@ if (request()->query('token')) {
             marker.addTo(markerLayer);
         }
 
-        // Real-time notification badge
+        // Real-time notification functions (disabled - kept for compatibility)
         function showRealtimeNotification(message) {
-            let notif = document.getElementById('realtimeNotification');
-            if (!notif) {
-                // Create the notification element if it doesn't exist
-                const div = document.createElement('div');
-                div.id = 'realtimeNotification';
-                div.style.cssText = `
-                    display: block;
-                    position: fixed;
-                    top: 80px;
-                    right: 20px;
-                    background: linear-gradient(135deg, #274d4c 0%, #3a6b6a 100%);
-                    color: white;
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    z-index: 9999;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                    animation: slideIn 0.3s ease;
-                `;
-                document.body.appendChild(div);
-                notif = div;
-            }
-
-            notif.textContent = message;
-            notif.style.display = 'block';
-            setTimeout(() => { notif.style.display = 'none'; }, 4000);
+            console.log('🔌 Real-time notification disabled:', message);
         }
 
         // CSS animation for notification
@@ -2731,7 +2659,7 @@ if (request()->query('token')) {
                     ];
 
                     const randomMessage = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
-                    showRealtimeNotification(randomMessage);
+                    console.log('🔌 Test notification disabled:', randomMessage);
 
                     // Change button to indicate success
                     testBtn.style.backgroundColor = '#22c55e';

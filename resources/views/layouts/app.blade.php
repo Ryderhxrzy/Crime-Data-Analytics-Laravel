@@ -5,13 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Crime Management System') - Crime Management System</title>
-    <!-- Reverb Configuration (passed from server) -->
-    <script>
-        window.reverbConfig = {
-            key: '{{ config("broadcasting.connections.pusher.key") }}',
-            cluster: '{{ config("broadcasting.connections.pusher.options.cluster") }}'
-        };
-    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="{{ asset('js/tailwind-config.js') }}"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
