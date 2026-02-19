@@ -58,5 +58,7 @@
         sidebarOverlay?.addEventListener('click', closeSidebar);
     </script>
     @stack('scripts')
+
+    @vite(['resources/js/app.js'])
 </body>
 </html>
