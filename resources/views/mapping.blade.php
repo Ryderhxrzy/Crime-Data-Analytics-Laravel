@@ -50,7 +50,7 @@ if (request()->query('token')) {
 
 
             <!-- Map Container with Right Panel -->
-            <div class="bg-white border border-gray-200 rounded-lg p-6 mb-8" style="position: relative; z-index: 1;">
+            <div class="bg-white border border-gray-200 rounded-lg p-6" style="position: relative; z-index: 1;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h2 class="text-lg font-bold text-gray-900">
                         <i class="fas fa-map mr-2 text-alertara-600"></i>Crime Incident Map
@@ -713,6 +713,7 @@ if (request()->query('token')) {
                     setupAutoFilter();
                     setupZoomScaling();
                     loadCrimeData();
+                    loadTotalStats();
                 })
                 .catch(error => {
                     console.error('Error loading QC boundary:', error);
@@ -747,6 +748,7 @@ if (request()->query('token')) {
                     setupAutoFilter();
                     setupZoomScaling();
                     loadCrimeData();
+                    loadTotalStats();
                 });
         }
 
@@ -1072,6 +1074,23 @@ if (request()->query('token')) {
         // Update debug info every 2 seconds
         setInterval(updateDebugInfo, 2000);
 
+        // Load total statistics (unfiltered)
+        async function loadTotalStats() {
+            try {
+                const response = await fetch('/api/crime-stats');
+                const stats = await response.json();
+                
+                document.getElementById('statTotal').textContent = stats.total;
+                document.getElementById('statCleared').textContent = stats.cleared;
+                document.getElementById('statUncleared').textContent = stats.uncleared;
+                document.getElementById('statCategories').textContent = stats.categories;
+                
+                console.log('Total stats loaded:', stats);
+            } catch (error) {
+                console.error('Error loading total stats:', error);
+            }
+        }
+
         // Load and display crime data
         async function loadCrimeData() {
             const loadingIndicator = document.getElementById('loadingIndicator');
@@ -1165,19 +1184,11 @@ if (request()->query('token')) {
             }
         }
 
-        // Update statistics on the right panel
+        // Update statistics on the right panel (filtered data only)
         function updateStatistics(data) {
-            const totalCount = data.length;
-            const clearedCount = data.filter(i => i.clearance_status === 'cleared').length;
-            const unclearedCount = data.filter(i => i.clearance_status === 'uncleared').length;
-
-            // Count unique categories
-            const uniqueCategories = new Set(data.map(i => i.crime_category_id)).size;
-
-            document.getElementById('statTotal').textContent = totalCount;
-            document.getElementById('statCleared').textContent = clearedCount;
-            document.getElementById('statUncleared').textContent = unclearedCount;
-            document.getElementById('statCategories').textContent = uniqueCategories;
+            // This function now only handles filtered data statistics
+            // Total stats are handled by loadTotalStats() function
+            console.log('Filtered data count:', data.length);
         }
 
         // Update incident list on the right panel (with virtual rendering)
@@ -2132,156 +2143,7 @@ if (request()->query('token')) {
             loadCrimeData();
         });
 
-        // Fullscreen Map Functionality
-        const mapFullscreenBtn = document.getElementById('mapFullscreenBtn');
-        const mapMainContainer = document.getElementById('mapContainer').parentElement; // Get the parent container that includes both map and right panel
-        let isFullscreen = false;
-        let originalParentStyles = {};
-
-        mapFullscreenBtn.addEventListener('click', function() {
-            if (!isFullscreen) {
-                // Store original styles
-                originalParentStyles = {
-                    position: mapMainContainer.style.position,
-                    top: mapMainContainer.style.top,
-                    left: mapMainContainer.style.left,
-                    width: mapMainContainer.style.width,
-                    height: mapMainContainer.style.height,
-                    zIndex: mapMainContainer.style.zIndex,
-                    borderRadius: mapMainContainer.style.borderRadius,
-                    backgroundColor: mapMainContainer.style.backgroundColor,
-                    padding: mapMainContainer.style.padding,
-                    margin: mapMainContainer.style.margin
-                };
-
-                // Enter fullscreen
-                if (mapMainContainer.requestFullscreen) {
-                    mapMainContainer.requestFullscreen();
-                } else if (mapMainContainer.webkitRequestFullscreen) {
-                    mapMainContainer.webkitRequestFullscreen();
-                } else if (mapMainContainer.msRequestFullscreen) {
-                    mapMainContainer.msRequestFullscreen();
-                }
-                
-                // Update button styling
-                mapFullscreenBtn.innerHTML = '<i class="fas fa-compress"></i><span class="hidden sm:inline">Exit Fullscreen</span>';
-                mapFullscreenBtn.classList.add('bg-alertara-600', 'text-white', 'border-alertara-600');
-                mapFullscreenBtn.classList.remove('bg-white', 'text-gray-700', 'border-gray-300');
-                
-                // Make main container take full screen with proper spacing
-                mapMainContainer.style.position = 'fixed';
-                mapMainContainer.style.top = '0';
-                mapMainContainer.style.left = '0';
-                mapMainContainer.style.width = '100vw';
-                mapMainContainer.style.height = '100vh';
-                mapMainContainer.style.zIndex = '9999';
-                mapMainContainer.style.borderRadius = '0';
-                mapMainContainer.style.backgroundColor = 'white';
-                mapMainContainer.style.padding = '20px';
-                mapMainContainer.style.margin = '0';
-                mapMainContainer.style.boxSizing = 'border-box';
-                mapMainContainer.style.overflow = 'auto';
-                
-                // Adjust the inner layout for fullscreen
-                setTimeout(() => {
-                    // Update flex container to use full height
-                    const flexContainer = mapMainContainer.querySelector('.flex.flex-col.lg\\:flex-row');
-                    const filtersSection = mapMainContainer.querySelector('.bg-white.rounded-xl.p-4.mb-6.border.border-gray-200');
-                    
-                    if (flexContainer && filtersSection) {
-                        const filtersHeight = filtersSection.offsetHeight + parseInt(window.getComputedStyle(filtersSection).marginBottom); // Get actual height including margin
-                        flexContainer.style.height = `calc(100vh - 40px - ${filtersHeight}px)`; // Account for padding and filters height
-                        flexContainer.style.maxHeight = `calc(100vh - 40px - ${filtersHeight}px)`;
-                    }
-                    
-                    // Update map container to take more space in fullscreen
-                    const mapContainer = document.getElementById('mapContainer');
-                    if (mapContainer) {
-                        mapContainer.style.flex = '1';
-                        mapContainer.style.maxWidth = '70%';
-                    }
-                    
-                    // Update right panel to take remaining space
-                    const rightPanel = mapContainer.nextElementSibling;
-                    if (rightPanel) {
-                        rightPanel.style.flex = '1';
-                        rightPanel.style.maxWidth = '30%';
-                    }
-                    
-                    // Resize map to fit new container
-                    if (map) {
-                        map.invalidateSize();
-                    }
-                }, 100);
-                
-                isFullscreen = true;
-            } else {
-                // Exit fullscreen
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
-                    document.msExitFullscreen();
-                }
-                
-                // Reset button styling
-                mapFullscreenBtn.innerHTML = '<i class="fas fa-expand"></i><span class="hidden sm:inline">Fullscreen</span>';
-                mapFullscreenBtn.classList.remove('bg-alertara-600', 'text-white', 'border-alertara-600');
-                mapFullscreenBtn.classList.add('bg-white', 'text-gray-700', 'border-gray-300');
-                
-                // Restore original styles
-                Object.keys(originalParentStyles).forEach(prop => {
-                    mapMainContainer.style[prop] = originalParentStyles[prop];
-                });
-                
-                // Reset the inner layout
-                setTimeout(() => {
-                    // Restore flex container
-                    const flexContainer = mapMainContainer.querySelector('.flex.flex-col.lg\\:flex-row');
-                    if (flexContainer) {
-                        flexContainer.style.height = '';
-                        flexContainer.style.maxHeight = '';
-                    }
-                    
-                    // Restore map container
-                    const mapContainer = document.getElementById('mapContainer');
-                    if (mapContainer) {
-                        mapContainer.style.flex = '';
-                        mapContainer.style.maxWidth = '';
-                    }
-                    
-                    // Restore right panel
-                    const rightPanel = mapContainer.nextElementSibling;
-                    if (rightPanel) {
-                        rightPanel.style.flex = '';
-                        rightPanel.style.maxWidth = '';
-                    }
-                    
-                    // Resize map to fit original container
-                    if (map) {
-                        map.invalidateSize();
-                    }
-                }, 100);
-                
-                isFullscreen = false;
-            }
-        });
-
-        // Handle fullscreen change events
-        document.addEventListener('fullscreenchange', function() {
-            if (!document.fullscreenElement && isFullscreen) {
-                // User exited fullscreen via ESC key
-                mapFullscreenBtn.click();
-            }
-        });
-
-        document.addEventListener('webkitfullscreenchange', function() {
-            if (!document.webkitFullscreenElement && isFullscreen) {
-                mapFullscreenBtn.click();
-            }
-        });
-                // Search incident functionality (with debounce to prevent lag on every keystroke)
+        // Search incident functionality (with debounce to prevent lag on every keystroke)
         try {
             let searchInputElement = document.getElementById('incidentSearch');
             if (searchInputElement) {
@@ -2714,66 +2576,41 @@ if (request()->query('token')) {
         // ============================================================
         console.log('🔌 Real-time features enabled - Using Pusher');
 
-        // Desktop notification function
+        // Desktop notification function using NotificationManager
         function showDesktopNotification(incident, action = 'created') {
-            // Check if browser supports notifications
-            if (!('Notification' in window)) {
-                console.log('❌ Browser does not support notifications');
-                return;
-            }
-            
-            // Request permission if not granted
-            if (Notification.permission === 'default') {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        createNotification(incident, action);
-                    }
-                });
-            } else if (Notification.permission === 'granted') {
-                createNotification(incident, action);
-            }
-        }
-
-        // Create and show notification
-        function createNotification(incident, action) {
             try {
-                let title, body;
+                let title;
                 
                 switch(action) {
                     case 'created':
                         title = 'New Crime Incident Reported';
-                        body = `${incident.incident_title} - ${incident.location ?? 'Unknown Barangay'}`;
                         break;
                     case 'updated':
                         title = 'Crime Incident Updated';
-                        body = `${incident.incident_title} - ${incident.location ?? 'Unknown Barangay'}`;
                         break;
                     case 'deleted':
                         title = 'Crime Incident Deleted';
-                        body = `Incident ID: ${incident.id} has been removed`;
                         break;
+                    default:
+                        title = 'Crime Incident Notification';
                 }
                 
-                const notification = new Notification(title, {
-                    body: body,
-                    icon: '/images/alertara.png',
-                    tag: `crime-incident-${incident.id}-${action}`,
-                    requireInteraction: false,
-                    silent: false
-                });
-                
-                // Auto-close after 10 seconds
-                setTimeout(() => {
-                    notification.close();
-                }, 10000);
-                
-                // Click to open mapping page
-                notification.onclick = function() {
-                    window.focus();
-                };
-                
+                // Use the NotificationManager class
+                if (typeof window.NotificationManager !== 'undefined') {
+                    window.NotificationManager.showIncidentNotification(title, {
+                        incident_title: incident.incident_title || 'Unknown Incident',
+                        category_name: incident.category_name || 'Unknown Category',
+                        location: incident.location || incident.barangay_name || 'Unknown Location',
+                        id: incident.id,
+                        incident_date: incident.incident_date || new Date().toISOString(),
+                        status: incident.status || 'reported',
+                        clearance_status: incident.clearance_status || 'uncleared'
+                    }, action);
+                } else {
+                    console.warn('NotificationManager not available');
+                }
             } catch (error) {
-                console.error('❌ Failed to create notification:', error);
+                console.error('Error showing notification:', error);
             }
         }
 
@@ -2912,6 +2749,7 @@ if (request()->query('token')) {
 
             // Update statistics and incident list
             updateStatistics(currentData);
+            loadTotalStats(); // Refresh total stats
             currentListData = currentData;
             currentListPage = 1; // Reset to first page
             renderIncidentPage(document.getElementById('incidentSearch').value);
@@ -2928,6 +2766,7 @@ if (request()->query('token')) {
                 else if (currentVisualizationMode === 'markers') displayMarkers(currentData);
                 else displayClusters(currentData);
                 updateStatistics(currentData);
+                loadTotalStats(); // Refresh total stats
                 renderIncidentPage(document.getElementById('incidentSearch').value);
             }
         }
@@ -2940,6 +2779,7 @@ if (request()->query('token')) {
             else if (currentVisualizationMode === 'markers') displayMarkers(currentData);
             else displayClusters(currentData);
             updateStatistics(currentData);
+            loadTotalStats(); // Refresh total stats
             renderIncidentPage(document.getElementById('incidentSearch').value);
         }
 
@@ -3110,6 +2950,9 @@ if (request()->query('token')) {
             }
         }
     </script>
+
+    <!-- External Fullscreen JavaScript -->
+    @vite(['resources/js/mapping-fullscreen.js', 'resources/js/notification-manager.ts'])
 
 </body>
 </html>
