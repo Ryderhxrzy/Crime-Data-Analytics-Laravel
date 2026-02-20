@@ -53,6 +53,21 @@ Route::get('/crimes', function() {
     ]);
 })->middleware('throttle:60,1');
 
+// Total crime statistics endpoint (unfiltered)
+Route::get('/crime-stats', function() {
+    $totalIncidents = \App\Models\CrimeIncident::count();
+    $clearedCases = \App\Models\CrimeIncident::where('clearance_status', 'cleared')->count();
+    $unclearedCases = \App\Models\CrimeIncident::where('clearance_status', 'uncleared')->count();
+    $totalCategories = \App\Models\CrimeCategory::count();
+    
+    return response()->json([
+        'total' => $totalIncidents,
+        'cleared' => $clearedCases,
+        'uncleared' => $unclearedCases,
+        'categories' => $totalCategories
+    ]);
+})->middleware('throttle:60,1');
+
 // Crime hotspot data endpoint
 Route::get('/crime-hotspots', [DashboardController::class, 'getHotspotData'])
     ->middleware('throttle:60,1')
