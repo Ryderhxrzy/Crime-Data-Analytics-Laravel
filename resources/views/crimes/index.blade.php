@@ -162,8 +162,145 @@
         </div>
     </div>
 
+    <!-- Add Incident Modal -->
+    <div id="addIncidentModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-100">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xl font-semibold text-gray-900">
+                        <i class="fas fa-plus mr-2 text-alertara-600"></i>Add New Incident
+                    </h3>
+                    <button id="closeAddModal" class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <form id="addIncidentForm" class="p-6">
+                @csrf
+                <!-- Row 1: Title and Category -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-heading mr-1 text-alertara-600"></i>Incident Title
+                        </label>
+                        <input type="text" name="incident_title" id="modalIncidentTitle" placeholder="e.g., Robbery at 7-11"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-tag mr-1 text-alertara-600"></i>Crime Category
+                        </label>
+                        <select name="crime_category_id" id="modalCrimeCategory" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required>
+                            <option value="">Select a category...</option>
+                            <!-- Categories will be populated by JavaScript -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Row 2: Description -->
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-align-left mr-1 text-alertara-600"></i>Description
+                    </label>
+                    <textarea name="incident_description" id="modalIncidentDescription" placeholder="Detailed description of incident..."
+                              rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required></textarea>
+                </div>
+
+                <!-- Row 3: Date and Time -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-calendar mr-1 text-alertara-600"></i>Incident Date
+                        </label>
+                        <input type="date" name="incident_date" id="modalIncidentDate"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-clock mr-1 text-alertara-600"></i>Incident Time
+                        </label>
+                        <input type="time" name="incident_time" id="modalIncidentTime"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required>
+                    </div>
+                </div>
+
+                <!-- Row 4: Location -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-map-marker-alt mr-1 text-alertara-600"></i>Latitude
+                        </label>
+                        <input type="number" step="0.000001" name="latitude" id="modalLatitude" placeholder="e.g., 14.6091"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required>
+                        <small class="text-gray-500">QC Range: 14.5 to 14.8</small>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-compass mr-1 text-alertara-600"></i>Longitude
+                        </label>
+                        <input type="number" step="0.000001" name="longitude" id="modalLongitude" placeholder="e.g., 121.0245"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required>
+                        <small class="text-gray-500">QC Range: 120.9 to 121.2</small>
+                    </div>
+                </div>
+
+                <!-- Row 5: Address -->
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-home mr-1 text-alertara-600"></i>Address Details
+                    </label>
+                    <input type="text" name="address_details" id="modalAddress" placeholder="Complete address of incident..."
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent">
+                </div>
+
+                <!-- Row 6: Status -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-info-circle mr-1 text-alertara-600"></i>Case Status
+                        </label>
+                        <select name="status" id="modalCaseStatus" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required>
+                            <option value="reported">Reported</option>
+                            <option value="under_investigation">Under Investigation</option>
+                            <option value="solved">Solved</option>
+                            <option value="closed">Closed</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-check-circle mr-1 text-alertara-600"></i>Clearance Status
+                        </label>
+                        <select name="clearance_status" id="modalClearanceStatus" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-transparent" required>
+                            <option value="uncleared">Uncleared</option>
+                            <option value="cleared">Cleared</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Row 7: Additional Fields (Hidden for now) -->
+                <input type="hidden" name="barangay_id" value="1"> <!-- Default barangay - can be enhanced later -->
+
+                <!-- Form Actions -->
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                    <button type="button" id="cancelAddIncident" class="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-2 bg-alertara-600 text-white rounded-lg hover:bg-alertara-700 transition-colors flex items-center gap-2">
+                        <i class="fas fa-save"></i>
+                        Save Incident
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.js"></script>
-    @vite(['resources/js/crime-page.ts'])
+    @vite(['resources/js/app.js', 'resources/js/crime-page.ts', 'resources/js/notification-manager.ts'])
 </body>
 </html>
