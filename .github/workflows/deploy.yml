@@ -18,5 +18,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /var/www/Crime-Data-Analytics-Laravel
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
+            php artisan cache:clear
+            php artisan view:clear
+            php artisan config:clear
+            php artisan route:clear
             php artisan optimize:clear
