@@ -86,15 +86,6 @@
                             <span>Crime Mapping</span>
                         </a>
                     </div>
-
-                    <!-- Add Crime Incident (Testing) -->
-                    <div class="tree-node">
-                        <a href="{{ route('crime-incident.create') }}"
-                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-incident.create') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
-                            <i class="fas fa-plus-circle w-4 h-4 mr-3 flex-shrink-0"></i>
-                            <span>Add Crime Incident</span>
-                        </a>
-                    </div>
                 </div>
 
                 <!-- Analytics Section -->
