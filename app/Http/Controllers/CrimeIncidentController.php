@@ -14,6 +14,11 @@ class CrimeIncidentController extends Controller
     {
         $crimes = CrimeIncident::with('category', 'barangay')->get();
 
+        // Check if request expects JSON (API request)
+        if (request()->expectsJson()) {
+            return response()->json($crimes);
+        }
+
         return view('crimes.index', compact('crimes'));
     }
 
@@ -66,8 +71,34 @@ class CrimeIncidentController extends Controller
             'broadcast_ready' => true
         ]);
 
+        // Broadcast real-time event
+        try {
+            broadcast(new CrimeIncidentUpdated($incident, 'created'));
+            \Log::info('📡 CrimeIncidentUpdated event broadcasted successfully', [
+                'incident_id' => $incident->id,
+                'event_type' => 'created',
+                'channel' => 'crime-incidents'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('❌ Failed to broadcast CrimeIncidentUpdated event', [
+                'incident_id' => $incident->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+
         \Log::info('🔄 Model events should trigger now - check Laravel logs for broadcast events');
 
+        // Check if request is AJAX (from modal)
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Crime incident created successfully!',
+                'incident' => $incident
+            ]);
+        }
+
+        // Regular form submission - redirect back
         return redirect()->back()->with('success', 'Crime incident created successfully! Check the mapping page for real-time update.');
     }
 }
