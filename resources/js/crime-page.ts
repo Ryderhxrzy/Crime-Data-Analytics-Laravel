@@ -43,9 +43,8 @@ interface CrimeIncidentResponse {
 
 declare global {
     interface Window {
-        crimePageManager: CrimePageManager;
-        crimePage: any;
         L: any;
+        NotificationManager: typeof NotificationManager;
     }
 }
 
@@ -69,6 +68,7 @@ class CrimePageManager {
         this.initializeElements();
         this.initializeEventListeners();
         this.loadInitialData();
+        this.initializeRealtimeListeners();
     }
 
     private initializeElements(): void {
@@ -90,6 +90,12 @@ class CrimePageManager {
         const closeModalBtn = document.getElementById('closeModal');
         const modalOverlay = document.getElementById('incidentModal');
 
+        // Add Incident Modal elements
+        const addIncidentModal = document.getElementById('addIncidentModal') as HTMLElement;
+        const closeAddModalBtn = document.getElementById('closeAddModal') as HTMLElement;
+        const cancelAddIncidentBtn = document.getElementById('cancelAddIncident') as HTMLElement;
+        const addIncidentForm = document.getElementById('addIncidentForm') as HTMLFormElement;
+
         // Store references
         (window as any).crimePage = {
             searchInput,
@@ -105,22 +111,26 @@ class CrimePageManager {
             addIncidentBtn,
             exportBtn,
             closeModalBtn,
-            modalOverlay
+            modalOverlay,
+            addIncidentModal,
+            closeAddModalBtn,
+            cancelAddIncidentBtn,
+            addIncidentForm
         };
     }
 
     private initializeMap(): void {
         // Initialize Leaflet map centered on Quezon City
-        this.map = L.map('crimeMap').setView([14.6760, 121.0437], 11);
+        this.map = window.L.map('crimeMap').setView([14.6760, 121.0437], 11);
 
         // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(this.map);
 
         // Add geocoder control
-        const geocoder = (L.Control as any).geocoder({
+        const geocoder = (window.L.Control as any).geocoder({
             defaultMarkGeocode: false,
             placeholder: 'Search location...',
             errorMessage: 'Nothing found.',
@@ -135,47 +145,47 @@ class CrimePageManager {
         const elements = (window as any).crimePage;
 
         // Filter listeners
-        elements.searchInput?.addEventListener('input', (e) => {
+        elements.searchInput?.addEventListener('input', (e: Event) => {
             this.filters.search = (e.target as HTMLInputElement).value;
             this.applyFilters();
         });
 
-        elements.tableSearchInput?.addEventListener('input', (e) => {
+        elements.tableSearchInput?.addEventListener('input', (e: Event) => {
             this.filters.search = (e.target as HTMLInputElement).value;
             this.applyFilters();
         });
 
-        elements.categoryFilter?.addEventListener('change', (e) => {
+        elements.categoryFilter?.addEventListener('change', (e: Event) => {
             this.filters.category = (e.target as HTMLSelectElement).value;
             this.applyFilters();
         });
 
-        elements.statusFilter?.addEventListener('change', (e) => {
+        elements.statusFilter?.addEventListener('change', (e: Event) => {
             this.filters.status = (e.target as HTMLSelectElement).value;
             this.applyFilters();
         });
 
-        elements.barangayFilter?.addEventListener('change', (e) => {
+        elements.barangayFilter?.addEventListener('change', (e: Event) => {
             this.filters.barangay = (e.target as HTMLSelectElement).value;
             this.applyFilters();
         });
 
-        elements.dateFilter?.addEventListener('change', (e) => {
+        elements.dateFilter?.addEventListener('change', (e: Event) => {
             this.filters.date = (e.target as HTMLInputElement).value;
             this.applyFilters();
         });
 
-        elements.caseStatusFilter?.addEventListener('change', (e) => {
+        elements.caseStatusFilter?.addEventListener('change', (e: Event) => {
             this.filters.status = (e.target as HTMLSelectElement).value;
             this.applyFilters();
         });
 
-        elements.clearanceStatusFilter?.addEventListener('change', (e) => {
+        elements.clearanceStatusFilter?.addEventListener('change', (e: Event) => {
             this.filters.clearance = (e.target as HTMLSelectElement).value;
             this.applyFilters();
         });
 
-        elements.tablePageSizeSelect?.addEventListener('change', (e) => {
+        elements.tablePageSizeSelect?.addEventListener('change', (e: Event) => {
             this.pageSize = parseInt((e.target as HTMLSelectElement).value);
             this.currentPage = 1;
             this.renderTable();
@@ -183,7 +193,7 @@ class CrimePageManager {
 
         // Button listeners
         elements.addIncidentBtn?.addEventListener('click', () => {
-            window.location.href = '/crime-incident/create';
+            this.showAddIncidentModal();
         });
 
         elements.exportBtn?.addEventListener('click', () => {
@@ -194,9 +204,29 @@ class CrimePageManager {
             this.closeModal();
         });
 
-        elements.modalOverlay?.addEventListener('click', (e) => {
+        elements.modalOverlay?.addEventListener('click', (e: Event) => {
             if (e.target === elements.modalOverlay) {
                 this.closeModal();
+            }
+        });
+
+        // Add Incident Modal listeners
+        elements.closeAddModalBtn?.addEventListener('click', () => {
+            this.closeAddIncidentModal();
+        });
+
+        elements.cancelAddIncidentBtn?.addEventListener('click', () => {
+            this.closeAddIncidentModal();
+        });
+
+        elements.addIncidentForm?.addEventListener('submit', (e: Event) => {
+            e.preventDefault();
+            this.submitIncidentForm();
+        });
+
+        elements.addIncidentModal?.addEventListener('click', (e: Event) => {
+            if (e.target === elements.addIncidentModal) {
+                this.closeAddIncidentModal();
             }
         });
 
@@ -672,6 +702,201 @@ class CrimePageManager {
             modal.classList.add('hidden');
             document.body.style.overflow = 'auto';
         }
+    }
+
+    private showAddIncidentModal(): void {
+        const modal = document.getElementById('addIncidentModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            this.loadCategoriesIntoModal();
+        }
+    }
+
+    private closeAddIncidentModal(): void {
+        const modal = document.getElementById('addIncidentModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            this.resetAddIncidentForm();
+        }
+    }
+
+    private loadCategoriesIntoModal(): void {
+        const categorySelect = document.getElementById('modalCrimeCategory') as HTMLSelectElement;
+        if (categorySelect && this.incidents.length > 0) {
+            // Extract unique categories from incidents
+            const uniqueCategories = [...new Map(
+                this.incidents
+                    .filter(incident => incident.category && incident.category.id)
+                    .map(incident => [incident.category.id, incident.category])
+            ).values()];
+            
+            const categoryOptions = uniqueCategories.map(cat => 
+                `<option value="${cat.id}">${cat.category_name}</option>`
+            );
+            
+            categorySelect.innerHTML = '<option value="">Select a category...</option>' + categoryOptions.join('');
+        }
+    }
+
+    private resetAddIncidentForm(): void {
+        const form = document.getElementById('addIncidentForm') as HTMLFormElement;
+        if (form) {
+            form.reset();
+        }
+    }
+
+    private async submitIncidentForm(): Promise<void> {
+        const form = document.getElementById('addIncidentForm') as HTMLFormElement;
+        const submitBtn = form?.querySelector('button[type="submit"]') as HTMLButtonElement;
+        if (!form || !submitBtn) return;
+
+        // Disable button and show loading
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+
+        const formData = new FormData(form);
+        
+        try {
+            const response = await fetch('/crime-incident', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.getAttribute('content') || '',
+                    'Accept': 'application/json',
+                },
+                body: formData
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                
+                // Use NotificationManager for success notification
+                if (typeof (window as any).NotificationManager !== 'undefined') {
+                    (window as any).NotificationManager.showIncidentNotification('Incident Created Successfully!', {
+                        incident_title: result.incident_title || 'New Incident',
+                        category_name: result.category_name || 'Category',
+                        location: result.barangay_name || 'Location',
+                        id: result.id,
+                        incident_date: result.incident_date || new Date().toISOString(),
+                        status: result.status || 'reported',
+                        clearance_status: result.clearance_status || 'uncleared'
+                    }, 'created');
+                }
+                
+                this.closeAddIncidentModal();
+                this.loadInitialData(); // Refresh the data
+            } else {
+                const error = await response.text();
+                this.showError('Failed to create incident: ' + error);
+            }
+        } catch (error) {
+            console.error('Error creating incident:', error);
+            this.showError('An error occurred while creating the incident');
+        } finally {
+            // Restore button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    }
+
+    private showSuccess(message: string): void {
+        // Simple success notification
+        const successDiv = document.createElement('div');
+        successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+        successDiv.textContent = message;
+        document.body.appendChild(successDiv);
+
+        setTimeout(() => {
+            document.body.removeChild(successDiv);
+        }, 3000);
+    }
+
+    private initializeRealtimeListeners(): void {
+        console.log('🔍 Initializing real-time listeners for crime incidents...');
+        
+        // Request notification permission if not already granted
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+                console.log('🔔 Notification permission:', permission);
+                if (permission === 'granted') {
+                    console.log('✅ Browser notifications enabled');
+                } else {
+                    console.log('⚠️ Browser notifications denied, will use custom notifications');
+                }
+            }).catch(error => {
+                console.error('❌ Error requesting notification permission:', error);
+            });
+        }
+        
+        // Check if Echo is available
+        if (typeof (window as any).Echo !== 'undefined' && (window as any).Echo) {
+            console.log('🔌 Echo available - Setting up real-time listeners...');
+            
+            // Add connection debugging
+            (window as any).Echo.connector.pusher.connection.bind('connected', function() {
+                console.log('✅ Pusher connected successfully');
+            });
+            
+            (window as any).Echo.connector.pusher.connection.bind('disconnected', function() {
+                console.log('❌ Pusher disconnected');
+            });
+            
+            (window as any).Echo.connector.pusher.connection.bind('error', function(err: any) {
+                console.error('❌ Pusher connection error:', err);
+            });
+            
+            // Listen for crime incident events
+            const channel = (window as any).Echo.channel('crime-incidents');
+            
+            channel.subscribed(function() {
+                console.log('✅ Subscribed to crime-incidents channel');
+            });
+            
+            channel.listen('.incident.created', (e: any) => {
+                console.log('🆕 New incident created:', e);
+                this.handleNewIncident(e);
+            });
+            
+            channel.listen('.incident.updated', (e: any) => {
+                console.log('📝 Incident updated:', e);
+                this.handleUpdatedIncident(e);
+            });
+            
+            channel.listen('.incident.deleted', (e: any) => {
+                console.log('🗑️ Incident deleted:', e);
+                this.handleDeletedIncident(e);
+            });
+            
+            console.log('✅ Real-time listeners setup complete');
+        } else {
+            console.warn('⚠️ Echo not available - real-time features disabled');
+        }
+    }
+    
+    private handleNewIncident(incidentData: any): void {
+        // Show notification for new incident
+        (window as any).NotificationManager?.showIncidentNotification('New Incident Reported', incidentData, 'created');
+        
+        // Refresh the data to show the new incident
+        this.loadInitialData();
+    }
+    
+    private handleUpdatedIncident(incidentData: any): void {
+        // Show notification for updated incident
+        (window as any).NotificationManager?.showIncidentNotification('Incident Updated', incidentData, 'updated');
+        
+        // Refresh the data to show updated incident
+        this.loadInitialData();
+    }
+    
+    private handleDeletedIncident(incidentData: any): void {
+        // Show notification for deleted incident
+        (window as any).NotificationManager?.showIncidentNotification('Incident Deleted', incidentData, 'deleted');
+        
+        // Refresh the data to remove deleted incident
+        this.loadInitialData();
     }
 
     public goToPage(page: number): void {
