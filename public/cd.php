@@ -1,1 +1,0 @@
-echo "Current working directory: " . getcwd();
