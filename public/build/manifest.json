@@ -1,8 +1,26 @@
 {
   "resources/js/app.js": {
-    "file": "assets/app-dhsRUEkx.js",
+    "file": "assets/app-vjCeJFDi.js",
     "name": "app",
     "src": "resources/js/app.js",
+    "isEntry": true
+  },
+  "resources/js/crime-page.ts": {
+    "file": "assets/crime-page-BDGiDPak.js",
+    "name": "crime-page",
+    "src": "resources/js/crime-page.ts",
+    "isEntry": true
+  },
+  "resources/js/mapping-fullscreen.js": {
+    "file": "assets/mapping-fullscreen-l0sNRNKZ.js",
+    "name": "mapping-fullscreen",
+    "src": "resources/js/mapping-fullscreen.js",
+    "isEntry": true
+  },
+  "resources/js/notification-manager.ts": {
+    "file": "assets/notification-manager-DPws6Weq.js",
+    "name": "notification-manager",
+    "src": "resources/js/notification-manager.ts",
     "isEntry": true
   }
 }
