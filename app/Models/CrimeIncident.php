@@ -59,6 +59,16 @@ class CrimeIncident extends Model
         return $this->belongsTo(User::class, 'reported_by');
     }
 
+    public function personsInvolved()
+    {
+        return $this->hasMany(PersonsInvolved::class, 'incident_id');
+    }
+
+    public function evidence()
+    {
+        return $this->hasMany(Evidence::class, 'incident_id');
+    }
+
     /**
      * Broadcast events when crime incidents are created, updated, or deleted
      * Enables real-time updates on the mapping page via WebSockets
