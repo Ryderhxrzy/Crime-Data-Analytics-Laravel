@@ -20,7 +20,7 @@ class AuditLogController extends Controller
             // Get unique action types for filter
             $actionTypes = AuditLog::distinct('action_type')->pluck('action_type')->toArray();
 
-            return view('audit-logs.index', [
+            return view('audit-logs', [
                 'auditLogs' => $auditLogs,
                 'actionTypes' => $actionTypes,
             ]);

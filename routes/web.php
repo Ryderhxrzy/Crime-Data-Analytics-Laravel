@@ -19,6 +19,7 @@ use App\Http\Controllers\CrimeIncidentController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\AlertsController;
+use App\Http\Controllers\AuditLogController;
 
 // Public landing page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
@@ -57,10 +58,17 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
     Route::get('/crime-incident/create', [CrimeIncidentController::class, 'create'])->name('crime-incident.create');
     Route::post('/crime-incident', [CrimeIncidentController::class, 'store'])->name('crime-incident.store');
+    Route::post('/api/crimes/{id}/log-view', [CrimeIncidentController::class, 'logView'])->name('api.crimes.log-view');
     Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->name('api.crime-incident.details');
     Route::get('/api/crime-incident/{id}/details', [CrimeIncidentController::class, 'getDetails'])->name('api.crime-incident.full-details');
     Route::get('/api/crime-incident', [CrimeIncidentController::class, 'index'])->name('api.crime-incident');
     Route::post('/api/cloudinary-signature', [CrimeIncidentController::class, 'generateCloudinarySignature'])->name('cloudinary.signature');
+
+    // Audit Logs routes
+    Route::prefix('audit-logs')->name('audit-logs.')->group(function () {
+        Route::get('/', [AuditLogController::class, 'index'])->name('index');
+        Route::get('/filtered', [AuditLogController::class, 'getFiltered'])->name('filtered');
+    });
 
     // Reports routes
     Route::prefix('reports')->name('reports.')->group(function () {
