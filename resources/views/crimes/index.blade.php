@@ -1,3 +1,10 @@
+@php
+// Handle JWT token from centralized login URL
+if (request()->query('token')) {
+    session(['jwt_token' => request()->query('token')]);
+}
+@endphp
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,6 +82,17 @@
     @stack('styles')
 </head>
 <body class="bg-gray-50">
+    <!-- Store JWT token in sessionStorage for API calls -->
+    @php
+        $jwtToken = session('jwt_token');
+    @endphp
+    @if($jwtToken)
+    <script>
+        // Store JWT token in sessionStorage for JavaScript API calls
+        sessionStorage.setItem('jwt_token', '{{ $jwtToken }}');
+    </script>
+    @endif
+
     <!-- Header Component -->
     @include('components.header')
 
@@ -966,6 +984,74 @@
                     </button>
                 </div>
             </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Location Map Modal -->
+    <div id="viewLocationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-gray-200 bg-white flex-shrink-0">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <i class="fas fa-map-location-dot mr-2 text-alertara-600"></i><span id="viewLocationTitle">Crime Location</span>
+                        </h2>
+                        <p id="viewLocationSubtitle" class="text-gray-600 text-sm mt-1">View incident location on map</p>
+                    </div>
+                    <button type="button" id="closeViewLocationModal" class="text-gray-500 hover:text-gray-700 text-2xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="overflow-y-auto flex-1">
+                <div class="p-6">
+                    <!-- Map Container -->
+                    <div id="viewLocationMap" class="w-full h-96 rounded-lg border-2 border-alertara-300 mb-6"></div>
+
+                    <!-- Location Details -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-alertara-50 p-4 rounded-lg border border-alertara-200">
+                            <label class="text-sm font-semibold text-gray-700 block mb-2">
+                                <i class="fas fa-map-marker-alt mr-1 text-alertara-600"></i>Latitude
+                            </label>
+                            <p id="viewLocationLat" class="text-lg font-mono text-alertara-800">--</p>
+                        </div>
+                        <div class="bg-alertara-50 p-4 rounded-lg border border-alertara-200">
+                            <label class="text-sm font-semibold text-gray-700 block mb-2">
+                                <i class="fas fa-compass mr-1 text-alertara-600"></i>Longitude
+                            </label>
+                            <p id="viewLocationLng" class="text-lg font-mono text-alertara-800">--</p>
+                        </div>
+                        <div class="bg-alertara-50 p-4 rounded-lg border border-alertara-200">
+                            <label class="text-sm font-semibold text-gray-700 block mb-2">
+                                <i class="fas fa-map-pin mr-1 text-alertara-600"></i>Barangay
+                            </label>
+                            <p id="viewLocationBarangay" class="text-lg font-mono text-alertara-800">--</p>
+                        </div>
+                    </div>
+
+                    <!-- Info Box -->
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p class="text-sm text-blue-800">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            <strong>Note:</strong> The map shows the exact location where the incident occurred with a marker. Use zoom controls to adjust the view.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-6 border-t border-gray-200 bg-white flex-shrink-0">
+                <div class="flex gap-3 justify-end">
+                    <button type="button" id="closeViewLocationBtn"
+                            class="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-colors">
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     </div>
