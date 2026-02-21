@@ -3,7 +3,7 @@
 <!-- Sidebar -->
 <aside class="w-72 border-r border-gray-200 fixed left-0 top-0 bottom-0 transition-transform duration-300 ease-in-out -translate-x-full lg:translate-x-0 z-50 flex flex-col overflow-hidden">
 
-    <div class="bg-gradient-to-r from-alertara-50 to-alertara-100 border-b-2 border-alertara-200 px-4 sm:px-6 lg:px-8 py-5 flex-shrink-0 relative overflow-hidden">
+    <div class="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-5 flex-shrink-0 relative overflow-hidden">
         <!-- Decorative Pattern -->
         <div class="absolute top-0 right-0 w-20 h-20 bg-alertara-200 rounded-full opacity-20 -mr-10 -mt-10"></div>
         <div class="absolute bottom-0 left-0 w-16 h-16 bg-alertara-200 rounded-full opacity-20 -ml-8 -mb-8"></div>
@@ -227,6 +227,15 @@
                            class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crimes.*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                             <i class="fas fa-file-lines w-4 h-4 mr-3 flex-shrink-0"></i>
                             <span>Crime</span>
+                        </a>
+                    </div>
+
+                    <!-- View History (Audit Logs) -->
+                    <div class="tree-node mt-0.5">
+                        <a href="{{ authUrl('audit-logs.index') }}"
+                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('audit-logs.*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
+                            <i class="fas fa-history w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>View History</span>
                         </a>
                     </div>
                 </div>
