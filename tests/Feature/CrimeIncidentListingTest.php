@@ -6,11 +6,11 @@ use Tests\TestCase;
 use App\Models\CrimeIncident;
 use App\Models\CrimeCategory;
 use App\Models\Barangay;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class CrimeIncidentListingTest extends TestCase
 {
-    use DatabaseTransactions;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {

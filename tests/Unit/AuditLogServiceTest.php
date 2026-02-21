@@ -5,11 +5,11 @@ namespace Tests\Unit;
 use Tests\TestCase;
 use App\Services\AuditLogService;
 use App\Models\AuditLog;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class AuditLogServiceTest extends TestCase
 {
-    use DatabaseTransactions;
+    use RefreshDatabase;
 
     /**
      * Test that log creates an audit log entry
