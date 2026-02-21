@@ -39,15 +39,73 @@ Route::get('/barangays', function() {
 
 // Crimes data endpoint for crime page
 Route::get('/crimes', function() {
-    $crimes = \App\Models\CrimeIncident::with(['category', 'barangay'])
+    $crimes = \App\Models\CrimeIncident::with(['category', 'barangay', 'personsInvolved', 'evidence'])
         ->orderBy('created_at', 'desc')
         ->get();
-    
+
+    // Add persons and evidence data to each crime
+    $crimesWithRelations = $crimes->map(function ($crime) {
+        // Format persons involved with encrypted fields marked
+        $personsData = $crime->personsInvolved->map(function ($person) {
+            return [
+                'id' => $person->person_id,
+                'person_type' => $person->person_type,
+                'first_name' => '[ENCRYPTED]',
+                'middle_name' => '[ENCRYPTED]',
+                'last_name' => '[ENCRYPTED]',
+                'contact_number' => '[ENCRYPTED]',
+                'other_info' => '[ENCRYPTED]',
+            ];
+        })->toArray();
+
+        // Format evidence with encrypted fields marked
+        $evidenceData = $crime->evidence->map(function ($evidence) {
+            return [
+                'id' => $evidence->evidence_id,
+                'evidence_type' => $evidence->evidence_type,
+                'description' => '[ENCRYPTED]',
+                'evidence_link' => '[ENCRYPTED]',
+            ];
+        })->toArray();
+
+        // Get unique person types
+        $personTypes = $crime->personsInvolved?->pluck('person_type')->unique()->values()->toArray() ?? [];
+        // Get unique evidence types
+        $evidenceTypes = $crime->evidence?->pluck('evidence_type')->unique()->values()->toArray() ?? [];
+
+        return [
+            'id' => $crime->id,
+            'incident_code' => $crime->incident_code,
+            'incident_title' => $crime->incident_title,
+            'incident_description' => $crime->incident_description,
+            'incident_date' => $crime->incident_date,
+            'incident_time' => $crime->incident_time,
+            'status' => $crime->status,
+            'clearance_status' => $crime->clearance_status,
+            'latitude' => $crime->latitude,
+            'longitude' => $crime->longitude,
+            'address_details' => $crime->address_details,
+            'victim_count' => $crime->victim_count,
+            'suspect_count' => $crime->suspect_count,
+            'modus_operandi' => $crime->modus_operandi,
+            'weather_condition' => $crime->weather_condition,
+            'assigned_officer' => $crime->assigned_officer,
+            'category' => $crime->category,
+            'barangay' => $crime->barangay,
+            'persons_involved_count' => $crime->personsInvolved->count(),
+            'persons_involved_types' => $personTypes,
+            'persons_involved' => $personsData,
+            'evidence_count' => $crime->evidence->count(),
+            'evidence_types' => $evidenceTypes,
+            'evidence' => $evidenceData,
+        ];
+    });
+
     $categories = \App\Models\CrimeCategory::select('id', 'category_name', 'color_code', 'icon')->get();
     $barangays = \App\Models\Barangay::select('id', 'barangay_name')->get();
-    
+
     return response()->json([
-        'incidents' => $crimes,
+        'incidents' => $crimesWithRelations,
         'categories' => $categories,
         'barangays' => $barangays
     ]);
