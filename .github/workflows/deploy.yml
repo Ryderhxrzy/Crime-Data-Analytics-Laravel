@@ -9,6 +9,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      PUSHER_APP_ID: test-app-id
+      PUSHER_APP_KEY: test-app-key
+      PUSHER_APP_SECRET: test-app-secret
+      BROADCAST_DRIVER: null
+
     steps:
     - uses: actions/checkout@v3
 
