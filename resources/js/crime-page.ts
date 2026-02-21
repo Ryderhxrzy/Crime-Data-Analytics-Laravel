@@ -265,6 +265,25 @@ class CrimePageManager {
             }
         });
 
+        // View Location Modal listeners
+        const closeViewLocationBtn = document.getElementById('closeViewLocationBtn');
+        const closeViewLocationModalBtn = document.getElementById('closeViewLocationModal');
+        const viewLocationModal = document.getElementById('viewLocationModal');
+
+        closeViewLocationBtn?.addEventListener('click', () => {
+            this.closeViewLocationModal();
+        });
+
+        closeViewLocationModalBtn?.addEventListener('click', () => {
+            this.closeViewLocationModal();
+        });
+
+        viewLocationModal?.addEventListener('click', (e: Event) => {
+            if (e.target === viewLocationModal) {
+                this.closeViewLocationModal();
+            }
+        });
+
         // Sidebar toggle for mobile
         this.setupSidebarToggle();
 
@@ -673,6 +692,7 @@ class CrimePageManager {
             const clearanceBadge = this.getClearanceBadge(incident.clearance_status);
 
             // Build location column (address, barangay, lat/long)
+            const hasCoordinates = incident.latitude && incident.longitude;
             const locationHTML = `
                 <div class="text-xs space-y-1">
                     <div><span class="font-medium text-gray-700">Barangay:</span> ${incident.barangay?.barangay_name || 'N/A'}</div>
@@ -681,6 +701,17 @@ class CrimePageManager {
                         <span><span class="font-medium text-gray-700">Lat:</span> <span class="font-mono">${incident.latitude || 'N/A'}</span></span>
                         <span><span class="font-medium text-gray-700">Lng:</span> <span class="font-mono">${incident.longitude || 'N/A'}</span></span>
                     </div>
+                    ${hasCoordinates ? `
+                        <div class="mt-2">
+                            <button class="view-map-btn px-3 py-1 bg-alertara-600 text-white text-xs rounded hover:bg-alertara-700 transition-colors"
+                                    data-lat="${incident.latitude}"
+                                    data-lng="${incident.longitude}"
+                                    data-title="${incident.incident_title}"
+                                    data-barangay="${incident.barangay?.barangay_name || 'Unknown'}">
+                                <i class="fas fa-map-location-dot mr-1"></i>View Map
+                            </button>
+                        </div>
+                    ` : ''}
                 </div>
             `;
 
@@ -811,7 +842,94 @@ class CrimePageManager {
 
         // Setup checkbox and expand listeners for the newly rendered table
         this.setupTableCheckboxListeners();
+        this.setupViewMapListeners();
         this.updatePagination();
+    }
+
+    private setupViewMapListeners(): void {
+        const viewMapButtons = document.querySelectorAll('.view-map-btn');
+        viewMapButtons.forEach(button => {
+            button.addEventListener('click', (e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const btn = button as HTMLElement;
+                const lat = parseFloat(btn.getAttribute('data-lat') || '0');
+                const lng = parseFloat(btn.getAttribute('data-lng') || '0');
+                const title = btn.getAttribute('data-title') || 'Crime Location';
+                const barangay = btn.getAttribute('data-barangay') || 'Unknown';
+
+                this.openViewLocationMap(lat, lng, title, barangay);
+            });
+        });
+    }
+
+    private openViewLocationMap(latitude: number, longitude: number, title: string, barangay: string): void {
+        const modal = document.getElementById('viewLocationModal');
+        if (!modal) return;
+
+        // Update modal content
+        const titleEl = document.getElementById('viewLocationTitle');
+        const subtitleEl = document.getElementById('viewLocationSubtitle');
+        const latEl = document.getElementById('viewLocationLat');
+        const lngEl = document.getElementById('viewLocationLng');
+        const barangayEl = document.getElementById('viewLocationBarangay');
+
+        if (titleEl) titleEl.textContent = title;
+        if (subtitleEl) subtitleEl.textContent = `Barangay: ${barangay}`;
+        if (latEl) latEl.textContent = latitude.toFixed(6);
+        if (lngEl) lngEl.textContent = longitude.toFixed(6);
+        if (barangayEl) barangayEl.textContent = barangay;
+
+        // Show modal
+        modal.classList.remove('hidden');
+
+        // Initialize or update map
+        setTimeout(() => {
+            this.initializeViewLocationMap(latitude, longitude);
+        }, 100);
+    }
+
+    private viewLocationMap: any = null;
+
+    private initializeViewLocationMap(latitude: number, longitude: number): void {
+        const mapContainer = document.getElementById('viewLocationMap');
+        if (!mapContainer) return;
+
+        // Destroy existing map if it exists
+        if (this.viewLocationMap) {
+            this.viewLocationMap.remove();
+            this.viewLocationMap = null;
+        }
+
+        // Initialize Leaflet map
+        this.viewLocationMap = (window as any).L.map('viewLocationMap').setView([latitude, longitude], 15);
+
+        // Add tile layer
+        (window as any).L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+        }).addTo(this.viewLocationMap);
+
+        // Add marker at the specific location
+        const marker = (window as any).L.marker([latitude, longitude]).addTo(this.viewLocationMap);
+        marker.bindPopup('<strong>Crime Location</strong><br/>Latitude: ' + latitude.toFixed(6) + '<br/>Longitude: ' + longitude.toFixed(6));
+        marker.openPopup();
+
+        // Optionally add a circle around the location
+        (window as any).L.circle([latitude, longitude], {
+            color: '#274d4c',
+            fillColor: '#95d5d0',
+            fillOpacity: 0.2,
+            radius: 50 // 50 meters radius
+        }).addTo(this.viewLocationMap);
+
+        // Invalidate size to ensure proper rendering
+        setTimeout(() => {
+            if (this.viewLocationMap) {
+                this.viewLocationMap.invalidateSize();
+            }
+        }, 50);
     }
 
     private getStatusBadge(status: string): string {
@@ -1006,6 +1124,9 @@ class CrimePageManager {
         try {
             const incident = this.incidents.find(i => i.id === id);
             if (!incident) return;
+
+            // Log the view action to audit logs
+            this.logIncidentView(id);
 
             // Create modal HTML with comprehensive incident data
             const modal = document.createElement('div');
@@ -1454,6 +1575,18 @@ class CrimePageManager {
         }
     }
 
+    private closeViewLocationModal(): void {
+        const modal = document.getElementById('viewLocationModal');
+        if (modal && modal instanceof HTMLElement) {
+            modal.classList.add('hidden');
+            // Destroy the map when closing
+            if (this.viewLocationMap) {
+                this.viewLocationMap.remove();
+                this.viewLocationMap = null;
+            }
+        }
+    }
+
     private loadCategoriesIntoModal(): void {
         const categorySelect = document.getElementById('modalCrimeCategory') as HTMLSelectElement;
         if (categorySelect && this.incidents.length > 0) {
@@ -1753,6 +1886,42 @@ class CrimePageManager {
         setTimeout(() => {
             document.body.removeChild(errorDiv);
         }, 3000);
+    }
+
+    private logIncidentView(incidentId: number): void {
+        // Log the incident view to audit logs
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+        // Get the incident code for logging
+        const incident = this.incidents.find(i => i.id === incidentId);
+        const incidentCode = incident?.incident_code || 'Unknown';
+
+        const headers: any = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        };
+
+        // Add CSRF token if available
+        if (csrfToken) {
+            headers['X-CSRF-TOKEN'] = csrfToken;
+        }
+
+        fetch(`/api/crimes/${incidentId}/log-view`, {
+            method: 'POST',
+            headers: headers,
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log(`📝 View logged for incident ${incidentCode} (ID: ${incidentId})`);
+            } else {
+                console.warn(`⚠️ Failed to log view for incident ${incidentCode}: ${data.message || 'Unknown error'}`);
+            }
+        })
+        .catch(error => {
+            console.error(`❌ Error logging incident view: ${error.message}`);
+        });
     }
 }
 
