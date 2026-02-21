@@ -45,7 +45,7 @@ jobs:
       run: npm run build
 
     - name: Run Tests
-      run: php artisan test --verbose
+      run: php artisan test
 
   deploy:
     needs: test
