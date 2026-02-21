@@ -44,6 +44,9 @@ jobs:
     - name: Build Assets
       run: npm run build
 
+    - name: Run Migrations
+      run: php artisan migrate --env=testing
+
     - name: Run Tests
       run: php artisan test
 
@@ -63,5 +66,6 @@ jobs:
             cd /var/www/Crime-Data-Analytics-Laravel
             git fetch origin main
             git reset --hard origin/main
+            php artisan migrate --force
             php artisan view:clear
             php artisan optimize:clear
