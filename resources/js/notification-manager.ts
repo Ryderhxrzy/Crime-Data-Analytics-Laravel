@@ -17,6 +17,7 @@ class NotificationManager {
     private static activeNotifications: Map<string, Notification> = new Map();
 
     static showIncidentNotification(title: string, incidentData: NotificationData['incidentData'], eventType: string): void {
+        console.log(`🔔 NotificationManager.showIncidentNotification called (ID: ${incidentData.id}, Event: ${eventType})`);
         // Request permission if not granted
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission().then(permission => {
