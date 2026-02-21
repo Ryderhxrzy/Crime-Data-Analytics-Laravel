@@ -32,8 +32,11 @@ jobs:
       with:
         node-version: '18'
 
+    - name: Clean npm Cache
+      run: npm cache clean --force
+
     - name: Install npm Dependencies
-      run: npm install
+      run: npm ci
 
     - name: Build Assets
       run: npm run build
