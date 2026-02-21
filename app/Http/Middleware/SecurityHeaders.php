@@ -22,9 +22,9 @@ class SecurityHeaders
             "default-src 'self'; " .
             "script-src 'self' 'unsafe-inline' {$viteAllowed} https://challenges.cloudflare.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://code.jquery.com https://cdn.jsdelivr.net https://cdn.datatables.net https://unpkg.com https://js.pusher.com https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js; " .
             "frame-src https://challenges.cloudflare.com; " .
-            "connect-src 'self' ws: wss: {$viteAllowed} https://challenges.cloudflare.com https://cdnjs.cloudflare.com https://oauth2.googleapis.com https://www.googleapis.com https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://cdn.datatables.net https://tile.openstreetmap.org https://unpkg.com https://*.pusher.com; " .
+            "connect-src 'self' ws: wss: {$viteAllowed} https://challenges.cloudflare.com https://cdnjs.cloudflare.com https://oauth2.googleapis.com https://www.googleapis.com https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://cdn.datatables.net https://tile.openstreetmap.org https://unpkg.com https://*.pusher.com https://api.cloudinary.com; " .
             "style-src 'self' 'unsafe-inline' {$viteAllowed} https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://cdn.datatables.net https://unpkg.com; " .
-            "img-src 'self' data: https: https://tile.openstreetmap.org; " .
+            "img-src 'self' data: https: https://tile.openstreetmap.org https://res.cloudinary.com; " .
             "font-src 'self' https://cdnjs.cloudflare.com; " .
             "form-action 'self';"
         );
