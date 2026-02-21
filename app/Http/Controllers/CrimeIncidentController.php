@@ -383,4 +383,39 @@ class CrimeIncidentController extends Controller
             'api_key' => $apiKey
         ]);
     }
+
+    /**
+     * Log when a crime incident is viewed
+     *
+     * @param int $id The crime incident ID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function logView($id)
+    {
+        try {
+            // Verify the incident exists
+            $incident = CrimeIncident::findOrFail($id);
+
+            // Log the view action
+            AuditLogService::logIncidentView($id, [
+                'incident_code' => $incident->incident_code,
+                'incident_title' => $incident->incident_title,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'View logged successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error logging incident view', [
+                'incident_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to log view'
+            ], 500);
+        }
+    }
 }
