@@ -22,7 +22,8 @@ class AuditLogService
         int $targetId,
         ?array $details = null
     ): AuditLog {
-        $adminId = Auth::id() ?? 0; // Use 0 if no authenticated user
+        // Try to get admin ID from JWT session first (centralized login), then fallback to Laravel Auth
+        $adminId = getUserId() ?? Auth::id() ?? 0;
 
         return AuditLog::create([
             'admin_id' => $adminId,
@@ -71,5 +72,17 @@ class AuditLogService
     public static function logEvidenceInsert(int $evidenceId, int $incidentId, array $details = []): AuditLog
     {
         return self::log('INSERT_EVIDENCE', 'crime_department_evidence', $evidenceId, $details);
+    }
+
+    /**
+     * Log incident view
+     *
+     * @param int $incidentId
+     * @param array $details
+     * @return AuditLog
+     */
+    public static function logIncidentView(int $incidentId, array $details = []): AuditLog
+    {
+        return self::log('VIEW_INCIDENT', 'crime_department_crime_incidents', $incidentId, $details);
     }
 }
