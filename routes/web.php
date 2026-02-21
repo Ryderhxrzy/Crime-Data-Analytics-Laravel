@@ -58,7 +58,9 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/crime-incident/create', [CrimeIncidentController::class, 'create'])->name('crime-incident.create');
     Route::post('/crime-incident', [CrimeIncidentController::class, 'store'])->name('crime-incident.store');
     Route::get('/api/crime-incident/{id}', [LandingController::class, 'getIncidentDetails'])->name('api.crime-incident.details');
+    Route::get('/api/crime-incident/{id}/details', [CrimeIncidentController::class, 'getDetails'])->name('api.crime-incident.full-details');
     Route::get('/api/crime-incident', [CrimeIncidentController::class, 'index'])->name('api.crime-incident');
+    Route::post('/api/cloudinary-signature', [CrimeIncidentController::class, 'generateCloudinarySignature'])->name('cloudinary.signature');
 
     // Reports routes
     Route::prefix('reports')->name('reports.')->group(function () {
