@@ -32,11 +32,14 @@ jobs:
       with:
         node-version: '18'
 
-    - name: Clean npm Cache
-      run: npm cache clean --force
+    - name: Clean npm Cache and Lock Files
+      run: |
+        npm cache clean --force
+        rm -rf node_modules
+        rm -f package-lock.json
 
     - name: Install npm Dependencies
-      run: npm ci
+      run: npm install
 
     - name: Build Assets
       run: npm run build
