@@ -229,13 +229,17 @@
                             <span>Crime</span>
                         </a>
                     </div>
+                </div>
 
+                <!-- Audit Logs Section -->
+                <div class="nav-section">
+                    <span class="section-label">History</span>
                     <!-- View History (Audit Logs) -->
                     <div class="tree-node mt-0.5">
                         <a href="{{ authUrl('audit-logs.index') }}"
                            class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('audit-logs.*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                             <i class="fas fa-history w-4 h-4 mr-3 flex-shrink-0"></i>
-                            <span>View History</span>
+                            <span>Audit Logs</span>
                         </a>
                     </div>
                 </div>
