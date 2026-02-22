@@ -131,6 +131,53 @@ class NotificationManager {
             default: return 'ℹ️';
         }
     }
+
+    /**
+     * Show generic notification (for non-incident events like data decryption)
+     */
+    static showGenericNotification(title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info'): void {
+        console.log(`🔔 NotificationManager.showGenericNotification called (Title: ${title}, Type: ${type})`);
+
+        // Request permission if not granted
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    this.createGenericDesktopNotification(title, message, type);
+                }
+            });
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+            this.createGenericDesktopNotification(title, message, type);
+        }
+    }
+
+    /**
+     * Create generic desktop notification
+     */
+    private static createGenericDesktopNotification(title: string, message: string, _type?: 'success' | 'error' | 'warning' | 'info'): void {
+        try {
+            const notification = new Notification(title, {
+                body: message,
+                icon: '/images/alertara.png',
+                badge: '/images/alertara.png',
+                tag: `generic-notification-${Date.now()}`,
+                requireInteraction: false,
+                silent: false
+            });
+
+            // Auto-close after 5 seconds
+            setTimeout(() => {
+                notification.close();
+            }, 5000);
+
+            // Close on click
+            notification.onclick = () => {
+                notification.close();
+                window.focus();
+            };
+        } catch (error) {
+            console.error('Error creating generic desktop notification:', error);
+        }
+    }
 }
 
 // Export for global access
