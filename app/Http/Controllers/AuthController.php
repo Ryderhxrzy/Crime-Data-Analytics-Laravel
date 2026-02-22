@@ -41,7 +41,7 @@ class AuthController extends Controller
         $ipAddress = $request->ip();
         $userAgent = $request->userAgent();
 
-        // Find user by email
+        // Find user by email in centralized_admin_user table
         $user = User::where('email', $email)->first();
 
         if (!$user) {
@@ -50,47 +50,39 @@ class AuthController extends Controller
             ])->onlyInput('email');
         }
 
-        // Check if account is locked
-        if ($user->status === 'lock') {
+        // Check if account is locked (unlock_token indicates locked status)
+        if ($user->unlock_token && $user->unlock_token_expiry && $user->unlock_token_expiry->isFuture()) {
             return back()->withErrors([
                 'email' => 'Your account has been locked due to multiple failed login attempts. Please check your email for unlock instructions.',
             ])->onlyInput('email');
         }
 
-        // Check if account is verified
-        if ($user->account_status === 'unverified') {
-            return back()->withErrors([
-                'email' => 'Your account is not verified. Please contact the super admin.',
-            ])->onlyInput('email');
-        }
-
-        // Verify password
-        if (!password_verify($password, $user->password)) {
+        // Verify password using password_hash from centralized table
+        if (!password_verify($password, $user->password_hash)) {
             $currentAttempts = intval($user->attempt_count) + 1;
-            $newStatus = $user->status;
 
             if ($currentAttempts >= 3) {
-                $newStatus = 'lock';
-            }
-
-            $user->update([
-                'attempt_count' => $currentAttempts,
-                'status' => $newStatus,
-                'ip_address' => $ipAddress,
-            ]);
-
-            // If account is now locked, send unlock email
-            if ($newStatus === 'lock') {
+                // Lock account by setting unlock token
                 $this->sendAccountLockedEmail($user, $ipAddress);
+                $user->update([
+                    'attempt_count' => $currentAttempts,
+                    'ip_address' => $ipAddress,
+                ]);
                 return back()->withErrors([
                     'email' => 'Account locked. Check your email for unlock instructions.',
                 ])->onlyInput('email');
-            } else {
-                $remainingAttempts = 3 - $currentAttempts;
-                return back()->withErrors([
-                    'email' => "Invalid credentials. $remainingAttempts attempt(s) remaining.",
-                ])->onlyInput('email');
             }
+
+            // Update attempt count and IP
+            $user->update([
+                'attempt_count' => $currentAttempts,
+                'ip_address' => $ipAddress,
+            ]);
+
+            $remainingAttempts = 3 - $currentAttempts;
+            return back()->withErrors([
+                'email' => "Invalid credentials. $remainingAttempts attempt(s) remaining.",
+            ])->onlyInput('email');
         }
 
         // Password is correct - check if 2FA is enabled
@@ -114,10 +106,10 @@ class AuthController extends Controller
 
         // 2FA not enabled - login directly
         $user->update([
-            'status' => 'active',
             'attempt_count' => 0,
             'ip_address' => $ipAddress,
             'last_login' => now(),
+            'last_activity' => now(),
         ]);
 
         Auth::login($user);
@@ -131,6 +123,7 @@ class AuthController extends Controller
         $unlockToken = Str::random(64);
         $unlockTokenExpiry = now()->addHour();
 
+        // Update with unlock token for locked state
         $user->update([
             'unlock_token' => $unlockToken,
             'unlock_token_expiry' => $unlockTokenExpiry,
@@ -278,10 +271,10 @@ class AuthController extends Controller
 
         // Update user and login
         $user->update([
-            'status' => 'active',
             'attempt_count' => 0,
             'ip_address' => $pendingIp,
             'last_login' => now(),
+            'last_activity' => now(),
         ]);
 
         Auth::login($user);
@@ -351,7 +344,6 @@ class AuthController extends Controller
         }
 
         $user->update([
-            'status' => 'active',
             'attempt_count' => 0,
             'unlock_token' => null,
             'unlock_token_expiry' => null,
@@ -494,33 +486,23 @@ class AuthController extends Controller
 
             $googleUser = json_decode((string) $userResponse->getBody(), true);
 
-            // Check if user exists - don't auto-create
+            // Check if user exists in centralized_admin_user table
             $user = User::where('email', $googleUser['email'])->first();
 
             if (!$user) {
                 return redirect('/')->withErrors(['error' => 'Account not found. Please contact administrator to create your account.']);
             }
 
-            // Check if account is verified
-            if ($user->account_status === 'unverified') {
-                return redirect('/')->withErrors(['error' => 'Your account is not verified. Please contact the super admin.']);
-            }
-
             // Check if account is locked
-            if ($user->status === 'lock') {
+            if ($user->unlock_token && $user->unlock_token_expiry && $user->unlock_token_expiry->isFuture()) {
                 return redirect('/')->withErrors(['error' => 'Your account has been locked. Please contact administrator.']);
             }
 
-            // Update google_id if not set
-            if (!$user->google_id) {
-                $user->update(['google_id' => $googleUser['id']]);
-            }
-
-            // Update last login and ip address
+            // Update last login, attempt count reset, and activity timestamp
             $user->update([
-                'status' => 'active',
                 'attempt_count' => 0,
                 'last_login' => now(),
+                'last_activity' => now(),
                 'ip_address' => $request->ip(),
             ]);
 
