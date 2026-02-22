@@ -752,11 +752,12 @@ class CrimePageManager {
                 </div>
             `;
 
-            // Simplify persons details for table column - show only first with see more
+            // Display persons involved - show only first with Show More button
             let personsTableHTML = '<span class="text-gray-500 text-xs">None</span>';
             if (incident.persons_involved && incident.persons_involved.length > 0) {
                 const firstPerson = incident.persons_involved[0];
                 const totalPersons = incident.persons_involved.length;
+
                 personsTableHTML = `
                     <div data-expand-target="${incident.id}-persons" class="text-xs mb-2 pb-2">
                         <span class="inline-block bg-purple-200 text-purple-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">${firstPerson.person_type.toUpperCase()}</span>
@@ -766,26 +767,27 @@ class CrimePageManager {
                             <div><span class="font-medium text-gray-700">Other:</span> <span class="blur-text-badge">${firstPerson.other_info}</span></div>
                         </div>
                     </div>
-                    ${totalPersons > 1 ? `<button class="see-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold" data-incident-id="${incident.id}" data-target="persons">See more (${totalPersons - 1} more)</button>` : ''}
+                    ${totalPersons > 1 ? `<button class="show-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold" data-incident-id="${incident.id}" data-target="persons">Show more (${totalPersons - 1} more)</button>` : ''}
                 `;
             }
 
-            // Simplify evidence details for table column - show only first with see more
+            // Display evidence details - show only first with Show More button
             let evidenceTableHTML = '<span class="text-gray-500 text-xs">None</span>';
             if (incident.evidence && incident.evidence.length > 0) {
                 const firstEvidence = incident.evidence[0];
                 const totalEvidence = incident.evidence.length;
+
                 evidenceTableHTML = `
                     <div data-expand-target="${incident.id}-evidence" class="text-xs mb-2 pb-2">
                         <span class="inline-block bg-orange-200 text-orange-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">${firstEvidence.evidence_type}</span>
                         <div class="ml-1">
                             <div><span class="font-medium text-gray-700">Desc:</span> <span class="blur-text-badge">${firstEvidence.description}</span></div>
                             <div><span class="font-medium text-gray-700">Link:</span>
-                                ${firstEvidence.evidence_link ? `<a href="${firstEvidence.evidence_link}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-xs font-semibold"><i class="fas fa-external-link-alt mr-1"></i>View</a>` : '<span class="text-gray-500 text-xs">N/A</span>'}
+                                ${firstEvidence.evidence_link ? `<span class="blur-text-badge text-xs">${firstEvidence.evidence_link}</span>` : '<span class="text-gray-500 text-xs">N/A</span>'}
                             </div>
                         </div>
                     </div>
-                    ${totalEvidence > 1 ? `<button class="see-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold" data-incident-id="${incident.id}" data-target="evidence">See more (${totalEvidence - 1} more)</button>` : ''}
+                    ${totalEvidence > 1 ? `<button class="show-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold" data-incident-id="${incident.id}" data-target="evidence">Show more (${totalEvidence - 1} more)</button>` : ''}
                 `;
             }
 

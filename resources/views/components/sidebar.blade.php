@@ -156,35 +156,6 @@
                     </div>
                 </div>
 
-                <!-- Reports & Alerts Section -->
-                <div class="nav-section">
-                    <span class="section-label">Reports</span>
-
-                    <!-- Reports (Collapsible) -->
-                    <div class="mt-0.5">
-                        <button class="crime-reports-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors"
-                                type="button">
-                            <span class="flex items-center">
-                                <i class="fas fa-file-pdf w-4 h-4 mr-3 flex-shrink-0"></i>
-                                <span>Reports</span>
-                            </span>
-                            <i class="fas fa-chevron-right text-xs chevron-icon text-alertara-600"></i>
-                        </button>
-                        <div class="crime-reports-content dropdown-menu submenu-tree">
-                            <a href="#reports"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
-                                <i class="fas fa-eye w-4 h-4 mr-3 flex-shrink-0"></i>
-                                <span>View Reports</span>
-                            </a>
-                            <a href="#reports-download"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
-                                <i class="fas fa-download w-4 h-4 mr-3 flex-shrink-0"></i>
-                                <span>Download Report</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="nav-section">
                     <span class="section-label">Alerts</span>
                     <!-- Alerts (Collapsible) -->

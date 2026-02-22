@@ -217,6 +217,13 @@ class DataDecryptionController extends Controller
                 'ip_address' => $request->ip(),
             ]);
 
+            // Cache decrypted data in Redis for 30 minutes per incident
+            // This allows instant decryption on page refresh without re-decrypting
+            $this->cacheDecryptedData($userId, $incidentId, [
+                'persons_involved' => $decryptedPersons,
+                'evidence_items' => $decryptedEvidence,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Data decrypted successfully.',
@@ -333,8 +340,16 @@ class DataDecryptionController extends Controller
     public function invalidateOtp(Request $request)
     {
         try {
+            $authUser = session('auth_user');
+            $userId = $authUser['id'] ?? auth()->id();
             $sessionId = session()->getId();
+
             OtpDecryptionService::invalidateOtp($sessionId);
+
+            // Clear all cached decrypted data for this user
+            if ($userId) {
+                $this->clearUserCachedData($userId);
+            }
 
             return response()->json([
                 'success' => true,
@@ -347,6 +362,126 @@ class DataDecryptionController extends Controller
                 'success' => false,
                 'message' => 'Error invalidating OTP.',
             ], 500);
+        }
+    }
+
+    /**
+     * Get cached decrypted data for an incident
+     * GET /api/decrypt-data/get-cached/{incident_id}
+     *
+     * @param int $incidentId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getCachedData($incidentId)
+    {
+        try {
+            $authUser = session('auth_user');
+            $userId = $authUser['id'] ?? auth()->id();
+
+            if (!$userId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User authentication required.',
+                ], 401);
+            }
+
+            // Try to get cached data from Redis
+            $cacheKey = "decrypted_data:user_{$userId}:incident_{$incidentId}";
+            $cachedData = \Illuminate\Support\Facades\Redis::get($cacheKey);
+
+            if (!$cachedData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No cached data available.',
+                ], 404);
+            }
+
+            $decryptedData = json_decode($cachedData, true);
+
+            Log::info('Retrieved cached decrypted data', [
+                'user_id' => $userId,
+                'incident_id' => $incidentId,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $decryptedData,
+            ]);
+        } catch (Exception $e) {
+            Log::error('Error retrieving cached data', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error retrieving cached data.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Cache decrypted data in Redis for 30 minutes per incident per user
+     *
+     * @param int $userId
+     * @param int $incidentId
+     * @param array $decryptedData
+     * @return void
+     */
+    private function cacheDecryptedData($userId, $incidentId, $decryptedData)
+    {
+        try {
+            $cacheKey = "decrypted_data:user_{$userId}:incident_{$incidentId}";
+            $ttl = 30 * 60; // 30 minutes in seconds
+
+            \Illuminate\Support\Facades\Redis::setex(
+                $cacheKey,
+                $ttl,
+                json_encode($decryptedData)
+            );
+
+            Log::info('Cached decrypted data in Redis', [
+                'user_id' => $userId,
+                'incident_id' => $incidentId,
+                'ttl' => $ttl,
+            ]);
+        } catch (Exception $e) {
+            Log::error('Failed to cache decrypted data', [
+                'error' => $e->getMessage(),
+                'user_id' => $userId,
+                'incident_id' => $incidentId,
+            ]);
+            // Don't throw - caching failure shouldn't block the response
+        }
+    }
+
+    /**
+     * Clear all cached decrypted data for a user
+     * Called on logout or session invalidation
+     *
+     * @param int $userId
+     * @return void
+     */
+    private function clearUserCachedData($userId)
+    {
+        try {
+            // Get all cache keys for this user using pattern
+            $pattern = "decrypted_data:user_{$userId}:*";
+            $keys = \Illuminate\Support\Facades\Redis::keys($pattern);
+
+            if ($keys && is_array($keys)) {
+                foreach ($keys as $key) {
+                    \Illuminate\Support\Facades\Redis::del($key);
+                }
+
+                Log::info('Cleared cached decrypted data for user', [
+                    'user_id' => $userId,
+                    'keys_deleted' => count($keys),
+                ]);
+            }
+        } catch (Exception $e) {
+            Log::error('Failed to clear user cached data', [
+                'error' => $e->getMessage(),
+                'user_id' => $userId,
+            ]);
+            // Don't throw - cache clearing failure shouldn't block the response
         }
     }
 }

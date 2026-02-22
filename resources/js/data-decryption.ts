@@ -32,6 +32,8 @@ class DataDecryptionManager {
 
     private jwtToken: string = '';
     private isDecryptionSessionValid: boolean = false;
+    private autoDecryptInProgress: boolean = false;
+    private decryptedIncidents: Set<number> = new Set();
 
     constructor() {
         this.initializeElements();
@@ -127,38 +129,280 @@ class DataDecryptionManager {
 
     /**
      * Auto-decrypt table data if session is valid
+     * Prevents duplicate requests and rate limiting
+     * Tries cached data first, then decrypts if needed
      */
     private async autoDecryptTableData(): Promise<void> {
+        // Prevent multiple concurrent auto-decrypt calls
+        if (this.autoDecryptInProgress) {
+            console.log('[Decryption] Auto-decryption already in progress, skipping...');
+            return;
+        }
+
+        this.autoDecryptInProgress = true;
+
         try {
             // Get all incident rows - look for data-incident-id attribute
             const incidentRows = document.querySelectorAll('[data-incident-id]');
 
+            // Process requests with throttling to avoid rate limit (60 req/min = 1 req/sec)
             for (const row of incidentRows) {
                 const incidentId = row.getAttribute('data-incident-id');
-                if (incidentId) {
-                    // Fetch decrypted data for this incident
-                    const response = await fetch('/decrypt-data/verify-otp', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-Token': this.getCsrfToken(),
-                            'Authorization': this.jwtToken ? `Bearer ${this.jwtToken}` : '',
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            otp: 'session_valid', // Pseudo OTP - backend will check session
-                            incident_id: incidentId,
-                        }),
-                    });
+                if (incidentId && !this.decryptedIncidents.has(parseInt(incidentId))) {
+                    // Add to set to prevent duplicate requests
+                    this.decryptedIncidents.add(parseInt(incidentId));
 
-                    const data = await response.json();
-                    if (data.success) {
-                        this.updateTableWithDecryptedData(data.data, parseInt(incidentId));
+                    // Show loading indicators in columns
+                    this.showLoadingInColumns(parseInt(incidentId));
+
+                    try {
+                        // First, try to get cached data from Redis
+                        const cachedData = await this.getCachedDecryptedData(incidentId);
+                        if (cachedData) {
+                            console.log(`[Decryption] Using cached data for incident ${incidentId}`);
+                            this.updateTableWithDecryptedData(cachedData, parseInt(incidentId));
+                            // Add small delay to maintain throttle behavior
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                            continue;
+                        }
+
+                        // If no cached data, decrypt on-demand
+                        const response = await fetch('/decrypt-data/verify-otp', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-Token': this.getCsrfToken(),
+                                'Authorization': this.jwtToken ? `Bearer ${this.jwtToken}` : '',
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                otp: 'session_valid', // Pseudo OTP - backend will check session
+                                incident_id: incidentId,
+                            }),
+                        });
+
+                        const data = await response.json();
+                        if (data.success) {
+                            this.updateTableWithDecryptedData(data.data, parseInt(incidentId));
+                            console.log(`[Decryption] Successfully decrypted incident ${incidentId}`);
+                        } else if (response.status === 410) {
+                            // Session expired
+                            this.isDecryptionSessionValid = false;
+                            console.log('[Decryption] Session expired, will need new OTP');
+                            break;
+                        }
+                    } catch (error) {
+                        console.warn(`[Decryption] Failed to decrypt incident ${incidentId}:`, error);
+                        // Remove loading indicator on error
+                        this.removeLoadingFromColumns(parseInt(incidentId));
                     }
+
+                    // Add throttle delay - cached items are fast, new decryption respects rate limit
+                    await new Promise(resolve => setTimeout(resolve, 200));
                 }
             }
         } catch (error) {
-            console.warn('Auto-decryption failed:', error);
+            console.warn('[Decryption] Auto-decryption failed:', error);
+        } finally {
+            this.autoDecryptInProgress = false;
+        }
+    }
+
+    /**
+     * Show loading spinner in columns while decrypting
+     */
+    private showLoadingInColumns(incidentId: number): void {
+        const personsCells = document.querySelectorAll(`[data-expand-target="${incidentId}-persons"]`);
+        const evidenceCells = document.querySelectorAll(`[data-expand-target="${incidentId}-evidence"]`);
+
+        const loadingHTML = `<div class="flex items-center gap-2"><i class="fas fa-spinner fa-spin text-blue-500"></i><span class="text-xs text-gray-600">Decrypting...</span></div>`;
+
+        personsCells.forEach(cell => {
+            cell.innerHTML = loadingHTML;
+        });
+
+        evidenceCells.forEach(cell => {
+            cell.innerHTML = loadingHTML;
+        });
+    }
+
+    /**
+     * Remove loading indicator from columns
+     */
+    private removeLoadingFromColumns(incidentId: number): void {
+        const personsCells = document.querySelectorAll(`[data-expand-target="${incidentId}-persons"]`);
+        const evidenceCells = document.querySelectorAll(`[data-expand-target="${incidentId}-evidence"]`);
+
+        personsCells.forEach(cell => {
+            if (cell.innerHTML.includes('fa-spinner')) {
+                cell.innerHTML = '<span class="text-gray-500 text-xs">None</span>';
+            }
+        });
+
+        evidenceCells.forEach(cell => {
+            if (cell.innerHTML.includes('fa-spinner')) {
+                cell.innerHTML = '<span class="text-gray-500 text-xs">None</span>';
+            }
+        });
+    }
+
+    /**
+     * Try to get cached decrypted data from Redis
+     */
+    private async getCachedDecryptedData(incidentId: string): Promise<any | null> {
+        try {
+            const response = await fetch(`/decrypt-data/get-cached/${incidentId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': this.jwtToken ? `Bearer ${this.jwtToken}` : '',
+                },
+                credentials: 'include',
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.data) {
+                    return data.data;
+                }
+            }
+        } catch (error) {
+            console.log(`[Decryption] No cached data for incident ${incidentId}`);
+        }
+        return null;
+    }
+
+    /**
+     * Handle Show More button click - expand items inline
+     */
+    private handleShowMore(incidentId: number, dataType: 'persons' | 'evidence'): void {
+        console.log(`[Decryption] handleShowMore called: incidentId=${incidentId}, dataType=${dataType}`);
+
+        const cellSelector = `[data-expand-target="${incidentId}-${dataType}"]`;
+        const cells = document.querySelectorAll(cellSelector);
+        console.log(`[Decryption] Found ${cells.length} cells for selector: ${cellSelector}`);
+
+        cells.forEach((cell, index) => {
+            console.log(`[Decryption] Processing cell ${index}:`, cell);
+
+            const incidentRow = cell.closest('tr');
+            console.log(`[Decryption] Found row:`, incidentRow);
+
+            if (!incidentRow) {
+                console.warn(`[Decryption] No row found for cell`);
+                return;
+            }
+
+            const button = incidentRow.querySelector(`.show-more-button[data-target="${dataType}"]`) as HTMLButtonElement;
+            console.log(`[Decryption] Found button:`, button);
+
+            if (!button) {
+                console.warn(`[Decryption] No button found in row for dataType=${dataType}`);
+                return;
+            }
+
+            const isExpanded = button.getAttribute('data-expanded') === 'true';
+            const cachedDataAttr = incidentRow.getAttribute(`data-${dataType}-cached`);
+            const totalItems = parseInt(button.getAttribute('data-total') || '0');
+
+            console.log(`[Decryption] State: isExpanded=${isExpanded}, totalItems=${totalItems}`);
+            console.log(`[Decryption] Cached data attribute exists:`, !!cachedDataAttr);
+            if (cachedDataAttr) {
+                console.log(`[Decryption] Cached data (first 100 chars):`, cachedDataAttr.substring(0, 100));
+            }
+
+            // Try to parse cached data if it exists
+            let items = null;
+            if (cachedDataAttr) {
+                try {
+                    items = JSON.parse(cachedDataAttr);
+                    console.log(`[Decryption] Successfully parsed ${items?.length || 0} items`);
+                } catch (e) {
+                    console.warn(`[Decryption] Failed to parse cached ${dataType} data:`, e, 'Raw:', cachedDataAttr);
+                    return;
+                }
+            }
+
+            if (!isExpanded && items) {
+                // Show all items
+                console.log(`[Decryption] Showing all items (${items.length})`);
+                button.setAttribute('data-expanded', 'true');
+                button.textContent = 'Show less';
+                this.renderAllItems(cell, items, dataType, incidentId);
+            } else if (isExpanded && items) {
+                // Show only first item
+                console.log(`[Decryption] Showing first item only`);
+                button.setAttribute('data-expanded', 'false');
+                button.textContent = `Show more (${totalItems - 1} more)`;
+                if (items.length > 0) {
+                    this.renderFirstItem(cell, items[0], dataType, incidentId);
+                }
+            } else {
+                // No cached data found
+                console.warn(`[Decryption] No cached data found. items=${items}, isExpanded=${isExpanded}`);
+            }
+        });
+    }
+
+    /**
+     * Render only the first item
+     */
+    private renderFirstItem(cell: Element, item: any, dataType: 'persons' | 'evidence', incidentId: number): void {
+        if (dataType === 'persons') {
+            cell.innerHTML = `
+                <span class="inline-block bg-green-200 text-green-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">✓ ${(item.role || 'Person').toUpperCase()}</span>
+                <div class="ml-1 text-gray-900 font-medium text-xs">
+                    <div><span class="text-gray-700">Name:</span> <strong>${item.first_name || ''}${item.middle_name ? ' ' + item.middle_name : ''} ${item.last_name || ''}</strong></div>
+                    <div><span class="text-gray-700">Contact:</span> <strong>${item.contact_number || 'N/A'}</strong></div>
+                    <div><span class="text-gray-700">Other:</span> <strong>${item.other_info || 'N/A'}</strong></div>
+                </div>
+            `;
+        } else {
+            cell.innerHTML = `
+                <span class="inline-block bg-green-200 text-green-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">✓ ${item.type || 'Evidence'}</span>
+                <div class="ml-1 text-gray-900 font-medium text-xs">
+                    <div><span class="text-gray-700">Desc:</span> <strong>${item.description || 'N/A'}</strong></div>
+                    <div><span class="text-gray-700">Link:</span>
+                        ${item.evidence_link ? `<a href="${item.evidence_link}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 font-semibold"><i class="fas fa-external-link-alt mr-1"></i>View</a>` : '<span class="text-gray-500">N/A</span>'}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Render all items
+     */
+    private renderAllItems(cell: Element, items: any[], dataType: 'persons' | 'evidence', incidentId: number): void {
+        console.log(`[Decryption] renderAllItems called: dataType=${dataType}, itemCount=${items.length}, cell=`, cell);
+
+        if (dataType === 'persons') {
+            const html = items.map((person: any) => `
+                <div class="mb-3 pb-3 border-b border-gray-100 last:border-b-0">
+                    <span class="inline-block bg-green-200 text-green-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">✓ ${(person.role || 'Person').toUpperCase()}</span>
+                    <div class="ml-1 text-gray-900 font-medium text-xs">
+                        <div><span class="text-gray-700">Name:</span> <strong>${person.first_name || ''}${person.middle_name ? ' ' + person.middle_name : ''} ${person.last_name || ''}</strong></div>
+                        <div><span class="text-gray-700">Contact:</span> <strong>${person.contact_number || 'N/A'}</strong></div>
+                        <div><span class="text-gray-700">Other:</span> <strong>${person.other_info || 'N/A'}</strong></div>
+                    </div>
+                </div>
+            `).join('');
+            cell.innerHTML = html;
+            console.log(`[Decryption] Rendered ${items.length} persons items`);
+        } else {
+            const html = items.map((evidence: any) => `
+                <div class="mb-3 pb-3 border-b border-gray-100 last:border-b-0">
+                    <span class="inline-block bg-green-200 text-green-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">✓ ${evidence.type || 'Evidence'}</span>
+                    <div class="ml-1 text-gray-900 font-medium text-xs">
+                        <div><span class="text-gray-700">Desc:</span> <strong>${evidence.description || 'N/A'}</strong></div>
+                        <div><span class="text-gray-700">Link:</span>
+                            ${evidence.evidence_link ? `<a href="${evidence.evidence_link}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 font-semibold"><i class="fas fa-external-link-alt mr-1"></i>View</a>` : '<span class="text-gray-500">N/A</span>'}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            cell.innerHTML = html;
+            console.log(`[Decryption] Rendered ${items.length} evidence items`);
         }
     }
 
@@ -198,14 +442,15 @@ class DataDecryptionManager {
             }
         });
 
-        // Delegate "See More" button clicks
+        // Delegate Show More button clicks - expand items inline
         document.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
-            if (target.classList.contains('see-more-button')) {
-                const incidentId = target.getAttribute('data-incident-id');
-                const dataType = target.getAttribute('data-target');
+            const button = target.closest('.show-more-button') as HTMLButtonElement;
+            if (button) {
+                const incidentId = button.getAttribute('data-incident-id');
+                const dataType = button.getAttribute('data-target');
                 if (incidentId && dataType) {
-                    this.handleSeeMore(parseInt(incidentId), dataType);
+                    this.handleShowMore(parseInt(incidentId), dataType);
                 }
             }
         });
@@ -213,92 +458,51 @@ class DataDecryptionManager {
         // Listen for table re-render events (pagination, filtering, etc.)
         document.addEventListener('crimePageTableRendered', () => {
             console.log('[Decryption] Table re-rendered, triggering auto-decryption...');
-            this.retryAutoDecryption();
-        });
-    }
 
-    /**
-     * Handle "See More" button click
-     */
-    private handleSeeMore(incidentId: number, dataType: 'persons' | 'evidence'): void {
-        const decryptedData = window.decryptedData || {};
+            // Get current incidents in the table
+            const incidentRows = document.querySelectorAll('[data-incident-id]');
+            const currentIncidentIds = new Set<number>();
 
-        if (dataType === 'persons' && window.decryptedPersonsInvolved && window.decryptedPersonsInvolved.length > 0) {
-            this.showExpandedData('Persons Involved', window.decryptedPersonsInvolved, 'persons');
-        } else if (dataType === 'evidence' && window.decryptedEvidenceItems && window.decryptedEvidenceItems.length > 0) {
-            this.showExpandedData('Evidence Items', window.decryptedEvidenceItems, 'evidence');
-        }
-    }
+            incidentRows.forEach(row => {
+                const incidentId = parseInt(row.getAttribute('data-incident-id') || '0');
+                if (incidentId) {
+                    currentIncidentIds.add(incidentId);
+                }
+            });
 
-    /**
-     * Show expanded data view
-     */
-    private showExpandedData(title: string, items: any[], type: 'persons' | 'evidence'): void {
-        // Create modal for expanded view
-        const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center';
+            // If table shows different incidents than what we've decrypted,
+            // it means new data has loaded (pagination, filtering, or data updates)
+            // Clear tracking so we can decrypt all data including newly added persons/evidence
+            let shouldReset = false;
 
-        let content = '';
-        if (type === 'persons') {
-            content = items.map((person) => `
-                <div class="bg-white p-4 rounded-lg border-l-4 border-alertara-500 mb-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="font-bold text-lg text-alertara-700">${person.role || 'Person'}</span>
-                        <span class="text-xs px-2 py-1 bg-alertara-100 text-alertara-700 rounded-full">${person.role || 'Unknown'}</span>
-                    </div>
-                    <div class="space-y-2 text-sm">
-                        <div><span class="text-gray-600 font-medium">Name:</span> <strong>${person.first_name || ''}${person.middle_name ? ' ' + person.middle_name : ''} ${person.last_name || ''}</strong></div>
-                        <div><span class="text-gray-600 font-medium">Contact:</span> <strong>${person.contact_number || 'N/A'}</strong></div>
-                        <div><span class="text-gray-600 font-medium">Additional Info:</span> <strong>${person.other_info || 'N/A'}</strong></div>
-                    </div>
-                </div>
-            `).join('');
-        } else {
-            content = items.map((evidence) => `
-                <div class="bg-white p-4 rounded-lg border-l-4 border-green-500 mb-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="font-bold text-lg text-green-700">${evidence.type || 'Evidence'}</span>
-                        <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">${evidence.type || 'Unknown'}</span>
-                    </div>
-                    <div class="space-y-2 text-sm">
-                        <div><span class="text-gray-600 font-medium">Description:</span> <strong>${evidence.description || 'N/A'}</strong></div>
-                        <div><span class="text-gray-600 font-medium">Evidence Link:</span>
-                            ${evidence.evidence_link ? `<a href="${evidence.evidence_link}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 font-medium"><i class="fas fa-external-link-alt mr-1"></i>View Evidence</a>` : '<strong class="text-gray-500">N/A</strong>'}
-                        </div>
-                        <div><span class="text-gray-600 font-medium">Collected Date:</span> <strong>${evidence.collected_date || 'N/A'}</strong></div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        modal.innerHTML = `
-            <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
-                <div class="flex items-center justify-between mb-6 sticky top-0 bg-white pb-4 border-b">
-                    <h2 class="text-2xl font-bold text-gray-900">${title}</h2>
-                    <button class="close-expanded-modal text-gray-400 hover:text-gray-600 text-2xl font-bold">
-                        ×
-                    </button>
-                </div>
-                <div class="space-y-4">
-                    ${content}
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-
-        // Close button
-        modal.querySelector('.close-expanded-modal')?.addEventListener('click', () => {
-            modal.remove();
-        });
-
-        // Close on background click
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
+            // Check if any previously decrypted incidents are no longer visible
+            // or if there are new incidents visible
+            if (this.decryptedIncidents.size !== currentIncidentIds.size) {
+                shouldReset = true;
+            } else {
+                // Check if the incident IDs have changed
+                for (const id of this.decryptedIncidents) {
+                    if (!currentIncidentIds.has(id)) {
+                        shouldReset = true;
+                        break;
+                    }
+                }
             }
+
+            // Reset tracking if table data has changed
+            if (shouldReset) {
+                console.log('[Decryption] Table data changed, resetting decryption tracking...');
+                this.decryptedIncidents.clear();
+            }
+
+            // Trigger auto-decryption for all visible incidents immediately
+            // Use small delay to ensure table DOM is fully rendered
+            setTimeout(() => {
+                this.autoDecryptTableData();
+            }, 100);
         });
     }
+
 
     /**
      * Get JWT token from session storage
@@ -519,17 +723,14 @@ class DataDecryptionManager {
             this.showSuccessMessage('verifySuccessMessage', 'verifySuccessText',
                 'OTP verified! Decrypting data...');
 
-            // Store decrypted data globally
-            window.decryptedData = data.data;
-            window.decryptedPersonsInvolved = data.data.persons_involved || [];
-            window.decryptedEvidenceItems = data.data.evidence_items || [];
-
             // Mark session as decrypted
             this.isDecryptionSessionValid = true;
             sessionStorage.setItem('decryption_session_valid', 'true');
 
             // Update table with decrypted data
             setTimeout(() => {
+                // Track that this incident has been decrypted
+                this.decryptedIncidents.add(parseInt(incidentId));
                 this.updateTableWithDecryptedData(data.data, parseInt(incidentId));
 
                 // Show desktop notification using NotificationManager
@@ -861,50 +1062,102 @@ class DataDecryptionManager {
 
     /**
      * Update table cells with decrypted data
+     * Displays only first item with Show More button
      */
     private updateTableWithDecryptedData(data: any, incidentId: number): void {
-        // Update persons involved in table
+        // Update persons involved in table - show only FIRST item
         if (data.persons_involved && data.persons_involved.length > 0) {
             const personsCells = document.querySelectorAll(`[data-expand-target="${incidentId}-persons"]`);
             personsCells.forEach((cell) => {
                 const firstPerson = data.persons_involved[0];
                 const totalPersons = data.persons_involved.length;
-                const personRole = (firstPerson.role || 'Person').toUpperCase();
 
-                cell.innerHTML = `
-                    <div class="text-xs mb-2 pb-2">
-                        <span class="inline-block bg-green-200 text-green-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">✓ ${personRole}</span>
-                        <div class="ml-1 text-gray-900 font-medium">
-                            <div><span class="text-gray-700">Name:</span> <strong>${firstPerson.first_name || ''}${firstPerson.middle_name ? ' ' + firstPerson.middle_name : ''} ${firstPerson.last_name || ''}</strong></div>
-                            <div><span class="text-gray-700">Contact:</span> <strong>${firstPerson.contact_number || 'N/A'}</strong></div>
-                            <div><span class="text-gray-700">Other:</span> <strong>${firstPerson.other_info || 'N/A'}</strong></div>
-                        </div>
-                    </div>
-                    ${totalPersons > 1 ? `<button class="see-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer" data-incident-id="${incidentId}" data-target="persons">See more (${totalPersons - 1} more)</button>` : ''}
-                `;
+                // Store all persons data for Show More functionality
+                const row = cell.closest('tr');
+                if (row) {
+                    row.setAttribute('data-persons-cached', JSON.stringify(data.persons_involved));
+                }
+
+                // Show only first person
+                this.renderFirstItem(cell, firstPerson, 'persons', incidentId);
+            });
+
+            // Update or add the Show More button for persons (if multiple items)
+            const personRows = document.querySelectorAll(`tr:has([data-expand-target="${incidentId}-persons"])`);
+            personRows.forEach((row) => {
+                if (data.persons_involved.length > 1) {
+                    let existingButton = row.querySelector(`.show-more-button[data-target="persons"]`) as HTMLButtonElement;
+
+                    if (!existingButton) {
+                        const personCell = row.querySelector(`[data-expand-target="${incidentId}-persons"]`);
+                        if (personCell && personCell.parentElement) {
+                            const button = document.createElement('button');
+                            button.type = 'button';
+                            button.className = 'show-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer';
+                            button.setAttribute('data-incident-id', incidentId.toString());
+                            button.setAttribute('data-target', 'persons');
+                            button.setAttribute('data-expanded', 'false');
+                            button.setAttribute('data-total', data.persons_involved.length.toString());
+                            button.textContent = `Show more (${data.persons_involved.length - 1} more)`;
+                            personCell.parentElement.appendChild(button);
+                            console.log(`[Decryption] Created Show More button for persons in incident ${incidentId}`);
+                        }
+                    } else {
+                        // Update existing button
+                        existingButton.setAttribute('data-total', data.persons_involved.length.toString());
+                        existingButton.setAttribute('data-expanded', 'false'); // Initialize to not expanded
+                        existingButton.textContent = `Show more (${data.persons_involved.length - 1} more)`;
+                        console.log(`[Decryption] Updated existing Show More button for persons in incident ${incidentId}`);
+                    }
+                }
             });
         }
 
-        // Update evidence items in table
+        // Update evidence items in table - show only FIRST item
         if (data.evidence_items && data.evidence_items.length > 0) {
             const evidenceCells = document.querySelectorAll(`[data-expand-target="${incidentId}-evidence"]`);
             evidenceCells.forEach((cell) => {
                 const firstEvidence = data.evidence_items[0];
                 const totalEvidence = data.evidence_items.length;
-                const evidenceType = firstEvidence.type || 'Evidence';
 
-                cell.innerHTML = `
-                    <div class="text-xs mb-2 pb-2">
-                        <span class="inline-block bg-green-200 text-green-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">✓ ${evidenceType}</span>
-                        <div class="ml-1 text-gray-900 font-medium">
-                            <div><span class="text-gray-700">Desc:</span> <strong>${firstEvidence.description || 'N/A'}</strong></div>
-                            <div><span class="text-gray-700">Link:</span>
-                                ${firstEvidence.evidence_link ? `<a href="${firstEvidence.evidence_link}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 font-semibold"><i class="fas fa-external-link-alt mr-1"></i>View</a>` : '<span class="text-gray-500">N/A</span>'}
-                            </div>
-                        </div>
-                    </div>
-                    ${totalEvidence > 1 ? `<button class="see-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer" data-incident-id="${incidentId}" data-target="evidence">See more (${totalEvidence - 1} more)</button>` : ''}
-                `;
+                // Store all evidence data for Show More functionality
+                const row = cell.closest('tr');
+                if (row) {
+                    row.setAttribute('data-evidence-cached', JSON.stringify(data.evidence_items));
+                }
+
+                // Show only first evidence
+                this.renderFirstItem(cell, firstEvidence, 'evidence', incidentId);
+            });
+
+            // Update or add the Show More button for evidence (if multiple items)
+            const evidenceRows = document.querySelectorAll(`tr:has([data-expand-target="${incidentId}-evidence"])`);
+            evidenceRows.forEach((row) => {
+                if (data.evidence_items.length > 1) {
+                    let existingButton = row.querySelector(`.show-more-button[data-target="evidence"]`) as HTMLButtonElement;
+
+                    if (!existingButton) {
+                        const evidenceCell = row.querySelector(`[data-expand-target="${incidentId}-evidence"]`);
+                        if (evidenceCell && evidenceCell.parentElement) {
+                            const button = document.createElement('button');
+                            button.type = 'button';
+                            button.className = 'show-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer';
+                            button.setAttribute('data-incident-id', incidentId.toString());
+                            button.setAttribute('data-target', 'evidence');
+                            button.setAttribute('data-expanded', 'false');
+                            button.setAttribute('data-total', data.evidence_items.length.toString());
+                            button.textContent = `Show more (${data.evidence_items.length - 1} more)`;
+                            evidenceCell.parentElement.appendChild(button);
+                            console.log(`[Decryption] Created Show More button for evidence in incident ${incidentId}`);
+                        }
+                    } else {
+                        // Update existing button
+                        existingButton.setAttribute('data-total', data.evidence_items.length.toString());
+                        existingButton.setAttribute('data-expanded', 'false'); // Initialize to not expanded
+                        existingButton.textContent = `Show more (${data.evidence_items.length - 1} more)`;
+                        console.log(`[Decryption] Updated existing Show More button for evidence in incident ${incidentId}`);
+                    }
+                }
             });
         }
 
@@ -950,11 +1203,3 @@ document.addEventListener('DOMContentLoaded', () => {
     new DataDecryptionManager();
 });
 
-// Declare global window properties
-declare global {
-    interface Window {
-        decryptedData?: any;
-        decryptedPersonsInvolved?: any[];
-        decryptedEvidenceItems?: any[];
-    }
-}

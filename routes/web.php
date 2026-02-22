@@ -71,7 +71,7 @@ Route::middleware('jwt.api')->group(function () {
         ->name('decrypt.send-otp');
 
     Route::post('/decrypt-data/verify-otp', [DataDecryptionController::class, 'verifyOtp'])
-        ->middleware('throttle:5,1')
+        ->middleware('throttle:60,1')
         ->name('decrypt.verify-otp');
 
     Route::get('/decrypt-data/status', [DataDecryptionController::class, 'checkDecryptionStatus'])
@@ -81,6 +81,10 @@ Route::middleware('jwt.api')->group(function () {
     Route::post('/decrypt-data/invalidate', [DataDecryptionController::class, 'invalidateOtp'])
         ->middleware('throttle:10,1')
         ->name('decrypt.invalidate');
+
+    Route::get('/decrypt-data/get-cached/{incident_id}', [DataDecryptionController::class, 'getCachedData'])
+        ->middleware('throttle:60,1')
+        ->name('decrypt.get-cached');
 
     // Audit Logs routes
     Route::prefix('audit-logs')->name('audit-logs.')->group(function () {
