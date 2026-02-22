@@ -3,7 +3,14 @@
 @section('content')
 <div class="flex-1 overflow-auto">
     <div class="max-w-7xl mx-auto px-4 py-8">
-        <h1 class="text-2xl font-bold">Active Alerts</h1>
+        <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Active Alerts</h1>
+                    <p class="text-gray-600 mt-1 text-sm lg:text-base">Monitor active alert notifications</p>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 @endsection

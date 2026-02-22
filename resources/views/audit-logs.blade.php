@@ -109,13 +109,10 @@ if (request()->query('token')) {
                                class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                     </div>
 
-                    <!-- Buttons -->
-                    <div class="flex items-end gap-2">
-                        <button id="applyFiltersBtn" class="px-4 py-2 bg-alertara-600 text-white rounded-lg hover:bg-alertara-700 transition-colors w-full">
-                            <i class="fas fa-search mr-2"></i>Filter
-                        </button>
-                        <button id="resetFiltersBtn" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors">
-                            <i class="fas fa-rotate-right"></i>
+                    <!-- Reset Button -->
+                    <div class="flex items-end">
+                        <button id="resetFiltersBtn" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors w-full">
+                            <i class="fas fa-rotate-right mr-2"></i>Reset
                         </button>
                     </div>
                 </div>
@@ -202,17 +199,29 @@ if (request()->query('token')) {
         let currentPage = 1;
         let pageSize = 25;
         let allAuditLogs = [];
+        let filterTimeout = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             // Load initial data
             loadAuditLogs();
 
-            // Filter listeners
-            document.getElementById('applyFiltersBtn').addEventListener('click', function() {
-                currentPage = 1;
-                loadAuditLogs();
+            // Real-time filter listeners with debouncing
+            const filterElements = [
+                'startDateFilter',
+                'endDateFilter',
+                'actionTypeFilter',
+                'searchIpFilter'
+            ];
+
+            filterElements.forEach(elementId => {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    element.addEventListener('change', applyFiltersWithDebounce);
+                    element.addEventListener('input', applyFiltersWithDebounce);
+                }
             });
 
+            // Reset button
             document.getElementById('resetFiltersBtn').addEventListener('click', function() {
                 document.getElementById('startDateFilter').value = '';
                 document.getElementById('endDateFilter').value = '';
@@ -229,6 +238,19 @@ if (request()->query('token')) {
                 renderTable();
             });
         });
+
+        function applyFiltersWithDebounce() {
+            // Clear existing timeout
+            if (filterTimeout) {
+                clearTimeout(filterTimeout);
+            }
+
+            // Set new timeout for debouncing (500ms)
+            filterTimeout = setTimeout(function() {
+                currentPage = 1;
+                loadAuditLogs();
+            }, 500);
+        }
 
         function loadAuditLogs() {
             const filters = {

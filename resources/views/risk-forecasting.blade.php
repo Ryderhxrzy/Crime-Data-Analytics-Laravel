@@ -8,14 +8,17 @@ if (request()->query('token')) {
 @extends('layouts.app')
 @section('title', 'Risk Forecasting')
 @section('content')
-    <div class="p-6">
+    <div class="p-4 lg:p-6 pt-0 lg:pt-0 pb-12">
         <!-- Page Header -->
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">
-                <i class="fas fa-triangle-exclamation mr-3" style="color: #274d4c;"></i>
-                Risk Forecasting
-            </h1>
-            <p class="text-gray-600">Predictive analytics for crime risk assessment and future incident forecasting</p>
+        <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">
+                        <i class="fas fa-triangle-exclamation mr-3" style="color: #274d4c;"></i>Risk Forecasting
+                    </h1>
+                    <p class="text-gray-600 mt-1 text-sm lg:text-base">Predictive analytics for crime risk assessment and future incident forecasting</p>
+                </div>
+            </div>
         </div>
 
         <!-- Forecast Controls -->

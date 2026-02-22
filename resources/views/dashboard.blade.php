@@ -12,9 +12,13 @@ if (request()->query('token')) {
 @section('content')
 <div class="p-6">
     <!-- Page Header -->
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">Crime Analytics Dashboard</h1>
-        <p class="text-gray-600 mt-2">Real-time crime statistics and analysis</p>
+    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Crime Analytics Dashboard</h1>
+                <p class="text-gray-600 mt-1 text-sm lg:text-base">Real-time crime statistics and analysis</p>
+            </div>
+        </div>
     </div>
 
             <!-- Key Metrics Cards -->
