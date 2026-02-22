@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CrimeIncidentController;
+use App\Http\Controllers\DataDecryptionController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\AlertsController;
@@ -63,6 +64,23 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/api/crime-incident/{id}/details', [CrimeIncidentController::class, 'getDetails'])->name('api.crime-incident.full-details');
     Route::get('/api/crime-incident', [CrimeIncidentController::class, 'index'])->name('api.crime-incident');
     Route::post('/api/cloudinary-signature', [CrimeIncidentController::class, 'generateCloudinarySignature'])->name('cloudinary.signature');
+
+    // Data Decryption routes (OTP-based)
+    Route::post('/decrypt-data/send-otp', [DataDecryptionController::class, 'sendOtp'])
+        ->middleware('throttle:3,1')
+        ->name('decrypt.send-otp');
+
+    Route::post('/decrypt-data/verify-otp', [DataDecryptionController::class, 'verifyOtp'])
+        ->middleware('throttle:5,1')
+        ->name('decrypt.verify-otp');
+
+    Route::get('/decrypt-data/status', [DataDecryptionController::class, 'checkDecryptionStatus'])
+        ->middleware('throttle:60,1')
+        ->name('decrypt.status');
+
+    Route::post('/decrypt-data/invalidate', [DataDecryptionController::class, 'invalidateOtp'])
+        ->middleware('throttle:10,1')
+        ->name('decrypt.invalidate');
 
     // Audit Logs routes
     Route::prefix('audit-logs')->name('audit-logs.')->group(function () {
