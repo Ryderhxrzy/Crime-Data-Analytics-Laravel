@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AuditLogService
 {
@@ -33,6 +34,7 @@ class AuditLogService
             'ip_address' => request()->ip() ?? 'unknown',
             'user_agent' => request()->userAgent() ?? null,
             'details' => $details,
+            'created_at' => now(), // Explicitly set timestamp in Asia/Manila timezone
         ]);
     }
 
@@ -84,5 +86,65 @@ class AuditLogService
     public static function logIncidentView(int $incidentId, array $details = []): AuditLog
     {
         return self::log('VIEW_INCIDENT', 'crime_department_crime_incidents', $incidentId, $details);
+    }
+
+    /**
+     * Log when user requests to send decryption OTP
+     *
+     * @param int $incidentId
+     * @param array $details
+     * @return AuditLog
+     */
+    public static function logSendDecryptOtp(int $incidentId, array $details = []): AuditLog
+    {
+        return self::log('SEND_DECRYPT_OTP', 'crime_department_crime_incidents', $incidentId, $details);
+    }
+
+    /**
+     * Log successful OTP verification for decryption
+     *
+     * @param int $incidentId
+     * @param array $details
+     * @return AuditLog
+     */
+    public static function logVerifyDecryptOtpSuccess(int $incidentId, array $details = []): AuditLog
+    {
+        return self::log('VERIFY_DECRYPT_OTP_SUCCESS', 'crime_department_crime_incidents', $incidentId, $details);
+    }
+
+    /**
+     * Log failed OTP verification for decryption
+     *
+     * @param int $incidentId
+     * @param array $details
+     * @return AuditLog
+     */
+    public static function logVerifyDecryptOtpFailed(int $incidentId, array $details = []): AuditLog
+    {
+        return self::log('VERIFY_DECRYPT_OTP_FAILED', 'crime_department_crime_incidents', $incidentId, $details);
+    }
+
+    /**
+     * Log successful data decryption
+     *
+     * @param int $incidentId
+     * @param array $details
+     * @return AuditLog
+     */
+    public static function logDecryptDataSuccess(int $incidentId, array $details = []): AuditLog
+    {
+        return self::log('DECRYPT_DATA_SUCCESS', 'crime_department_crime_incidents', $incidentId, $details);
+    }
+
+    /**
+     * Log data decryption error
+     *
+     * @param int $incidentId
+     * @param array $details
+     * @return AuditLog
+     */
+    public static function logDecryptDataError(int $incidentId, array $details = []): AuditLog
+    {
+        return self::log('DECRYPT_DATA_ERROR', 'crime_department_crime_incidents', $incidentId, $details);
     }
 }
