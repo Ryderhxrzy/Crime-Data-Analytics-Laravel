@@ -1,12 +1,12 @@
 {
   "resources/js/app.js": {
-    "file": "assets/app-vjCeJFDi.js",
+    "file": "assets/app-C6U4iWCn.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true
   },
   "resources/js/crime-page.ts": {
-    "file": "assets/crime-page-DQUUryp1.js",
+    "file": "assets/crime-page-D58JUtfv.js",
     "name": "crime-page",
     "src": "resources/js/crime-page.ts",
     "isEntry": true
@@ -18,7 +18,7 @@
     "isEntry": true
   },
   "resources/js/notification-manager.ts": {
-    "file": "assets/notification-manager-DPws6Weq.js",
+    "file": "assets/notification-manager-CL0FmmOu.js",
     "name": "notification-manager",
     "src": "resources/js/notification-manager.ts",
     "isEntry": true
