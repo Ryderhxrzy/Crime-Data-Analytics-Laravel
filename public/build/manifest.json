@@ -11,6 +11,12 @@
     "src": "resources/js/crime-page.ts",
     "isEntry": true
   },
+  "resources/js/data-decryption.ts": {
+    "file": "assets/data-decryption-BXizMQsF.js",
+    "name": "data-decryption",
+    "src": "resources/js/data-decryption.ts",
+    "isEntry": true
+  },
   "resources/js/mapping-fullscreen.js": {
     "file": "assets/mapping-fullscreen-l0sNRNKZ.js",
     "name": "mapping-fullscreen",

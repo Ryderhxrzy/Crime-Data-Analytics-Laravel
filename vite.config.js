@@ -4,7 +4,7 @@ import laravel from 'laravel-vite-plugin';
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/js/app.js', 'resources/js/crime-page.ts', 'resources/js/notification-manager.ts', 'resources/js/mapping-fullscreen.js'],
+            input: ['resources/js/app.js', 'resources/js/crime-page.ts', 'resources/js/notification-manager.ts', 'resources/js/data-decryption.ts', 'resources/js/mapping-fullscreen.js'],
             refresh: true,
         }),
     ],
