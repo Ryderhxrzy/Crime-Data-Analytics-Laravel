@@ -160,29 +160,34 @@
                     <span class="section-label">Alerts</span>
                     <!-- Alerts (Collapsible) -->
                     <div class="mt-0.5">
-                        <button class="crime-alerts-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors"
+                        <button class="crime-alerts-toggle tree-node w-full flex items-center justify-between px-3 py-2 rounded text-sm {{ (request()->routeIs('alerts.*')) ? 'active-nav-item is-open-trigger' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors"
                                 type="button">
                             <span class="flex items-center">
                                 <i class="fas fa-bell w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Alerts</span>
                             </span>
-                            <i class="fas fa-chevron-right text-xs chevron-icon text-alertara-600"></i>
+                            <i class="fas fa-chevron-right text-xs chevron-icon {{ (request()->routeIs('alerts.*')) ? 'text-alertara-100' : 'text-alertara-600' }}"></i>
                         </button>
-                        <div class="crime-alerts-content dropdown-menu submenu-tree">
+                        <div class="crime-alerts-content dropdown-menu submenu-tree {{ (request()->routeIs('alerts.*')) ? 'is-open' : '' }}">
                             <a href="{{ authUrl('alerts.active') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('alerts.active') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-circle-dot w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Active Alerts</span>
                             </a>
                             <a href="{{ authUrl('alerts.history') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('alerts.history') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-clock-rotate-left w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Alert History</span>
                             </a>
                             <a href="{{ authUrl('alerts.settings') }}"
-                               class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('alerts.settings') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                                 <i class="fas fa-sliders-h w-4 h-4 mr-3 flex-shrink-0"></i>
                                 <span>Threshold Settings</span>
+                            </a>
+                            <a href="{{ authUrl('alerts.management') }}"
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('alerts.management') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
+                                <i class="fas fa-cog w-4 h-4 mr-3 flex-shrink-0"></i>
+                                <span>Alert Management</span>
                             </a>
                         </div>
                     </div>

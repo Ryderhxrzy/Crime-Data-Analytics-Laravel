@@ -107,6 +107,10 @@ Route::middleware('jwt.api')->group(function () {
         Route::get('/history', [AlertsController::class, 'history'])->name('history');
         Route::get('/settings', [AlertsController::class, 'settings'])->name('settings');
         Route::post('/settings', [AlertsController::class, 'updateSettings'])->name('updateSettings');
+        Route::get('/management', [AlertsController::class, 'management'])->name('management');
+        Route::post('/create-rule', [AlertsController::class, 'createRule'])->name('create-rule');
+        Route::post('/update-rule/{id}', [AlertsController::class, 'updateRule'])->name('update-rule');
+        Route::delete('/delete-rule/{id}', [AlertsController::class, 'deleteRule'])->name('delete-rule');
     });
 });
 
