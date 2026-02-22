@@ -780,7 +780,9 @@ class CrimePageManager {
                         <span class="inline-block bg-orange-200 text-orange-900 px-2 py-0.5 rounded text-xs font-semibold mb-1">${firstEvidence.evidence_type}</span>
                         <div class="ml-1">
                             <div><span class="font-medium text-gray-700">Desc:</span> <span class="blur-text-badge">${firstEvidence.description}</span></div>
-                            <div><span class="font-medium text-gray-700">Link:</span> <span class="blur-text-badge">${firstEvidence.evidence_link}</span></div>
+                            <div><span class="font-medium text-gray-700">Link:</span>
+                                ${firstEvidence.evidence_link ? `<a href="${firstEvidence.evidence_link}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-xs font-semibold"><i class="fas fa-external-link-alt mr-1"></i>View</a>` : '<span class="text-gray-500 text-xs">N/A</span>'}
+                            </div>
                         </div>
                     </div>
                     ${totalEvidence > 1 ? `<button class="see-more-button text-xs text-blue-600 hover:text-blue-800 font-semibold" data-incident-id="${incident.id}" data-target="evidence">See more (${totalEvidence - 1} more)</button>` : ''}
@@ -844,6 +846,27 @@ class CrimePageManager {
         this.setupTableCheckboxListeners();
         this.setupViewMapListeners();
         this.updatePagination();
+
+        // Trigger auto-decryption for newly rendered table if session is valid
+        this.triggerTableAutoDecryption();
+    }
+
+    /**
+     * Trigger auto-decryption after table render
+     */
+    private triggerTableAutoDecryption(): void {
+        // Access the DataDecryptionManager instance to trigger auto-decryption
+        setTimeout(() => {
+            // Find and call the retryAutoDecryption method on the DataDecryptionManager
+            // The manager is initialized globally in data-decryption.ts
+            const scripts = document.querySelectorAll('script');
+            if (typeof (window as any).DataDecryptionManager !== 'undefined') {
+                // If the manager exposes a way to trigger auto-decrypt, call it
+                // This is a safe approach to trigger decryption across page renders
+                const event = new CustomEvent('crimePageTableRendered');
+                document.dispatchEvent(event);
+            }
+        }, 100);
     }
 
     private setupViewMapListeners(): void {
