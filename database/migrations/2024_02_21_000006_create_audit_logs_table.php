@@ -14,22 +14,7 @@ return new class extends Migration
         Schema::create('crime_department_audit_logs', function (Blueprint $table) {
             $table->id('log_id');
             $table->unsignedBigInteger('admin_id');
-            $table->enum('action_type', [
-                'INSERT_INCIDENT',
-                'UPDATE_INCIDENT',
-                'DELETE_INCIDENT',
-                'VIEW_INCIDENT',
-                'INSERT_PERSON',
-                'UPDATE_PERSON',
-                'DELETE_PERSON',
-                'VIEW_PERSON_DETAILS',
-                'DECRYPT_PERSON_FIELD',
-                'INSERT_EVIDENCE',
-                'UPDATE_EVIDENCE',
-                'DELETE_EVIDENCE',
-                'VIEW_EVIDENCE',
-                'DECRYPT_EVIDENCE_FIELD'
-            ]);
+            $table->string('action_type', 255);
             $table->string('target_table', 255);
             $table->unsignedBigInteger('target_id');
             $table->string('ip_address', 45);
