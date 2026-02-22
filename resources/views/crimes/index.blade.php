@@ -30,6 +30,17 @@ if (request()->query('token')) {
             }
         }
 
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
         .skeleton-shimmer {
             background: linear-gradient(
                 90deg,
@@ -77,6 +88,11 @@ if (request()->query('token')) {
         .blur-text-badge:hover {
             opacity: 0.85;
         }
+
+        /* Notification animation */
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
     </style>
 
     @stack('styles')
@@ -113,11 +129,15 @@ if (request()->query('token')) {
                         <p class="text-gray-600 mt-1 text-sm lg:text-base">Manage and view all reported crime incidents</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <button id="addIncidentBtn" class="px-4 py-2 bg-alertara-600 text-white rounded-lg hover:bg-alertara-700 transition-colors flex items-center gap-2">
+                        <button id="addIncidentBtn" class="px-4 py-2 bg-alertara-600 text-white rounded-lg hover:bg-alertara-700 transition-colors flex items-center gap-2 shadow-sm">
                             <i class="fas fa-plus"></i>
                             <span class="hidden sm:inline">Add Incident</span>
                         </button>
-                        <button id="exportBtn" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
+                        <button id="decryptDataBtn" class="px-4 py-2 bg-alertara-500 text-white rounded-lg hover:bg-alertara-600 transition-colors flex items-center gap-2 shadow-sm" title="Decrypt sensitive data with OTP verification">
+                            <i class="fas fa-lock-open"></i>
+                            <span class="hidden sm:inline">Decrypt Data</span>
+                        </button>
+                        <button id="exportBtn" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 shadow-sm">
                             <i class="fas fa-download"></i>
                             <span class="hidden sm:inline">Export</span>
                         </button>
@@ -2233,6 +2253,135 @@ Title:`
         updateEvidenceList();
     </script>
 
-    @vite(['resources/js/app.js', 'resources/js/crime-page.ts', 'resources/js/notification-manager.ts'])
+    <!-- OTP Decryption Modal -->
+    <div id="decryptionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl max-w-md w-full shadow-lg">
+            <!-- Header -->
+            <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900">Sensitive Data</h3>
+                <button id="closeDecryptionModal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="p-6 space-y-6">
+                <!-- Step 1: Show Encrypted Data & Request OTP -->
+                <div id="decryptionStep1" class="space-y-4">
+                    <!-- Sample Encrypted Data Preview -->
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Names Involved</p>
+                            <div class="blur-text h-6 bg-gray-200"></div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Contact Numbers</p>
+                            <div class="blur-text h-6 bg-gray-200"></div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Evidence Details</p>
+                            <div class="blur-text h-6 bg-gray-200"></div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Message -->
+                    <div>
+                        <p class="text-gray-600 text-sm text-center mb-4">
+                            This data is encrypted. Click below to verify your identity via OTP and view the decrypted information.
+                        </p>
+                    </div>
+
+                    <!-- Send OTP Button -->
+                    <button id="sendOtpBtn" type="button" class="w-full px-4 py-2 bg-alertara-600 text-white rounded-lg hover:bg-alertara-700 transition-colors font-medium disabled:bg-alertara-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                        Send OTP to Email
+                    </button>
+
+                    <!-- Cancel Button -->
+                    <button type="button" id="closeDecryptionStep1" class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                        Cancel
+                    </button>
+
+                    <!-- Error Message -->
+                    <div id="otpErrorMessage" class="hidden bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                        <i class="fas fa-exclamation-circle mr-2"></i>
+                        <span id="otpErrorText"></span>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="otpLoadingState" class="hidden text-center py-3">
+                        <i class="fas fa-spinner animate-spin text-alertara-600"></i>
+                        <p class="text-sm text-gray-600 mt-2">Sending OTP to your email...</p>
+                    </div>
+                </div>
+
+                <!-- Step 2: OTP Sent Message & Verify -->
+                <div id="decryptionStep2" class="hidden space-y-4">
+                    <!-- Simple Message -->
+                    <div class="text-center space-y-2">
+                        <p class="text-gray-700">OTP sent to your email.</p>
+                        <p class="text-xs text-gray-500">Please verify your identity with the code below.</p>
+                    </div>
+
+                    <!-- OTP Input -->
+                    <div class="flex gap-2 justify-center py-4">
+                        <input type="text" class="otp-input w-11 h-11 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-alertara-500 focus:ring-2 focus:ring-alertara-200 transition-colors" maxlength="1" inputmode="numeric" placeholder="">
+                        <input type="text" class="otp-input w-11 h-11 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-alertara-500 focus:ring-2 focus:ring-alertara-200 transition-colors" maxlength="1" inputmode="numeric" placeholder="">
+                        <input type="text" class="otp-input w-11 h-11 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-alertara-500 focus:ring-2 focus:ring-alertara-200 transition-colors" maxlength="1" inputmode="numeric" placeholder="">
+                        <input type="text" class="otp-input w-11 h-11 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-alertara-500 focus:ring-2 focus:ring-alertara-200 transition-colors" maxlength="1" inputmode="numeric" placeholder="">
+                        <input type="text" class="otp-input w-11 h-11 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-alertara-500 focus:ring-2 focus:ring-alertara-200 transition-colors" maxlength="1" inputmode="numeric" placeholder="">
+                        <input type="text" class="otp-input w-11 h-11 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-alertara-500 focus:ring-2 focus:ring-alertara-200 transition-colors" maxlength="1" inputmode="numeric" placeholder="">
+                    </div>
+
+                    <!-- Verify Button -->
+                    <button id="verifyOtpBtn" type="button" class="w-full px-4 py-2 bg-alertara-600 text-white rounded-lg hover:bg-alertara-700 transition-colors font-medium disabled:bg-alertara-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                        Verify
+                    </button>
+
+                    <!-- Back Button -->
+                    <button type="button" id="backToStep1" class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                        Back
+                    </button>
+
+                    <!-- Resend OTP -->
+                    <div class="text-center text-xs">
+                        <button id="resendOtpBtn" type="button" class="text-alertara-600 hover:text-alertara-700 disabled:text-gray-400">
+                            Resend OTP <span id="resendTimer"></span>
+                        </button>
+                    </div>
+
+                    <!-- Timer -->
+                    <div class="text-center text-xs text-gray-500">
+                        <strong id="otpTimer">Expires in: 5:00</strong>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="verifyErrorMessage" class="hidden bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                        <i class="fas fa-exclamation-circle mr-2"></i>
+                        <span id="verifyErrorText"></span>
+                    </div>
+
+                    <!-- Success Message -->
+                    <div id="verifySuccessMessage" class="hidden bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        <span id="verifySuccessText"></span>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="verifyLoadingState" class="hidden text-center py-2">
+                        <i class="fas fa-spinner animate-spin text-alertara-600 text-sm"></i>
+                        <p class="text-xs text-gray-600 mt-1">Verifying...</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+            </div>
+        </div>
+    </div>
+
+    @vite(['resources/js/app.js', 'resources/js/crime-page.ts', 'resources/js/notification-manager.ts', 'resources/js/data-decryption.ts'])
 </body>
 </html>
