@@ -12,7 +12,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    protected $table = 'crime_department_admin_users';
+    protected $table = 'centralized_admin_user';
 
     /**
      * The attributes that are mass assignable.
@@ -21,19 +21,15 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'email',
-        'password',
-        'full_name',
-        'profile_picture',
+        'password_hash',
+        'department',
         'role',
-        'registration_type',
-        'status',
-        'account_status',
-        'last_login',
         'ip_address',
         'attempt_count',
-        'google_id',
         'unlock_token',
         'unlock_token_expiry',
+        'last_login',
+        'last_activity',
     ];
 
     /**
@@ -42,7 +38,7 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $hidden = [
-        'password',
+        'password_hash',
         'remember_token',
     ];
 
@@ -52,8 +48,20 @@ class User extends Authenticatable
      * @var array<string, string>
      */
     protected $casts = [
-        'password' => 'hashed',
         'last_login' => 'datetime',
+        'last_activity' => 'datetime',
         'unlock_token_expiry' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
+
+    /**
+     * Get the password for the user.
+     *
+     * @return string
+     */
+    public function getAuthPassword()
+    {
+        return $this->password_hash;
+    }
 }
