@@ -25,18 +25,160 @@
 
                 <!-- Messages -->
                 <div class="relative">
-                    <button class="p-2 text-gray-600 hover:bg-gray-100 rounded-md relative">
+                    <button id="messagesBtn" class="p-2 text-gray-600 hover:bg-gray-100 rounded-md relative transition-colors">
                         <i class="fas fa-envelope text-lg"></i>
                         <span class="absolute top-1 right-1 w-2 h-2 bg-danger-500 rounded-full"></span>
                     </button>
+
+                    <!-- Messages Dropdown -->
+                    <div id="messagesDropdown" class="hidden absolute top-full mt-2 -right-40 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden">
+                        <!-- Arrow pointing up -->
+                        <div class="absolute -top-2 left-12 w-4 h-4 bg-white border-t border-l border-gray-200 rotate-45"></div>
+
+                        <!-- Dropdown Header -->
+                        <div class="bg-alertara-600 text-white px-4 py-3 flex justify-between items-center">
+                            <h3 class="font-semibold"><i class="fas fa-envelope mr-2"></i>Messages</h3>
+                        </div>
+
+                        <!-- Dropdown Body -->
+                        <div class="max-h-96 overflow-y-auto">
+                            <!-- Message Item 1 -->
+                            <div class="border-b border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <div class="w-10 h-10 bg-alertara-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-user text-alertara-600"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-sm text-gray-900">John Smith</p>
+                                        <p class="text-xs text-gray-600 mt-1">Regarding the incident report from yesterday. Please review the attached evidence document.</p>
+                                        <span class="text-xs text-gray-500 mt-2 block">2 hours ago</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Message Item 2 -->
+                            <div class="border-b border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-user text-blue-600"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-sm text-gray-900">Maria Garcia</p>
+                                        <p class="text-xs text-gray-600 mt-1">Meeting rescheduled to 3:00 PM tomorrow. All crime analysis team members are requested to attend.</p>
+                                        <span class="text-xs text-gray-500 mt-2 block">5 hours ago</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Message Item 3 -->
+                            <div class="border-b border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-user text-green-600"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-sm text-gray-900">Robert Chen</p>
+                                        <p class="text-xs text-gray-600 mt-1">The crime hotspot analysis has been completed. Results are available in the dashboard.</p>
+                                        <span class="text-xs text-gray-500 mt-2 block">1 day ago</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Message Item 4 -->
+                            <div class="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-user text-orange-600"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-sm text-gray-900">Admin Team</p>
+                                        <p class="text-xs text-gray-600 mt-1">System maintenance scheduled for this weekend. Some features may be temporarily unavailable.</p>
+                                        <span class="text-xs text-gray-500 mt-2 block">2 days ago</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dropdown Footer -->
+                        <div class="bg-gray-50 border-t border-gray-200 px-4 py-3">
+                            <button class="text-alertara-600 hover:text-alertara-700 text-sm font-medium transition-colors">View All Messages →</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Notifications -->
                 <div class="relative">
-                    <button class="p-2 text-gray-600 hover:bg-gray-100 rounded-md relative">
+                    <button id="notificationsBtn" class="p-2 text-gray-600 hover:bg-gray-100 rounded-md relative transition-colors">
                         <i class="fas fa-bell text-lg"></i>
                         <span class="absolute top-1 right-1 w-2 h-2 bg-danger-500 rounded-full"></span>
                     </button>
+
+                    <!-- Notifications Dropdown -->
+                    <div id="notificationsDropdown" class="hidden absolute top-full mt-2 -right-40 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden">
+                        <!-- Arrow pointing up -->
+                        <div class="absolute -top-2 left-12 w-4 h-4 bg-white border-t border-l border-gray-200 rotate-45"></div>
+
+                        <!-- Dropdown Header -->
+                        <div class="bg-danger-600 text-white px-4 py-3">
+                            <h3 class="font-semibold"><i class="fas fa-bell mr-2"></i>Notifications</h3>
+                        </div>
+
+                        <!-- Dropdown Body -->
+                        <div class="max-h-96 overflow-y-auto">
+                            <!-- Notification Item 1 - Critical -->
+                            <div class="border-b border-gray-100 px-4 py-3 hover:bg-danger-50 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <i class="fas fa-exclamation-circle text-danger-600 text-lg mt-1 flex-shrink-0"></i>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-sm text-gray-900">High Crime Alert</p>
+                                        <p class="text-xs text-gray-600 mt-1">Significant increase in robberies detected in Barangay 30. Immediate investigation required.</p>
+                                        <span class="text-xs text-gray-500 mt-2 block">30 mins ago</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Notification Item 2 - Warning -->
+                            <div class="border-b border-gray-100 px-4 py-3 hover:bg-yellow-50 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <i class="fas fa-triangle-exclamation text-warning-500 text-lg mt-1 flex-shrink-0"></i>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-sm text-gray-900">Data Sync Warning</p>
+                                        <p class="text-xs text-gray-600 mt-1">Law Enforcement integration sync delayed. Last sync was 45 minutes ago.</p>
+                                        <span class="text-xs text-gray-500 mt-2 block">1 hour ago</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Notification Item 3 - Info -->
+                            <div class="border-b border-gray-100 px-4 py-3 hover:bg-blue-50 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <i class="fas fa-info-circle text-info-500 text-lg mt-1 flex-shrink-0"></i>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-sm text-gray-900">Report Generated</p>
+                                        <p class="text-xs text-gray-600 mt-1">Monthly crime statistics report has been generated and is ready for review.</p>
+                                        <span class="text-xs text-gray-500 mt-2 block">3 hours ago</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Notification Item 4 - Success -->
+                            <div class="px-4 py-3 hover:bg-green-50 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <i class="fas fa-check-circle text-success-500 text-lg mt-1 flex-shrink-0"></i>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-sm text-gray-900">System Update Complete</p>
+                                        <p class="text-xs text-gray-600 mt-1">All system updates have been successfully installed. No issues detected.</p>
+                                        <span class="text-xs text-gray-500 mt-2 block">1 day ago</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dropdown Footer -->
+                        <div class="bg-gray-50 border-t border-gray-200 px-4 py-3">
+                            <button class="text-danger-600 hover:text-danger-700 text-sm font-medium transition-colors">View All Notifications →</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Real-time Status -->
@@ -348,5 +490,48 @@ if (connectSampleBtn) {
                 chevron.style.transform = 'rotate(0deg)';
             }
         });
+
+        // Messages and Notifications Dropdown Handlers
+        setupDropdowns();
     });
+
+    // Setup Dropdowns
+    function setupDropdowns() {
+        const messagesBtn = document.getElementById('messagesBtn');
+        const notificationsBtn = document.getElementById('notificationsBtn');
+        const messagesDropdown = document.getElementById('messagesDropdown');
+        const notificationsDropdown = document.getElementById('notificationsDropdown');
+
+        // Messages Dropdown
+        if (messagesBtn && messagesDropdown) {
+            messagesBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                // Toggle messages dropdown
+                messagesDropdown.classList.toggle('hidden');
+                // Hide notifications dropdown
+                notificationsDropdown?.classList.add('hidden');
+            });
+        }
+
+        // Notifications Dropdown
+        if (notificationsBtn && notificationsDropdown) {
+            notificationsBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                // Toggle notifications dropdown
+                notificationsDropdown.classList.toggle('hidden');
+                // Hide messages dropdown
+                messagesDropdown?.classList.add('hidden');
+            });
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(e) {
+            if (messagesBtn && !messagesBtn.contains(e.target) && !messagesDropdown?.contains(e.target)) {
+                messagesDropdown?.classList.add('hidden');
+            }
+            if (notificationsBtn && !notificationsBtn.contains(e.target) && !notificationsDropdown?.contains(e.target)) {
+                notificationsDropdown?.classList.add('hidden');
+            }
+        });
+    }
 </script>

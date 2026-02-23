@@ -125,17 +125,8 @@ if (request()->query('token')) {
                 </div>
             </div>
 
-            <!-- Charts Row 3 -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <!-- Alert Severity Distribution -->
-                <div class="bg-white border border-gray-200 rounded-lg p-6 hover:border-alertara-300 transition-colors">
-                    <h2 class="text-lg font-bold text-gray-900 mb-4">Alert Severity Distribution</h2>
-                    <div style="position: relative; height: 300px; width: 100%;">
-                        <canvas id="severityChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Latest Alerts -->
+            <!-- Latest Alerts -->
+            <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-white border border-gray-200 rounded-lg p-6 hover:border-alertara-300 transition-colors">
                     <h2 class="text-lg font-bold text-gray-900 mb-4">Latest Alerts</h2>
                     <div class="space-y-4">
@@ -163,7 +154,7 @@ if (request()->query('token')) {
                     <!-- Year Dropdown -->
                     <select id="filterYear" class="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-alertara-600">
                         @for($year = 2020; $year <= now()->year; $year++)
-                            <option value="{{ $year }}" {{ $year === now()->year ? 'selected' : '' }}>
+                            <option value="{{ $year }}" {{ $year === 2025 ? 'selected' : '' }}>
                                 {{ $year }}
                             </option>
                         @endfor
@@ -176,11 +167,6 @@ if (request()->query('token')) {
                             <option value="{{ $m }}">{{ \Carbon\Carbon::createFromFormat('m', $m)->format('F') }}</option>
                         @endfor
                     </select>
-
-                    <!-- Apply Button -->
-                    <button id="applyFilter" class="bg-alertara-600 hover:bg-alertara-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
-                        Apply
-                    </button>
 
                     <!-- Reset Button -->
                     <button id="resetFilter" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded text-sm font-medium transition-colors">
@@ -281,84 +267,6 @@ if (request()->query('token')) {
                 </div>
             </div>
 
-            <!-- Location Trends Section -->
-            <div id="location-trends" class="mb-8">
-                <div class="mb-6">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                        <i class="fas fa-map-location-dot mr-2" style="color: #274d4c;"></i>Location Trends Analysis
-                    </h2>
-                    <p class="text-gray-600">Geographic hotspots and barangay-level crime patterns</p>
-                </div>
-
-                <div class="bg-white border border-gray-200 rounded-lg p-6 hover:border-alertara-300 transition-colors">
-                    <h3 class="text-lg font-bold text-gray-900 mb-4">Top 10 High-Risk Barangays</h3>
-                    <div style="position: relative; height: 400px; width: 100%;">
-                        <canvas id="locationTrendChart"></canvas>
-                    </div>
-                    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="bg-red-50 border border-red-200 rounded p-4">
-                            <p class="text-xs font-semibold text-red-900 mb-1">🔴 Highest Risk Area</p>
-                            <p class="text-lg font-bold text-red-700" id="highestRiskBarangay">--</p>
-                        </div>
-                        <div class="bg-green-50 border border-green-200 rounded p-4">
-                            <p class="text-xs font-semibold text-green-900 mb-1">🟢 Safest Area</p>
-                            <p class="text-lg font-bold text-green-700" id="safestBarangay">--</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Crime Type Trends Section -->
-            <div id="crime-type-trends" class="mb-8">
-                <div class="mb-6">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                        <i class="fas fa-shapes mr-2" style="color: #274d4c;"></i>Crime Type Trends Analysis
-                    </h2>
-                    <p class="text-gray-600">Emerging patterns in different crime categories</p>
-                </div>
-
-                <!-- Charts Row -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    <!-- Crime Type Distribution -->
-                    <div class="bg-white border border-gray-200 rounded-lg p-6 hover:border-alertara-300 transition-colors">
-                        <h3 class="text-lg font-bold text-gray-900 mb-4">Crime Type Distribution</h3>
-                        <div style="position: relative; height: 300px; width: 100%;">
-                            <canvas id="crimeTypeDistChart"></canvas>
-                        </div>
-                        <p class="text-xs text-gray-600 mt-4">Breakdown of incidents by crime category</p>
-                    </div>
-
-                    <!-- Crime Type Trends Over Time -->
-                    <div class="bg-white border border-gray-200 rounded-lg p-6 hover:border-alertara-300 transition-colors">
-                        <h3 class="text-lg font-bold text-gray-900 mb-4">Top 5 Crime Types Trend</h3>
-                        <div style="position: relative; height: 300px; width: 100%;">
-                            <canvas id="crimeTypeTrendChart"></canvas>
-                        </div>
-                        <p class="text-xs text-gray-600 mt-4">Monthly trend of the most common crimes</p>
-                    </div>
-                </div>
-
-                <!-- Crime Type Insights -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-white border border-gray-200 rounded-lg p-6 hover:border-alertara-300 transition-colors">
-                        <h3 class="text-lg font-bold text-gray-900 mb-4">
-                            <i class="fas fa-arrow-trend-up mr-2 text-danger-600"></i>Most Prevalent Crime
-                        </h3>
-                        <div class="space-y-3" id="mostPrevalentCrime">
-                            <p class="text-gray-500">Loading...</p>
-                        </div>
-                    </div>
-
-                    <div class="bg-white border border-gray-200 rounded-lg p-6 hover:border-alertara-300 transition-colors">
-                        <h3 class="text-lg font-bold text-gray-900 mb-4">
-                            <i class="fas fa-info-circle mr-2 text-alertara-600"></i>Crime Type Summary
-                        </h3>
-                        <div class="space-y-3" id="crimeTypeSummary">
-                            <p class="text-gray-500">Loading...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </main>
 
@@ -573,11 +481,22 @@ if (request()->query('token')) {
                 if (month) params.append('month', month);
 
                 const response = await fetch(`{{ route('dashboard.charts') }}?${params}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
+
+                if (!data || typeof data !== 'object') {
+                    throw new Error('Invalid data format received from server');
+                }
 
                 updateCharts(data);
             } catch (error) {
                 console.error('Error loading chart data:', error);
+                console.error('Response status:', response?.status);
+                console.error('Full error:', error.message);
                 alert('Failed to load chart data. Please try again.');
             } finally {
                 filterLoader.classList.add('hidden');
@@ -594,17 +513,24 @@ if (request()->query('token')) {
                 info: '#3b82f6'
             };
 
+            // Validate data exists
+            if (!data || typeof data !== 'object') {
+                console.error('Invalid chart data received:', data);
+                alert('Failed to load chart data. Please try again.');
+                return;
+            }
+
             // 1. Monthly Trend Chart
             const trendCtx = document.getElementById('trendChart')?.getContext('2d');
-            if (trendCtx) {
+            if (trendCtx && data.monthlyTrend) {
                 if (trendChart) trendChart.destroy();
                 trendChart = new Chart(trendCtx, {
                     type: 'line',
                     data: {
-                        labels: data.monthlyTrend.labels,
+                        labels: data.monthlyTrend.labels || [],
                         datasets: [{
                             label: 'Incidents',
-                            data: data.monthlyTrend.data,
+                            data: data.monthlyTrend.data || [],
                             borderColor: chartColors.primary,
                             backgroundColor: 'rgba(39, 77, 76, 0.1)',
                             tension: 0.4,
@@ -626,14 +552,14 @@ if (request()->query('token')) {
 
             // 2. Crime Types Chart (Doughnut)
             const crimeTypesCtx = document.getElementById('crimeTypesChart')?.getContext('2d');
-            if (crimeTypesCtx) {
+            if (crimeTypesCtx && data.crimeTypes) {
                 if (crimeTypesChart) crimeTypesChart.destroy();
                 crimeTypesChart = new Chart(crimeTypesCtx, {
                     type: 'doughnut',
                     data: {
-                        labels: data.crimeTypes.labels,
+                        labels: data.crimeTypes.labels || [],
                         datasets: [{
-                            data: data.crimeTypes.data,
+                            data: data.crimeTypes.data || [],
                             backgroundColor: [
                                 chartColors.primary, chartColors.danger, chartColors.warning,
                                 chartColors.info, chartColors.success, '#9333ea', '#ec4899', '#f97316', '#84cc16', '#06b6d4'
@@ -652,15 +578,15 @@ if (request()->query('token')) {
 
             // 3. Weekly Distribution Chart (Bar)
             const weeklyCtx = document.getElementById('weeklyChart')?.getContext('2d');
-            if (weeklyCtx) {
+            if (weeklyCtx && data.weeklyDist) {
                 if (weeklyChart) weeklyChart.destroy();
                 weeklyChart = new Chart(weeklyCtx, {
                     type: 'bar',
                     data: {
-                        labels: data.weeklyDist.labels,
+                        labels: data.weeklyDist.labels || [],
                         datasets: [{
                             label: 'Incident Count',
-                            data: data.weeklyDist.data,
+                            data: data.weeklyDist.data || [],
                             backgroundColor: chartColors.warning,
                             borderColor: chartColors.warning,
                             borderWidth: 1,
@@ -678,12 +604,13 @@ if (request()->query('token')) {
 
             // 4. Peak Crime Hours Chart (Bar with gradient effect)
             const peakHoursCtx = document.getElementById('peakHoursChart')?.getContext('2d');
-            if (peakHoursCtx) {
+            if (peakHoursCtx && data.peakHours) {
                 if (peakHoursChart) peakHoursChart.destroy();
 
                 // Create gradient colors for hours (low=blue, high=red)
-                const maxCount = Math.max(...data.peakHours.data, 1);
-                const barColors = data.peakHours.data.map(count => {
+                const peakData = data.peakHours.data || [];
+                const maxCount = Math.max(...peakData, 1);
+                const barColors = peakData.map(count => {
                     const ratio = count / maxCount;
                     if (ratio < 0.33) return '#3b82f6'; // Blue
                     if (ratio < 0.66) return '#f59e0b'; // Amber
@@ -693,10 +620,10 @@ if (request()->query('token')) {
                 peakHoursChart = new Chart(peakHoursCtx, {
                     type: 'bar',
                     data: {
-                        labels: data.peakHours.labels,
+                        labels: data.peakHours.labels || [],
                         datasets: [{
                             label: 'Incident Count',
-                            data: data.peakHours.data,
+                            data: peakData,
                             backgroundColor: barColors,
                             borderColor: barColors,
                             borderWidth: 1,
@@ -713,160 +640,29 @@ if (request()->query('token')) {
             }
         }
 
-        // Event Listeners for Filter Controls
-        document.getElementById('applyFilter').addEventListener('click', () => {
+        // Event Listeners for Auto-Filter (on change)
+        document.getElementById('filterYear').addEventListener('change', () => {
+            const year = document.getElementById('filterYear').value;
+            const month = document.getElementById('filterMonth').value;
+            loadFilteredCharts(year, month || null);
+        });
+
+        document.getElementById('filterMonth').addEventListener('change', () => {
             const year = document.getElementById('filterYear').value;
             const month = document.getElementById('filterMonth').value;
             loadFilteredCharts(year, month || null);
         });
 
         document.getElementById('resetFilter').addEventListener('click', () => {
-            document.getElementById('filterYear').value = {{ now()->year }};
+            document.getElementById('filterYear').value = 2025;
             document.getElementById('filterMonth').value = '';
-            loadFilteredCharts({{ now()->year }}, null);
+            loadFilteredCharts(2025, null);
         });
 
-        // Allow Enter key to apply filter
-        document.getElementById('filterYear').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') document.getElementById('applyFilter').click();
-        });
-
-        document.getElementById('filterMonth').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') document.getElementById('applyFilter').click();
-        });
-
-        // Initialize Location Trends Charts
-        function initializeLocationTrends() {
-            const locationCtx = document.getElementById('locationTrendChart')?.getContext('2d');
-            if (locationCtx) {
-                const barangayLabels = {!! json_encode($barangayLabels ?? []) !!};
-                const barangayData = {!! json_encode($barangayData ?? []) !!};
-
-                new Chart(locationCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: barangayLabels.length > 0 ? barangayLabels : ['Barangay 1', 'Barangay 2', 'Barangay 3'],
-                        datasets: [{
-                            label: 'Incident Count',
-                            data: barangayData.length > 0 ? barangayData : [45, 38, 32, 28, 25, 22, 20, 18, 16, 14],
-                            backgroundColor: '#274d4c',
-                            borderColor: '#274d4c',
-                            borderWidth: 1,
-                            borderRadius: 6
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: { x: { beginAtZero: true } }
-                    }
-                });
-
-                const barangayLabelsArray = barangayLabels.length > 0 ? barangayLabels : ['Barangay 1'];
-                document.getElementById('highestRiskBarangay').textContent = barangayLabelsArray[0];
-                document.getElementById('safestBarangay').textContent = barangayLabelsArray[barangayLabelsArray.length - 1];
-            }
-        }
-
-        // Initialize Crime Type Trends Charts
-        function initializeCrimeTypeTrends() {
-            // Crime Type Distribution Pie Chart
-            const crimeTypeCtx = document.getElementById('crimeTypeDistChart')?.getContext('2d');
-            if (crimeTypeCtx) {
-                const categoryLabels = {!! json_encode($categoryLabels ?? []) !!};
-                const categoryData = {!! json_encode($categoryData ?? []) !!};
-
-                const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#0ea5e9', '#6366f1', '#8b5cf6', '#d946ef'];
-
-                new Chart(crimeTypeCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: categoryLabels.length > 0 ? categoryLabels : ['Crime Type 1', 'Crime Type 2', 'Crime Type 3'],
-                        datasets: [{
-                            data: categoryData.length > 0 ? categoryData : [30, 25, 20, 15, 10],
-                            backgroundColor: colors.slice(0, Math.max(categoryLabels.length, 5)),
-                            borderColor: '#fff',
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { position: 'bottom' } }
-                    }
-                });
-            }
-
-            // Crime Type Trends Over Time (Line Chart)
-            const crimeTypeTrendCtx = document.getElementById('crimeTypeTrendChart')?.getContext('2d');
-            if (crimeTypeTrendCtx) {
-                new Chart(crimeTypeTrendCtx, {
-                    type: 'line',
-                    data: {
-                        labels: {!! json_encode($monthLabels ?? []) !!},
-                        datasets: [
-                            {
-                                label: 'Theft',
-                                data: [12, 14, 16, 15, 18, 17, 19, 21, 20, 22, 24, 25],
-                                borderColor: '#ef4444',
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                tension: 0.4
-                            },
-                            {
-                                label: 'Assault',
-                                data: [8, 9, 8, 10, 11, 12, 13, 14, 15, 14, 16, 17],
-                                borderColor: '#f97316',
-                                backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                                tension: 0.4
-                            },
-                            {
-                                label: 'Robbery',
-                                data: [5, 6, 7, 6, 8, 9, 8, 10, 11, 10, 12, 13],
-                                borderColor: '#eab308',
-                                backgroundColor: 'rgba(234, 179, 8, 0.1)',
-                                tension: 0.4
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { position: 'top' } },
-                        scales: { y: { beginAtZero: true } }
-                    }
-                });
-            }
-
-            // Populate most prevalent crime
-            const categoryLabels = {!! json_encode($categoryLabels ?? []) !!};
-            const categoryData = {!! json_encode($categoryData ?? []) !!};
-            if (categoryLabels.length > 0) {
-                const mostPrevalentHtml = `
-                    <div class="border-b border-gray-200 pb-3">
-                        <p class="font-semibold text-gray-900">${categoryLabels[0]}</p>
-                        <p class="text-2xl font-bold text-danger-600">${categoryData[0]} incidents</p>
-                        <p class="text-xs text-gray-500 mt-1">Most common crime type</p>
-                    </div>
-                `;
-                document.getElementById('mostPrevalentCrime').innerHTML = mostPrevalentHtml;
-            }
-
-            // Crime Type Summary
-            const summaryHtml = `
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-700">Total Crime Types Tracked:</span>
-                    <span class="font-bold text-alertara-600">${categoryLabels.length}</span>
-                </div>
-            `;
-            document.getElementById('crimeTypeSummary').innerHTML = summaryHtml;
-        }
-
-        // Initialize all trend charts on page load
+        // Initialize with 2025 data on page load
         document.addEventListener('DOMContentLoaded', function() {
-            initializeLocationTrends();
-            initializeCrimeTypeTrends();
+            loadFilteredCharts(2025, null);
         });
+
     </script>
 @endsection
