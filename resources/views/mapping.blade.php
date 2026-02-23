@@ -121,6 +121,14 @@ if (request()->query('token')) {
                             </select>
                         </div>
 
+                        <!-- Barangay -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Barangay</label>
+                            <select id="barangay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="">All Barangays</option>
+                            </select>
+                        </div>
+
                         <!-- Buttons -->
                         <div class="flex items-end gap-2">
                             <button id="resetFilterBtn" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
@@ -2103,8 +2111,7 @@ if (request()->query('token')) {
                 'crimeType',
                 'caseStatus',
                 'clearanceStatus',
-                'barangay',
-                'dateFilter'
+                'barangay'
             ];
 
             filterElements.forEach(elementId => {
@@ -2127,7 +2134,6 @@ if (request()->query('token')) {
             document.getElementById('caseStatus').value = '';
             document.getElementById('clearanceStatus').value = '';
             document.getElementById('barangay').value = '';
-            document.getElementById('dateFilter').value = '';
             document.getElementById('incidentSearch').value = '';
             loadCrimeData();
         });
