@@ -132,14 +132,122 @@ if (request()->query('token')) {
             </div>
         </div>
 
+        <!-- Pattern Detection Timeline -->
+        <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow mb-8">
+            <div class="p-4 border-b border-gray-200">
+                <h3 class="text-lg font-bold text-gray-900 flex items-center">
+                    <i class="fas fa-timeline mr-2" style="color: #274d4c;"></i>
+                    Pattern Detection Timeline
+                </h3>
+                <p class="text-sm text-gray-600 mt-1">Chronological view of detected patterns and their evolution</p>
+            </div>
+            <div class="p-6">
+                <div class="space-y-6" id="patternTimeline">
+                    <!-- Timeline Item 1 -->
+                    <div class="flex gap-4">
+                        <div class="flex flex-col items-center">
+                            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-2">
+                                <i class="fas fa-exclamation text-red-600 text-lg"></i>
+                            </div>
+                            <div class="w-1 h-20 bg-red-200"></div>
+                        </div>
+                        <div class="flex-1 pb-4">
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <div class="flex items-start justify-between mb-2">
+                                    <h4 class="font-semibold text-gray-900">Critical: Vehicle Theft Hotspot Sequence</h4>
+                                    <span class="text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded">2 hours ago</span>
+                                </div>
+                                <p class="text-sm text-gray-700 mb-2">Sequential vehicle theft pattern detected with 91% confidence</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">Sequential Pattern</span>
+                                    <span class="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded">High Risk</span>
+                                    <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">4 Incidents</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Item 2 -->
+                    <div class="flex gap-4">
+                        <div class="flex flex-col items-center">
+                            <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mb-2">
+                                <i class="fas fa-warning text-orange-600 text-lg"></i>
+                            </div>
+                            <div class="w-1 h-20 bg-orange-200"></div>
+                        </div>
+                        <div class="flex-1 pb-4">
+                            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                                <div class="flex items-start justify-between mb-2">
+                                    <h4 class="font-semibold text-gray-900">Emerging: Industrial Zone Burglary Cluster</h4>
+                                    <span class="text-xs font-semibold text-orange-700 bg-orange-100 px-2 py-1 rounded">6 hours ago</span>
+                                </div>
+                                <p class="text-sm text-gray-700 mb-2">Spatial pattern of burglaries in warehouses with 72% match rate</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded">Spatial Pattern</span>
+                                    <span class="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded">Medium Risk</span>
+                                    <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">8 Incidents</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Item 3 -->
+                    <div class="flex gap-4">
+                        <div class="flex flex-col items-center">
+                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-2">
+                                <i class="fas fa-check text-purple-600 text-lg"></i>
+                            </div>
+                            <div class="w-1 h-20 bg-purple-200"></div>
+                        </div>
+                        <div class="flex-1 pb-4">
+                            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                <div class="flex items-start justify-between mb-2">
+                                    <h4 class="font-semibold text-gray-900">Active: Weekend Night Theft Pattern</h4>
+                                    <span class="text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-1 rounded">1 day ago</span>
+                                </div>
+                                <p class="text-sm text-gray-700 mb-2">Consistent weekend night theft pattern in commercial areas with 87% match rate</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">Temporal Pattern</span>
+                                    <span class="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">High Risk</span>
+                                    <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">12 Incidents</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Item 4 -->
+                    <div class="flex gap-4">
+                        <div class="flex flex-col items-center">
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-2">
+                                <i class="fas fa-check text-green-600 text-lg"></i>
+                            </div>
+                        </div>
+                        <div class="flex-1">
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <div class="flex items-start justify-between mb-2">
+                                    <h4 class="font-semibold text-gray-900">Resolved: Residential Robbery Streak</h4>
+                                    <span class="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded">3 days ago</span>
+                                </div>
+                                <p class="text-sm text-gray-700 mb-2">Pattern successfully identified and suspects arrested - pattern no longer active</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">Resolved</span>
+                                    <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">6 Incidents</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Pattern Visualization -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <!-- Pattern Timeline -->
+            <!-- Pattern Timeline (Temporal) -->
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
                 <div class="p-4 border-b border-gray-200">
                     <h3 class="text-lg font-bold text-gray-900 flex items-center">
                         <i class="fas fa-clock mr-2" style="color: #274d4c;"></i>
-                        Temporal Pattern Analysis
+                        Pattern Occurrence Timeline
                     </h3>
                 </div>
                 <div class="p-4">
@@ -154,7 +262,7 @@ if (request()->query('token')) {
                 <div class="p-4 border-b border-gray-200">
                     <h3 class="text-lg font-bold text-gray-900 flex items-center">
                         <i class="fas fa-network-wired mr-2" style="color: #274d4c;"></i>
-                        Pattern Network Map
+                        Pattern Correlation Network
                     </h3>
                 </div>
                 <div class="p-4">
@@ -213,17 +321,18 @@ if (request()->query('token')) {
             </div>
         </div>
 
-        <!-- Detected Patterns List -->
+        <!-- Detected Patterns List with Incident Sequences -->
         <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow mb-8">
             <div class="p-4 border-b border-gray-200">
                 <h3 class="text-lg font-bold text-gray-900 flex items-center">
                     <i class="fas fa-list mr-2" style="color: #274d4c;"></i>
-                    Detected Patterns & Insights
+                    Detected Patterns & Incident Sequences
                 </h3>
+                <p class="text-sm text-gray-600 mt-1">Detailed analysis with chronological incident sequences</p>
             </div>
             <div class="p-4">
                 <div class="space-y-4" id="patternsList">
-                    <!-- Pattern 1: Weekend Night Pattern -->
+                    <!-- Pattern 1: Weekend Night Pattern with Sequence -->
                     <div class="border border-gray-200 rounded-lg p-4 hover:border-purple-300 transition-colors">
                         <div class="flex items-start justify-between mb-3">
                             <div class="flex items-center">
@@ -251,10 +360,20 @@ if (request()->query('token')) {
                                 <span class="text-red-600 ml-2 font-medium">High</span>
                             </div>
                         </div>
-                        <div class="bg-gray-50 rounded p-3">
+                        <div class="bg-gray-50 rounded p-3 mb-3">
                             <p class="text-sm text-gray-700">
                                 <strong>Pattern Description:</strong> Significant increase in theft incidents during weekend nights, particularly in commercial areas. Pattern suggests organized activity with 3-4 incidents per weekend following similar MO.
                             </p>
+                        </div>
+                        <!-- Incident Sequence Timeline -->
+                        <div class="bg-white border border-gray-200 rounded p-3 text-xs">
+                            <p class="font-semibold text-gray-900 mb-2">Recent Incident Sequence:</p>
+                            <div class="space-y-1 text-gray-700">
+                                <div class="flex items-center gap-2"><span class="text-purple-600">●</span><strong>Feb 22, 11:45 PM</strong> - Theft at Downtown Mall</div>
+                                <div class="flex items-center gap-2"><span class="text-purple-600">→</span><strong>Feb 22, 12:30 AM</strong> - Theft at Commercial Center (3.2 km away)</div>
+                                <div class="flex items-center gap-2"><span class="text-purple-600">→</span><strong>Feb 22, 1:15 AM</strong> - Theft at Shopping District (1.8 km away)</div>
+                                <div class="flex items-center gap-2"><span class="text-purple-600">→</span><strong>Feb 23, 2:00 AM</strong> - Theft at Business Plaza (2.1 km away)</div>
+                            </div>
                         </div>
                     </div>
 
@@ -286,10 +405,19 @@ if (request()->query('token')) {
                                 <span class="text-orange-600 ml-2 font-medium">Medium</span>
                             </div>
                         </div>
-                        <div class="bg-gray-50 rounded p-3">
+                        <div class="bg-gray-50 rounded p-3 mb-3">
                             <p class="text-sm text-gray-700">
                                 <strong>Pattern Description:</strong> Cluster of burglaries in industrial zone targeting warehouses during late night hours. Suggests possible insider knowledge or systematic surveillance of targets.
                             </p>
+                        </div>
+                        <!-- Incident Spatial Sequence -->
+                        <div class="bg-white border border-gray-200 rounded p-3 text-xs">
+                            <p class="font-semibold text-gray-900 mb-2">Spatial Sequence (Last 2 Weeks):</p>
+                            <div class="space-y-1 text-gray-700">
+                                <div class="flex items-center gap-2"><span class="text-indigo-600">●</span><strong>Feb 20, 2:30 AM</strong> - Warehouse A (Industrial Zone North)</div>
+                                <div class="flex items-center gap-2"><span class="text-indigo-600">→</span><strong>Feb 22, 1:45 AM</strong> - Warehouse C (Industrial Zone South, 0.8 km away)</div>
+                                <div class="flex items-center gap-2"><span class="text-indigo-600">→</span><strong>Feb 24, 3:00 AM</strong> - Warehouse B (Industrial Zone Central, 0.5 km away)</div>
+                            </div>
                         </div>
                     </div>
 
@@ -321,10 +449,20 @@ if (request()->query('token')) {
                                 <span class="text-red-600 ml-2 font-medium">Critical</span>
                             </div>
                         </div>
-                        <div class="bg-gray-50 rounded p-3">
+                        <div class="bg-gray-50 rounded p-3 mb-3">
                             <p class="text-sm text-gray-700">
                                 <strong>Pattern Description:</strong> Sequential vehicle theft pattern following specific route and targeting similar vehicle types. High correlation with specific time windows suggests coordinated operation.
                             </p>
+                        </div>
+                        <!-- Sequential Timeline -->
+                        <div class="bg-white border border-gray-200 rounded p-3 text-xs">
+                            <p class="font-semibold text-gray-900 mb-2">Sequential Attack Pattern:</p>
+                            <div class="space-y-1 text-gray-700">
+                                <div class="flex items-center gap-2"><span class="text-pink-600">●</span><strong>Feb 15, 10:15 PM</strong> - Toyota Camry stolen (Residential District A)</div>
+                                <div class="flex items-center gap-2"><span class="text-pink-600">→</span><strong>Feb 18, 9:45 PM</strong> - Honda Civic stolen (Parking lot B, 2.1 km away)</div>
+                                <div class="flex items-center gap-2"><span class="text-pink-600">→</span><strong>Feb 21, 11:30 PM</strong> - Toyota Corolla stolen (Residential District C, 1.9 km away)</div>
+                                <div class="flex items-center gap-2"><span class="text-pink-600">→</span><strong>Feb 23, 10:00 PM</strong> - Honda Accord stolen (Parking lot D, 2.3 km away) [ESTIMATED NEXT]</div>
+                            </div>
                         </div>
                     </div>
                 </div>
