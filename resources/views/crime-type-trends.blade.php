@@ -21,6 +21,70 @@ if (request()->query('token')) {
             </div>
         </div>
 
+        <!-- Standardized Filter Section -->
+        <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
+            <div class="mb-4 pb-4 border-b border-gray-200">
+                <h3 class="text-sm font-bold text-gray-900">
+                    <i class="fas fa-filter mr-2 text-alertara-700"></i>Crime Type Filters
+                </h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                <!-- Time Period -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Time Period</label>
+                    <select id="crimeTypeTimePeriod" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="30">Last 30 Days</option>
+                        <option value="90">Last 90 Days</option>
+                        <option value="180">Last 6 Months</option>
+                        <option value="all" selected>All Time</option>
+                    </select>
+                </div>
+
+                <!-- Barangay -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Barangay</label>
+                    <select id="crimeTypeBarangay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="">All Barangays</option>
+                    </select>
+                </div>
+
+                <!-- Crime Category -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Category</label>
+                    <select id="crimeTypeCategory" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+
+                <!-- Case Status -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Case Status</label>
+                    <select id="crimeTypeCaseStatus" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="">All Status</option>
+                        <option value="cleared">Cleared</option>
+                        <option value="uncleared">Uncleared</option>
+                    </select>
+                </div>
+
+                <!-- Clearance Status -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Clearance</label>
+                    <select id="crimeTypeClearanceStatus" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="">All Clearances</option>
+                        <option value="cleared">Cleared</option>
+                        <option value="uncleared">Uncleared</option>
+                    </select>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex items-end gap-2">
+                    <button id="resetCrimeTypeFilter" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-redo"></i>Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Crime Type Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div class="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 rounded-lg p-6 hover:shadow-md transition-shadow">

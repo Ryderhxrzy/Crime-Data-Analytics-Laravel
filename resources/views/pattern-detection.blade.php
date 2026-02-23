@@ -21,13 +21,18 @@ if (request()->query('token')) {
             </div>
         </div>
 
-        <!-- Pattern Analysis Controls -->
-        <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- Standardized Filter Section -->
+        <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
+            <div class="mb-4 pb-4 border-b border-gray-200">
+                <h3 class="text-sm font-bold text-gray-900">
+                    <i class="fas fa-filter mr-2 text-alertara-700"></i>Pattern Detection Filters
+                </h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 <!-- Analysis Type -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Analysis Type</label>
-                    <select id="analysisType" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#274d4c]">
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Analysis Type</label>
+                    <select id="analysisType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="temporal" selected>Temporal Patterns</option>
                         <option value="spatial">Spatial Patterns</option>
                         <option value="behavioral">Behavioral Patterns</option>
@@ -37,8 +42,8 @@ if (request()->query('token')) {
 
                 <!-- Time Range -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Time Range</label>
-                    <select id="timeRange" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#274d4c]">
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Time Range</label>
+                    <select id="timeRange" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="7d">Last 7 Days</option>
                         <option value="30d" selected>Last 30 Days</option>
                         <option value="90d">Last 90 Days</option>
@@ -48,9 +53,9 @@ if (request()->query('token')) {
 
                 <!-- Pattern Sensitivity -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Pattern Sensitivity</label>
-                    <select id="sensitivity" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#274d4c]">
-                        <option value="low">Low (Broad Patterns)</option>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Sensitivity</label>
+                    <select id="sensitivity" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="low">Low (Broad)</option>
                         <option value="medium" selected>Medium</option>
                         <option value="high">High (Specific)</option>
                     </select>
@@ -58,27 +63,24 @@ if (request()->query('token')) {
 
                 <!-- Crime Category -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Crime Category</label>
-                    <select id="patternCrimeType" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#274d4c]">
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Category</label>
+                    <select id="patternCrimeType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="">All Categories</option>
                         @foreach($crimeCategories as $category)
                             <option value="{{ $category->id }}">{{ $category->category_name }}</option>
                         @endforeach
                     </select>
                 </div>
-            </div>
 
-            <!-- Action Buttons -->
-            <div class="flex gap-3 mt-4">
-                <button onclick="runPatternDetection()" class="px-4 py-2 bg-[#274d4c] text-white rounded-md hover:bg-[#1a3534] transition-colors">
-                    <i class="fas fa-search mr-2"></i>Run Detection
-                </button>
-                <button onclick="exportPatterns()" class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">
-                    <i class="fas fa-download mr-2"></i>Export Patterns
-                </button>
-                <button onclick="comparePatterns()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                    <i class="fas fa-balance-scale mr-2"></i>Compare Periods
-                </button>
+                <!-- Action Buttons (Span 2 columns) -->
+                <div class="col-span-2 flex items-end gap-2">
+                    <button onclick="runPatternDetection()" class="flex-1 px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-search"></i>Run Detection
+                    </button>
+                    <button onclick="resetPatternFilter()" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-redo"></i>Reset
+                    </button>
+                </div>
             </div>
         </div>
 

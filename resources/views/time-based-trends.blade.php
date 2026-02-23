@@ -28,142 +28,39 @@ if (request()->query('token')) {
                 </div>
             </div>
 
-            <!-- Compact Time Filter Section -->
-            <div class="compact-filter bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6" style="position: sticky; top: 4rem; z-index: 40;">
-                <style>
-                    .compact-filter {
-                        background: rgba(255, 255, 255, 0.98);
-                        border: 1px solid #e5e7eb;
-                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                    }
-                    .dateRangeBtn {
-                        padding: 4px 8px;
-                        border-radius: 6px;
-                        border: 1px solid #e5e7eb;
-                        font-size: 11px;
-                        font-weight: 500;
-                        cursor: pointer;
-                        background: white;
-                        color: #6b7280;
-                        transition: all 0.2s ease;
-                        white-space: nowrap;
-                    }
-                    .dateRangeBtn:hover:not(.active) {
-                        background-color: #f9fafb;
-                        border-color: #274d4c;
-                        color: #274d4c;
-                    }
-                    .dateRangeBtn.active {
-                        background: #274d4c;
-                        border-color: #274d4c;
-                        color: white;
-                    }
-                    .compact-select {
-                        border: 1px solid #e5e7eb;
-                        border-radius: 6px;
-                        padding: 6px 8px;
-                        font-size: 12px;
-                        background: white;
-                        color: #374151;
-                        cursor: pointer;
-                        transition: all 0.2s ease;
-                        font-weight: 500;
-                    }
-                    .compact-select:hover {
-                        border-color: #274d4c;
-                    }
-                    .compact-select:focus {
-                        outline: none;
-                        border-color: #274d4c;
-                        box-shadow: 0 0 0 2px rgba(39, 77, 76, 0.1);
-                    }
-                    .reset-btn-compact {
-                        background: #ef4444;
-                        border: none;
-                        color: white;
-                        padding: 6px 12px;
-                        border-radius: 6px;
-                        font-size: 11px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.2s ease;
-                    }
-                    .reset-btn-compact:hover {
-                        background: #dc2626;
-                    }
-                    .filter-loader-compact {
-                        display: none;
-                        align-items: center;
-                        font-size: 11px;
-                        color: #274d4c;
-                        font-weight: 500;
-                    }
-                    .filter-loader-compact.active {
-                        display: flex;
-                    }
-                    .quick-filter-btn {
-                        padding: 6px 12px;
-                        border: 1px solid #e5e7eb;
-                        border-radius: 6px;
-                        font-size: 11px;
-                        font-weight: 500;
-                        cursor: pointer;
-                        background: white;
-                        color: #6b7280;
-                        transition: all 0.2s ease;
-                        white-space: nowrap;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 6px;
-                    }
-                    .quick-filter-btn:hover {
-                        background-color: #f9fafb;
-                        border-color: #274d4c;
-                        color: #274d4c;
-                    }
-                    .quick-filter-btn.active {
-                        background: #274d4c;
-                        color: white;
-                        border-color: #274d4c;
-                    }
-                </style>
-                
-                <!-- Compact Filter Layout -->
-                <div class="flex flex-wrap items-center gap-4">
-                    <!-- Date Range Buttons -->
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs font-semibold text-gray-600 mr-2">Quick:</span>
-                        <button class="dateRangeBtn" data-range="today">Today</button>
-                        <button class="dateRangeBtn" data-range="7days">7 Days</button>
-                        <button class="dateRangeBtn" data-range="30days">30 Days</button>
-                        <button class="dateRangeBtn" data-range="thismonth">This Month</button>
-                    </div>
-
-                    <!-- Divider -->
-                    <div class="h-6 w-px bg-gray-300"></div>
-
-                    <!-- Time Filters -->
-                    <div class="flex items-center gap-3">
-                        <select id="trendFilterWeek" class="compact-select">
-                            <option value="">All Weeks</option>
-                            <option value="current">Current Week</option>
-                            <option value="last">Last Week</option>
-                            <option value="2">2 Weeks Ago</option>
-                            <option value="3">3 Weeks Ago</option>
-                            <option value="4">4 Weeks Ago</option>
-                        </select>
-                        <select id="trendFilterYear" class="compact-select">
+            <!-- Standardized Filter Section -->
+            <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
+                <div class="mb-4 pb-4 border-b border-gray-200">
+                    <h3 class="text-sm font-bold text-gray-900">
+                        <i class="fas fa-filter mr-2 text-alertara-700"></i>Trend Filters
+                    </h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                    <!-- Time Period -->
+                    <div>
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Time Period</label>
+                        <select id="trendFilterYear" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                             @for($y = now()->year - 5; $y <= now()->year; $y++)
                                 <option value="{{ $y }}" {{ $y == now()->year ? 'selected' : '' }}>{{ $y }}</option>
                             @endfor
                         </select>
-                        <select id="trendFilterMonth" class="compact-select">
+                    </div>
+
+                    <!-- Month -->
+                    <div>
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Month</label>
+                        <select id="trendFilterMonth" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                             <option value="">All Months</option>
                             @for($m = 1; $m <= 12; $m++)
                                 <option value="{{ $m }}">{{ \Carbon\Carbon::createFromFormat('m', $m)->format('M') }}</option>
                             @endfor
                         </select>
-                        <select id="trendDayOfWeek" class="compact-select">
+                    </div>
+
+                    <!-- Day of Week -->
+                    <div>
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Day of Week</label>
+                        <select id="trendDayOfWeek" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                             <option value="">All Days</option>
                             <option value="1">Sun</option>
                             <option value="2">Mon</option>
@@ -173,7 +70,12 @@ if (request()->query('token')) {
                             <option value="6">Fri</option>
                             <option value="7">Sat</option>
                         </select>
-                        <select id="trendTimeOfDay" class="compact-select">
+                    </div>
+
+                    <!-- Time of Day -->
+                    <div>
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Time of Day</label>
+                        <select id="trendTimeOfDay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                             <option value="">All Times</option>
                             <option value="morning">Morning</option>
                             <option value="afternoon">Afternoon</option>
@@ -182,17 +84,19 @@ if (request()->query('token')) {
                         </select>
                     </div>
 
-                    <!-- Divider -->
-                    <div class="h-6 w-px bg-gray-300"></div>
+                    <!-- Crime Type -->
+                    <div>
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Type</label>
+                        <select id="trendFilterCrimeType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                            <option value="">All Types</option>
+                        </select>
+                    </div>
 
-                    <!-- Actions -->
-                    <div class="flex items-center gap-2">
-                        <button id="resetTrendFilter" class="reset-btn-compact">
-                            <i class="fas fa-redo mr-1"></i>Reset
+                    <!-- Buttons -->
+                    <div class="flex items-end gap-2">
+                        <button id="resetTrendFilter" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                            <i class="fas fa-redo"></i>Reset
                         </button>
-                        <div class="filter-loader-compact" id="trendFilterLoader">
-                            <i class="fas fa-spinner fa-spin mr-1"></i>Loading...
-                        </div>
                     </div>
                 </div>
             </div>

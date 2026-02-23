@@ -63,7 +63,12 @@ if (request()->query('token')) {
 
                 <!-- Filters Section -->
                 <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div class="mb-4 pb-4 border-b border-gray-200">
+                        <h3 class="text-sm font-bold text-gray-900">
+                            <i class="fas fa-filter mr-2 text-alertara-700"></i>Map Filters
+                        </h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                         <!-- Visualization Mode -->
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">View Mode</label>
@@ -73,7 +78,7 @@ if (request()->query('token')) {
                                 <option value="clusters">Cluster View</option>
                             </select>
                         </div>
-                        
+
                         <!-- Time Period -->
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">Time Period</label>
@@ -84,7 +89,7 @@ if (request()->query('token')) {
                                 <option value="all" selected>All Time</option>
                             </select>
                         </div>
-                        
+
                         <!-- Crime Type -->
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">Category</label>
@@ -92,7 +97,7 @@ if (request()->query('token')) {
                                 <option value="">All Categories</option>
                             </select>
                         </div>
-                        
+
                         <!-- Case Status -->
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">Case Status</label>
@@ -105,7 +110,7 @@ if (request()->query('token')) {
                                 <option value="archived">Archived</option>
                             </select>
                         </div>
-                        
+
                         <!-- Clearance Status -->
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">Clearance Status</label>
@@ -115,27 +120,11 @@ if (request()->query('token')) {
                                 <option value="uncleared">Uncleared</option>
                             </select>
                         </div>
-                        
-                        <!-- Barangay -->
-                        <div>
-                            <label class="block text-sm font-medium text-alertara-800 mb-2">Barangay</label>
-                            <select id="barangay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                                <option value="">All Barangays</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Date Range -->
-                        <div>
-                            <label class="block text-sm font-medium text-alertara-800 mb-2">Date Range</label>
-                            <input type="date" id="dateFilter" 
-                                   class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        </div>
-                        
-                        <!-- Reset Button -->
-                        <div class="flex items-end">
-                            <button id="resetFilterBtn" class="w-full px-4 py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
-                                <i class="fas fa-redo"></i>
-                                <span>Reset</span>
+
+                        <!-- Buttons -->
+                        <div class="flex items-end gap-2">
+                            <button id="resetFilterBtn" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                                <i class="fas fa-redo"></i>Reset
                             </button>
                         </div>
                     </div>

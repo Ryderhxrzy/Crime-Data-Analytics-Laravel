@@ -120,7 +120,7 @@ if (request()->query('token')) {
 
                         <!-- Reset Button -->
                         <div class="flex items-end">
-                            <button id="resetFilterBtn" class="w-full px-4 py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
+                            <button id="resetFilterBtn" class="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
                                 <i class="fas fa-redo"></i>
                                 <span>Reset</span>
                             </button>

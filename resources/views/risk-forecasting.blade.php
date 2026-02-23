@@ -22,12 +22,17 @@ if (request()->query('token')) {
         </div>
 
         <!-- Forecast Controls -->
-        <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
+            <div class="mb-4 pb-4 border-b border-gray-200">
+                <h3 class="text-sm font-bold text-gray-900">
+                    <i class="fas fa-filter mr-2 text-alertara-700"></i>Forecast Filters
+                </h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 <!-- Forecast Period -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Forecast Period</label>
-                    <select id="forecastPeriod" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#274d4c]">
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Forecast Period</label>
+                    <select id="forecastPeriod" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="7d" selected>Next 7 Days</option>
                         <option value="14d">Next 14 Days</option>
                         <option value="30d">Next 30 Days</option>
@@ -37,17 +42,30 @@ if (request()->query('token')) {
 
                 <!-- Crime Type -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Crime Type</label>
-                    <select id="crimeTypeFilter" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#274d4c]">
-                        <option value="" selected>All Crime Types</option>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Type</label>
+                    <select id="crimeTypeFilter" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="" selected>All Types</option>
                     </select>
                 </div>
 
-                <!-- Area Selection -->
+                <!-- Case Status -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Target Area</label>
-                    <select id="targetArea" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#274d4c]">
-                        <option value="all" selected>All Areas</option>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Case Status</label>
+                    <select id="caseStatus" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="">All Status</option>
+                        <option value="reported">Reported</option>
+                        <option value="under_investigation">Under Investigation</option>
+                        <option value="solved">Solved</option>
+                        <option value="closed">Closed</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+
+                <!-- Barangay -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Barangay</label>
+                    <select id="targetArea" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="all" selected>All Barangays</option>
                         @if(isset($barangays))
                             @foreach($barangays as $barangay)
                                 <option value="{{ $barangay->id }}">{{ $barangay->barangay_name }}</option>
@@ -56,10 +74,19 @@ if (request()->query('token')) {
                     </select>
                 </div>
 
+                <!-- Reset Button -->
+                <div class="flex items-end">
+                    <button onclick="resetFilters()" class="w-full px-4 py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-redo"></i>
+                        <span>Reset</span>
+                    </button>
+                </div>
+
                 <!-- Generate Button -->
                 <div class="flex items-end">
-                    <button onclick="generateForecast()" class="w-full px-4 py-2 bg-[#274d4c] text-white rounded-md hover:bg-[#1a3534] transition-colors font-medium">
-                        <i class="fas fa-chart-line mr-2"></i>Generate Forecast
+                    <button onclick="generateForecast()" class="w-full px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 transition-colors font-medium flex items-center justify-center gap-2">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Generate</span>
                     </button>
                 </div>
             </div>
@@ -500,7 +527,16 @@ if (request()->query('token')) {
         function setupEventListeners() {
             document.getElementById('forecastPeriod').addEventListener('change', generateForecast);
             document.getElementById('crimeTypeFilter').addEventListener('change', generateForecast);
+            document.getElementById('caseStatus').addEventListener('change', generateForecast);
             document.getElementById('targetArea').addEventListener('change', generateForecast);
+        }
+
+        function resetFilters() {
+            document.getElementById('forecastPeriod').value = '7d';
+            document.getElementById('crimeTypeFilter').value = '';
+            document.getElementById('caseStatus').value = '';
+            document.getElementById('targetArea').value = 'all';
+            generateForecast();
         }
 
         function generateInitialForecast() {
