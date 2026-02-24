@@ -193,11 +193,10 @@
                     </div>
                 </div>
 
-                <!-- Crime Management Section -->
+                <!-- Crime Management Section 
                 <div class="nav-section">
                     <span class="section-label">Crime Management</span>
 
-                    <!-- Crime Incidents -->
                     <div class="tree-node mt-0.5">
                         <a href="{{ authUrl('crimes.index') }}"
                            class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crimes.*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
@@ -205,7 +204,7 @@
                             <span>Crime</span>
                         </a>
                     </div>
-                </div>
+                </div>-->
 
                 <!-- Audit Logs Section -->
                 <div class="nav-section">
