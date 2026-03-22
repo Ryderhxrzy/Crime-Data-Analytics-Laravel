@@ -8,6 +8,26 @@ if (request()->query('token')) {
 @extends('layouts.app')
 @section('title', 'Pattern Detection')
 @section('content')
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 0.4; }
+            100% { transform: scale(1); opacity: 0.7; }
+        }
+        
+        .custom-marker, .chain-marker, .simulation-marker {
+            background: transparent !important;
+            border: none !important;
+        }
+        
+        #crimeMap {
+            z-index: 1;
+        }
+    </style>
+    
     <div class="p-4 lg:p-6 pt-0 lg:pt-0 pb-12">
         <!-- Page Header -->
         <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
@@ -21,844 +41,807 @@ if (request()->query('token')) {
             </div>
         </div>
 
+        <!-- Analysis Type Selection -->
+        <div class="bg-white rounded-xl p-6 mb-6 border border-gray-200">
+            <div class="mb-4 pb-4 border-b border-gray-200">
+                <h3 class="text-sm font-bold text-gray-900">
+                    <i class="fas fa-chart-line mr-2 text-alertara-700"></i>Analysis Type
+                </h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="analysis-type-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-alertara-500 transition" data-type="temporal">
+                    <div class="flex items-center mb-2">
+                        <i class="fas fa-clock text-2xl text-alertara-600 mr-3"></i>
+                        <h4 class="font-semibold text-gray-900">Temporal Analysis</h4>
+                    </div>
+                    <p class="text-sm text-gray-600">Detect time-based patterns and trends in crime data</p>
+                </div>
+                <div class="analysis-type-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-alertara-500 transition" data-type="spatial">
+                    <div class="flex items-center mb-2">
+                        <i class="fas fa-map-marker-alt text-2xl text-alertara-600 mr-3"></i>
+                        <h4 class="font-semibold text-gray-900">Spatial Analysis</h4>
+                    </div>
+                    <p class="text-sm text-gray-600">Identify geographic hotspots and location patterns</p>
+                </div>
+                <div class="analysis-type-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-alertara-500 transition" data-type="predictive">
+                    <div class="flex items-center mb-2">
+                        <i class="fas fa-crystal-ball text-2xl text-alertara-600 mr-3"></i>
+                        <h4 class="font-semibold text-gray-900">Predictive Analysis</h4>
+                    </div>
+                    <p class="text-sm text-gray-600">Forecast future crime trends and patterns</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Standardized Filter Section -->
         <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
             <div class="mb-4 pb-4 border-b border-gray-200">
                 <h3 class="text-sm font-bold text-gray-900">
-                    <i class="fas fa-filter mr-2 text-alertara-700"></i>Pattern Detection Filters
+                    <i class="fas fa-filter mr-2 text-alertara-700"></i>Customize Your Search
                 </h3>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                <!-- Analysis Type -->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Analysis Type</label>
-                    <select id="analysisType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="temporal" selected>Temporal Patterns</option>
-                        <option value="spatial">Spatial Patterns</option>
-                        <option value="behavioral">Behavioral Patterns</option>
-                        <option value="sequential">Sequential Patterns</option>
-                    </select>
-                </div>
-
-                <!-- Time Range -->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Time Range</label>
-                    <select id="timeRange" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="7d">Last 7 Days</option>
-                        <option value="30d" selected>Last 30 Days</option>
-                        <option value="90d">Last 90 Days</option>
-                        <option value="1y">Last Year</option>
-                    </select>
-                </div>
-
-                <!-- Pattern Sensitivity -->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Sensitivity</label>
-                    <select id="sensitivity" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="low">Low (Broad)</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="high">High (Specific)</option>
-                    </select>
-                </div>
+                <!-- Analysis Type Hidden (selected via cards) -->
+                <input type="hidden" id="analysisType" value="temporal">
 
                 <!-- Crime Category -->
                 <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Category</label>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Type</label>
                     <select id="patternCrimeType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="">All Categories</option>
+                        <option value="">All Types</option>
                         @foreach($crimeCategories as $category)
                             <option value="{{ $category->id }}">{{ $category->category_name }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <!-- Action Buttons (Span 2 columns) -->
-                <div class="col-span-2 flex items-end gap-2">
-                    <button onclick="runPatternDetection()" class="flex-1 px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 transition-colors flex items-center justify-center gap-2">
-                        <i class="fas fa-search"></i>Run Detection
-                    </button>
-                    <button onclick="resetPatternFilter()" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
-                        <i class="fas fa-redo"></i>Reset
-                    </button>
+                <!-- Specific Date -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Start Date</label>
+                    <input type="date" id="startDate" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                 </div>
+
+                <!-- End Date -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">End Date</label>
+                    <input type="date" id="endDate" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                </div>
+
+                <!-- Day of Week s-->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Day of Week</label>
+                    <select id="dayOfWeek" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="">All Days</option>
+                        <option value="monday">Monday</option>
+                        <option value="tuesday">Tuesday</option>
+                        <option value="wednesday">Wednesday</option>
+                        <option value="thursday">Thursday</option>
+                        <option value="friday">Friday</option>
+                        <option value="saturday">Saturday</option>
+                        <option value="sunday">Sunday</option>
+                    </select>
+                </div>
+
+                <!-- Time of Day -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Time of Day</label>
+                    <select id="timeOfDay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="">All Hours</option>
+                        <option value="morning">Morning (5AM - 12PM)</option>
+                        <option value="afternoon">Afternoon (12PM - 5PM)</option>
+                        <option value="evening">Evening (5PM - 9PM)</option>
+                        <option value="night">Night (9PM - 5AM)</option>
+                    </select>
+                </div>
+
+                <!-- Location/Barangay -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Location</label>
+                    <input type="text" id="location" placeholder="Enter barangay or area" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                </div>
+
+                <!-- Sensitivity Level -->
+                <div>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Sensitivity</label>
+                    <select id="sensitivity" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="low">Low - Broad Patterns</option>
+                        <option value="medium" selected>Medium - Balanced</option>
+                        <option value="high">High - Specific Patterns</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="mt-4 flex gap-2 justify-end">
+                <button id="resetFilters" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition">
+                    <i class="fas fa-redo mr-2"></i>Reset
+                </button>
+                <button id="applyFilters" class="px-4 py-2 bg-alertara-700 hover:bg-alertara-800 text-white rounded-lg font-medium transition">
+                    <i class="fas fa-search mr-2"></i>Analyze
+                </button>
+                <button id="runSimulation" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition">
+                    <i class="fas fa-play mr-2"></i>Run Simulation
+                </button>
             </div>
         </div>
 
-        <!-- Pattern Detection Statistics -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-sm font-semibold text-purple-900 mb-1">
-                            <i class="fas fa-project-diagram mr-1"></i>Patterns Found
-                        </p>
-                        <p class="text-2xl font-bold text-purple-700" id="patternsFound">24</p>
-                        <p class="text-xs text-purple-600 mt-1">Significant patterns detected</p>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-sm font-semibold text-indigo-900 mb-1">
-                            <i class="fas fa-exclamation-triangle mr-1"></i>Anomalies
-                        </p>
-                        <p class="text-2xl font-bold text-indigo-700" id="anomaliesDetected">7</p>
-                        <p class="text-xs text-indigo-600 mt-1">Unusual activity patterns</p>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-gradient-to-br from-pink-50 to-pink-100 border-pink-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-sm font-semibold text-pink-900 mb-1">
-                            <i class="fas fa-link mr-1"></i>Correlations
-                        </p>
-                        <p class="text-2xl font-bold text-pink-700" id="correlations">12</p>
-                        <p class="text-xs text-pink-600 mt-1">Related pattern clusters</p>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-sm font-semibold text-teal-900 mb-1">
-                            <i class="fas fa-bullseye mr-1"></i>Accuracy
-                        </p>
-                        <p class="text-2xl font-bold text-teal-700" id="detectionAccuracy">92%</p>
-                        <p class="text-xs text-teal-600 mt-1">Pattern detection accuracy</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Pattern Detection Timeline -->
-        <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow mb-8">
-            <div class="p-4 border-b border-gray-200">
-                <h3 class="text-lg font-bold text-gray-900 flex items-center">
-                    <i class="fas fa-timeline mr-2" style="color: #274d4c;"></i>
-                    Pattern Detection Timeline
-                </h3>
-                <p class="text-sm text-gray-600 mt-1">Chronological view of detected patterns and their evolution</p>
-            </div>
-            <div class="p-6">
-                <div class="space-y-6" id="patternTimeline">
-                    <!-- Timeline Item 1 -->
-                    <div class="flex gap-4">
-                        <div class="flex flex-col items-center">
-                            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-2">
-                                <i class="fas fa-exclamation text-red-600 text-lg"></i>
-                            </div>
-                            <div class="w-1 h-20 bg-red-200"></div>
-                        </div>
-                        <div class="flex-1 pb-4">
-                            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                                <div class="flex items-start justify-between mb-2">
-                                    <h4 class="font-semibold text-gray-900">Critical: Vehicle Theft Hotspot Sequence</h4>
-                                    <span class="text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded">2 hours ago</span>
-                                </div>
-                                <p class="text-sm text-gray-700 mb-2">Sequential vehicle theft pattern detected with 91% confidence</p>
-                                <div class="flex flex-wrap gap-2">
-                                    <span class="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">Sequential Pattern</span>
-                                    <span class="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded">High Risk</span>
-                                    <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">4 Incidents</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Timeline Item 2 -->
-                    <div class="flex gap-4">
-                        <div class="flex flex-col items-center">
-                            <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mb-2">
-                                <i class="fas fa-warning text-orange-600 text-lg"></i>
-                            </div>
-                            <div class="w-1 h-20 bg-orange-200"></div>
-                        </div>
-                        <div class="flex-1 pb-4">
-                            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                                <div class="flex items-start justify-between mb-2">
-                                    <h4 class="font-semibold text-gray-900">Emerging: Industrial Zone Burglary Cluster</h4>
-                                    <span class="text-xs font-semibold text-orange-700 bg-orange-100 px-2 py-1 rounded">6 hours ago</span>
-                                </div>
-                                <p class="text-sm text-gray-700 mb-2">Spatial pattern of burglaries in warehouses with 72% match rate</p>
-                                <div class="flex flex-wrap gap-2">
-                                    <span class="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded">Spatial Pattern</span>
-                                    <span class="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded">Medium Risk</span>
-                                    <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">8 Incidents</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Timeline Item 3 -->
-                    <div class="flex gap-4">
-                        <div class="flex flex-col items-center">
-                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-2">
-                                <i class="fas fa-check text-purple-600 text-lg"></i>
-                            </div>
-                            <div class="w-1 h-20 bg-purple-200"></div>
-                        </div>
-                        <div class="flex-1 pb-4">
-                            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                                <div class="flex items-start justify-between mb-2">
-                                    <h4 class="font-semibold text-gray-900">Active: Weekend Night Theft Pattern</h4>
-                                    <span class="text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-1 rounded">1 day ago</span>
-                                </div>
-                                <p class="text-sm text-gray-700 mb-2">Consistent weekend night theft pattern in commercial areas with 87% match rate</p>
-                                <div class="flex flex-wrap gap-2">
-                                    <span class="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">Temporal Pattern</span>
-                                    <span class="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">High Risk</span>
-                                    <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">12 Incidents</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Timeline Item 4 -->
-                    <div class="flex gap-4">
-                        <div class="flex flex-col items-center">
-                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-2">
-                                <i class="fas fa-check text-green-600 text-lg"></i>
-                            </div>
-                        </div>
-                        <div class="flex-1">
-                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                                <div class="flex items-start justify-between mb-2">
-                                    <h4 class="font-semibold text-gray-900">Resolved: Residential Robbery Streak</h4>
-                                    <span class="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded">3 days ago</span>
-                                </div>
-                                <p class="text-sm text-gray-700 mb-2">Pattern successfully identified and suspects arrested - pattern no longer active</p>
-                                <div class="flex flex-wrap gap-2">
-                                    <span class="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">Resolved</span>
-                                    <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">6 Incidents</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Pattern Visualization -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <!-- Pattern Timeline (Temporal) -->
-            <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                <div class="p-4 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-900 flex items-center">
-                        <i class="fas fa-clock mr-2" style="color: #274d4c;"></i>
-                        Pattern Occurrence Timeline
-                    </h3>
-                </div>
-                <div class="p-4">
-                    <div style="position: relative; height: 400px;">
-                        <canvas id="temporalPatternChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pattern Network -->
-            <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                <div class="p-4 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-900 flex items-center">
-                        <i class="fas fa-network-wired mr-2" style="color: #274d4c;"></i>
-                        Pattern Correlation Network
-                    </h3>
-                </div>
-                <div class="p-4">
-                    <div style="position: relative; height: 400px;">
-                        <canvas id="patternNetworkChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Detailed Pattern Analysis -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <!-- Frequency Patterns -->
-            <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                <div class="p-4 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-900 flex items-center">
-                        <i class="fas fa-chart-bar mr-2" style="color: #274d4c;"></i>
-                        Frequency Patterns
-                    </h3>
-                </div>
-                <div class="p-4">
-                    <div style="position: relative; height: 300px;">
-                        <canvas id="frequencyPatternChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sequence Patterns -->
-            <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                <div class="p-4 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-900 flex items-center">
-                        <i class="fas fa-sort-numeric-down mr-2" style="color: #274d4c;"></i>
-                        Sequence Analysis
-                    </h3>
-                </div>
-                <div class="p-4">
-                    <div style="position: relative; height: 300px;">
-                        <canvas id="sequencePatternChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Anomaly Detection -->
-            <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                <div class="p-4 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-900 flex items-center">
-                        <i class="fas fa-radar mr-2" style="color: #274d4c;"></i>
-                        Anomaly Detection
-                    </h3>
-                </div>
-                <div class="p-4">
-                    <div style="position: relative; height: 300px;">
-                        <canvas id="anomalyDetectionChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Detected Patterns List with Incident Sequences -->
-        <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow mb-8">
-            <div class="p-4 border-b border-gray-200">
-                <h3 class="text-lg font-bold text-gray-900 flex items-center">
-                    <i class="fas fa-list mr-2" style="color: #274d4c;"></i>
-                    Detected Patterns & Incident Sequences
-                </h3>
-                <p class="text-sm text-gray-600 mt-1">Detailed analysis with chronological incident sequences</p>
-            </div>
-            <div class="p-4">
-                <div class="space-y-4" id="patternsList">
-                    <!-- Pattern 1: Weekend Night Pattern with Sequence -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:border-purple-300 transition-colors">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="flex items-center">
-                                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                                    <i class="fas fa-calendar-week text-purple-600"></i>
-                                </div>
-                                <div>
-                                    <h4 class="font-semibold text-gray-900">Weekend Night Theft Pattern</h4>
-                                    <p class="text-sm text-gray-600">Temporal • High Confidence • 87% Match</p>
-                                </div>
-                            </div>
-                            <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">Active</span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Frequency:</span>
-                                <span class="text-gray-600 ml-2">Every weekend, 8PM-2AM</span>
-                            </div>
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Locations:</span>
-                                <span class="text-gray-600 ml-2">Downtown, Commercial District</span>
-                            </div>
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Risk Level:</span>
-                                <span class="text-red-600 ml-2 font-medium">High</span>
-                            </div>
-                        </div>
-                        <div class="bg-gray-50 rounded p-3 mb-3">
-                            <p class="text-sm text-gray-700">
-                                <strong>Pattern Description:</strong> Significant increase in theft incidents during weekend nights, particularly in commercial areas. Pattern suggests organized activity with 3-4 incidents per weekend following similar MO.
-                            </p>
-                        </div>
-                        <!-- Incident Sequence Timeline -->
-                        <div class="bg-white border border-gray-200 rounded p-3 text-xs">
-                            <p class="font-semibold text-gray-900 mb-2">Recent Incident Sequence:</p>
-                            <div class="space-y-1 text-gray-700">
-                                <div class="flex items-center gap-2"><span class="text-purple-600">●</span><strong>Feb 22, 11:45 PM</strong> - Theft at Downtown Mall</div>
-                                <div class="flex items-center gap-2"><span class="text-purple-600">→</span><strong>Feb 22, 12:30 AM</strong> - Theft at Commercial Center (3.2 km away)</div>
-                                <div class="flex items-center gap-2"><span class="text-purple-600">→</span><strong>Feb 22, 1:15 AM</strong> - Theft at Shopping District (1.8 km away)</div>
-                                <div class="flex items-center gap-2"><span class="text-purple-600">→</span><strong>Feb 23, 2:00 AM</strong> - Theft at Business Plaza (2.1 km away)</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Pattern 2: Industrial Zone Burglary -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition-colors">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="flex items-center">
-                                <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
-                                    <i class="fas fa-industry text-indigo-600"></i>
-                                </div>
-                                <div>
-                                    <h4 class="font-semibold text-gray-900">Industrial Zone Burglary Cluster</h4>
-                                    <p class="text-sm text-gray-600">Spatial • Medium Confidence • 72% Match</p>
-                                </div>
-                            </div>
-                            <span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">Emerging</span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Frequency:</span>
-                                <span class="text-gray-600 ml-2">2-3 times per week</span>
-                            </div>
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Locations:</span>
-                                <span class="text-gray-600 ml-2">Industrial Zone, Warehouses</span>
-                            </div>
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Risk Level:</span>
-                                <span class="text-orange-600 ml-2 font-medium">Medium</span>
-                            </div>
-                        </div>
-                        <div class="bg-gray-50 rounded p-3 mb-3">
-                            <p class="text-sm text-gray-700">
-                                <strong>Pattern Description:</strong> Cluster of burglaries in industrial zone targeting warehouses during late night hours. Suggests possible insider knowledge or systematic surveillance of targets.
-                            </p>
-                        </div>
-                        <!-- Incident Spatial Sequence -->
-                        <div class="bg-white border border-gray-200 rounded p-3 text-xs">
-                            <p class="font-semibold text-gray-900 mb-2">Spatial Sequence (Last 2 Weeks):</p>
-                            <div class="space-y-1 text-gray-700">
-                                <div class="flex items-center gap-2"><span class="text-indigo-600">●</span><strong>Feb 20, 2:30 AM</strong> - Warehouse A (Industrial Zone North)</div>
-                                <div class="flex items-center gap-2"><span class="text-indigo-600">→</span><strong>Feb 22, 1:45 AM</strong> - Warehouse C (Industrial Zone South, 0.8 km away)</div>
-                                <div class="flex items-center gap-2"><span class="text-indigo-600">→</span><strong>Feb 24, 3:00 AM</strong> - Warehouse B (Industrial Zone Central, 0.5 km away)</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Pattern 3: Vehicle Theft Sequence -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:border-pink-300 transition-colors">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="flex items-center">
-                                <div class="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center mr-3">
-                                    <i class="fas fa-car text-pink-600"></i>
-                                </div>
-                                <div>
-                                    <h4 class="font-semibold text-gray-900">Vehicle Theft Hotspot Sequence</h4>
-                                    <p class="text-sm text-gray-600">Sequential • High Confidence • 91% Match</p>
-                                </div>
-                            </div>
-                            <span class="px-3 py-1 bg-pink-100 text-pink-700 rounded-full text-xs font-semibold">Critical</span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Frequency:</span>
-                                <span class="text-gray-600 ml-2">Every 3-4 days</span>
-                            </div>
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Locations:</span>
-                                <span class="text-gray-600 ml-2">Parking Areas, Residential Streets</span>
-                            </div>
-                            <div class="text-sm">
-                                <span class="font-medium text-gray-700">Risk Level:</span>
-                                <span class="text-red-600 ml-2 font-medium">Critical</span>
-                            </div>
-                        </div>
-                        <div class="bg-gray-50 rounded p-3 mb-3">
-                            <p class="text-sm text-gray-700">
-                                <strong>Pattern Description:</strong> Sequential vehicle theft pattern following specific route and targeting similar vehicle types. High correlation with specific time windows suggests coordinated operation.
-                            </p>
-                        </div>
-                        <!-- Sequential Timeline -->
-                        <div class="bg-white border border-gray-200 rounded p-3 text-xs">
-                            <p class="font-semibold text-gray-900 mb-2">Sequential Attack Pattern:</p>
-                            <div class="space-y-1 text-gray-700">
-                                <div class="flex items-center gap-2"><span class="text-pink-600">●</span><strong>Feb 15, 10:15 PM</strong> - Toyota Camry stolen (Residential District A)</div>
-                                <div class="flex items-center gap-2"><span class="text-pink-600">→</span><strong>Feb 18, 9:45 PM</strong> - Honda Civic stolen (Parking lot B, 2.1 km away)</div>
-                                <div class="flex items-center gap-2"><span class="text-pink-600">→</span><strong>Feb 21, 11:30 PM</strong> - Toyota Corolla stolen (Residential District C, 1.9 km away)</div>
-                                <div class="flex items-center gap-2"><span class="text-pink-600">→</span><strong>Feb 23, 10:00 PM</strong> - Honda Accord stolen (Parking lot D, 2.3 km away) [ESTIMATED NEXT]</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Pattern Intelligence & Recommendations -->
-        <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-            <div class="p-4 border-b border-gray-200">
-                <h3 class="text-lg font-bold text-gray-900 flex items-center">
-                    <i class="fas fa-brain mr-2" style="color: #274d4c;"></i>
-                    Pattern Intelligence & Strategic Recommendations
+        <!-- Simulation Results Section -->
+        <div id="simulationResults" class="bg-white rounded-xl p-6 mb-6 border border-gray-200 hidden">
+            <div class="mb-4 pb-4 border-b border-gray-200">
+                <h3 class="text-sm font-bold text-gray-900">
+                    <i class="fas fa-chart-bar mr-2 text-alertara-700"></i>Simulation Results
                 </h3>
             </div>
-            <div class="p-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <!-- Predictive Insights -->
-                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                        <h4 class="font-semibold text-purple-900 mb-3">
-                            <i class="fas fa-crystal-ball mr-1"></i>Predictive Insights
-                        </h4>
-                        <div class="space-y-2">
-                            <div class="flex items-start">
-                                <i class="fas fa-arrow-right text-purple-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Weekend pattern likely to continue for next 3 weeks</p>
-                            </div>
-                            <div class="flex items-start">
-                                <i class="fas fa-arrow-right text-purple-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Industrial activity may expand to adjacent areas</p>
-                            </div>
-                            <div class="flex items-start">
-                                <i class="fas fa-arrow-right text-purple-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Vehicle theft pattern shows 78% recurrence probability</p>
-                            </div>
-                        </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Predictions -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-900 mb-3">
+                        <i class="fas fa-crystal-ball mr-2 text-blue-600"></i>Predictions
+                    </h4>
+                    <div id="predictionsList" class="space-y-2">
+                        <!-- Predictions will be populated here -->
                     </div>
+                </div>
+                <!-- Recommendations -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-900 mb-3">
+                        <i class="fas fa-lightbulb mr-2 text-yellow-600"></i>Recommendations
+                    </h4>
+                    <div id="recommendationsList" class="space-y-2">
+                        <!-- Recommendations will be populated here -->
+                    </div>
+                </div>
+            </div>
+            <!-- Simulation Chart -->
+            <div class="mt-6">
+                <h4 class="font-semibold text-gray-900 mb-3">
+                    <i class="fas fa-chart-line mr-2 text-green-600"></i>Trend Analysis
+                </h4>
+                <div class="bg-gray-50 rounded-lg p-4 h-64 flex items-center justify-center">
+                    <canvas id="simulationChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+        </div>
 
-                    <!-- Tactical Recommendations -->
-                    <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                        <h4 class="font-semibold text-indigo-900 mb-3">
-                            <i class="fas fa-chess mr-1"></i>Tactical Actions
-                        </h4>
-                        <div class="space-y-2">
-                            <div class="flex items-start">
-                                <i class="fas fa-shield-alt text-indigo-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Increase weekend patrols in downtown area</p>
-                            </div>
-                            <div class="flex items-start">
-                                <i class="fas fa-shield-alt text-indigo-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Set up surveillance in industrial zone</p>
-                            </div>
-                            <div class="flex items-start">
-                                <i class="fas fa-shield-alt text-indigo-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Deploy bait vehicles in high-risk areas</p>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Analysis Results Section -->
+        <div id="analysisResults" class="bg-white rounded-xl p-6 mb-6 border border-gray-200 hidden">
+            <div class="mb-4 pb-4 border-b border-gray-200">
+                <h3 class="text-sm font-bold text-gray-900">
+                    <i class="fas fa-magnifying-glass mr-2 text-alertara-700"></i>Analysis Results
+                </h3>
+            </div>
+            <div id="patternsList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Pattern results will be populated here -->
+            </div>
+        </div>
 
-                    <!-- Resource Optimization -->
-                    <div class="bg-pink-50 border border-pink-200 rounded-lg p-4">
-                        <h4 class="font-semibold text-pink-900 mb-3">
-                            <i class="fas fa-cogs mr-1"></i>Resource Optimization
-                        </h4>
-                        <div class="space-y-2">
-                            <div class="flex items-start">
-                                <i class="fas fa-users text-pink-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Reallocate 30% units to pattern hotspots</p>
-                            </div>
-                            <div class="flex items-start">
-                                <i class="fas fa-clock text-pink-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Adjust shift schedules to match patterns</p>
-                            </div>
-                            <div class="flex items-start">
-                                <i class="fas fa-route text-pink-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Optimize patrol routes based on sequences</p>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Map Visualization Section -->
+        <div class="bg-white rounded-xl p-6 mb-6 border border-gray-200">
+            <div class="mb-4 pb-4 border-b border-gray-200">
+                <h3 class="text-sm font-bold text-gray-900">
+                    <i class="fas fa-map mr-2 text-alertara-700"></i>Crime Map Visualization - Quezon City
+                </h3>
+            </div>
+            
+            <!-- Map Controls -->
+            <div class="mb-4 flex flex-wrap gap-2">
+                <button id="showCurrentHotspots" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-fire mr-1"></i>Current Hotspots
+                </button>
+                <button id="showPredictedHotspots" class="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-chart-line mr-1"></i>Predicted Hotspots
+                </button>
+                <button id="showCrimeChains" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-link mr-1"></i>Crime Chains
+                </button>
+                <button id="toggleSimulation" class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-play mr-1"></i>Simulation
+                </button>
+            </div>
 
-                    <!-- Community Engagement -->
-                    <div class="bg-teal-50 border border-teal-200 rounded-lg p-4">
-                        <h4 class="font-semibold text-teal-900 mb-3">
-                            <i class="fas fa-users-cog mr-1"></i>Community Strategy
-                        </h4>
-                        <div class="space-y-2">
-                            <div class="flex items-start">
-                                <i class="fas fa-bullhorn text-teal-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Alert residents about weekend patterns</p>
-                            </div>
-                            <div class="flex items-start">
-                                <i class="fas fa-handshake text-teal-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Partner with industrial security teams</p>
-                            </div>
-                            <div class="flex items-start">
-                                <i class="fas fa-eye text-teal-600 mt-1 mr-2 text-xs"></i>
-                                <p class="text-sm text-gray-700">Establish neighborhood watch programs</p>
-                            </div>
-                        </div>
+            <!-- Map Container -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Map -->
+                <div class="lg:col-span-2">
+                    <div id="crimeMap" class="h-96 rounded-lg border border-gray-300"></div>
+                </div>
+                
+                <!-- Crime Chain Panel -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-900 mb-3">
+                        <i class="fas fa-link mr-2 text-purple-600"></i>Crime Chains
+                    </h4>
+                    <div id="crimeChainsList" class="space-y-3">
+                        <!-- Crime chains will be populated here -->
                     </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="mt-4 flex flex-wrap gap-4 text-sm">
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
+                    <span>Theft</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
+                    <span>Robbery</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-yellow-500 rounded-full mr-2"></div>
+                    <span>Assault</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-purple-500 rounded-full mr-2"></div>
+                    <span>Crime Chain</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-blue-300 rounded-full mr-2 opacity-50"></div>
+                    <span>Predicted Area</span>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <script>
-        let temporalPatternChart, patternNetworkChart, frequencyPatternChart, sequencePatternChart, anomalyDetectionChart;
-
         document.addEventListener('DOMContentLoaded', function() {
-            initializeTemporalPatternChart();
-            initializePatternNetworkChart();
-            initializeFrequencyPatternChart();
-            initializeSequencePatternChart();
-            initializeAnomalyDetectionChart();
-            setupEventListeners();
-        });
-
-        function initializeTemporalPatternChart() {
-            const ctx = document.getElementById('temporalPatternChart')?.getContext('2d');
-            if (!ctx) return;
-
-            const hours = Array.from({length: 24}, (_, i) => `${i}:00`);
-            const weekdayData = hours.map(() => Math.floor(Math.random() * 20 + 10));
-            const weekendData = hours.map(() => Math.floor(Math.random() * 40 + 20));
-
-            // Enhance weekend evening hours
-            for (let i = 20; i <= 23; i++) {
-                weekendData[i] = Math.floor(Math.random() * 30 + 50);
+            // Initialize map
+            let map;
+            let markers = [];
+            let crimeChains = [];
+            let simulationActive = false;
+            
+            function initializeMap() {
+                // Initialize map centered on Quezon City
+                map = L.map('crimeMap').setView([14.6760, 121.0437], 13);
+                
+                // Add OpenStreetMap tiles
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+                
+                // Add sample crime data
+                addSampleCrimeData();
+                addCrimeChains();
             }
-
-            temporalPatternChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: hours,
-                    datasets: [{
-                        label: 'Weekday Pattern',
-                        data: weekdayData,
-                        borderColor: '#274d4c',
-                        backgroundColor: 'rgba(39, 77, 76, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }, {
-                        label: 'Weekend Pattern',
-                        data: weekendData,
-                        borderColor: '#8b5cf6',
-                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top' }
-                    },
-                    scales: {
-                        y: { 
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Incident Frequency'
-                            }
-                        }
-                    }
+            
+            // Sample crime data for Quezon City
+            function addSampleCrimeData() {
+                const crimeData = [
+                    // Commonwealth Area
+                    { lat: 14.7489, lng: 121.0495, type: 'theft', description: 'Theft - Commonwealth Ave', severity: 'high' },
+                    { lat: 14.7501, lng: 121.0512, type: 'theft', description: 'Theft - near SM Fairview', severity: 'high' },
+                    { lat: 14.7523, lng: 121.0487, type: 'theft', description: 'Theft - Commonwealth Market', severity: 'high' },
+                    { lat: 14.7515, lng: 121.0528, type: 'robbery', description: 'Robbery - Commonwealth', severity: 'critical' },
+                    
+                    // Cubao Area
+                    { lat: 14.6121, lng: 121.0487, type: 'assault', description: 'Assault - Cubao', severity: 'medium' },
+                    { lat: 14.6134, lng: 121.0501, type: 'robbery', description: 'Robbery - Ali Mall', severity: 'high' },
+                    { lat: 14.6109, lng: 121.0472, type: 'theft', description: 'Theft - Cubao Station', severity: 'medium' },
+                    
+                    // UP Diliman Area
+                    { lat: 14.6539, lng: 121.0684, type: 'theft', description: 'Theft - UP Diliman', severity: 'low' },
+                    { lat: 14.6551, lng: 121.0692, type: 'assault', description: 'Assault - UP Village', severity: 'medium' },
+                    
+                    // Eastwood Area
+                    { lat: 14.6084, lng: 121.0966, type: 'robbery', description: 'Robbery - Eastwood', severity: 'high' },
+                    { lat: 14.6072, lng: 121.0951, type: 'theft', description: 'Theft - Eastwood Mall', severity: 'medium' }
+                ];
+                
+                crimeData.forEach(crime => {
+                    const color = getCrimeColor(crime.type);
+                    const icon = L.divIcon({
+                        className: 'custom-marker',
+                        html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+                        iconSize: [20, 20]
+                    });
+                    
+                    const marker = L.marker([crime.lat, crime.lng], { icon: icon })
+                        .addTo(map)
+                        .bindPopup(`
+                            <div class="p-2">
+                                <strong>${crime.description}</strong><br>
+                                <small>Type: ${crime.type}</small><br>
+                                <small>Severity: ${crime.severity}</small>
+                            </div>
+                        `);
+                    
+                    markers.push({ marker, type: crime.type, data: crime });
+                });
+            }
+            
+            // Add crime chains visualization
+            function addCrimeChains() {
+                // Commonwealth Area Crime Chain
+                const commonwealthChain = [
+                    { lat: 14.7489, lng: 121.0495, description: 'Point A: Theft Incident 1' },
+                    { lat: 14.7501, lng: 121.0512, description: 'Point B: Theft Incident 2' },
+                    { lat: 14.7515, lng: 121.0528, description: 'Point C: Robbery Incident' }
+                ];
+                
+                // Draw chain line
+                const chainLine = L.polyline(
+                    commonwealthChain.map(point => [point.lat, point.lng]),
+                    { color: 'purple', weight: 3, opacity: 0.7, dashArray: '10, 5' }
+                ).addTo(map);
+                
+                // Add chain markers
+                commonwealthChain.forEach((point, index) => {
+                    const chainIcon = L.divIcon({
+                        className: 'chain-marker',
+                        html: `<div style="background-color: purple; width: 25px; height: 25px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">${String.fromCharCode(65 + index)}</div>`,
+                        iconSize: [25, 25]
+                    });
+                    
+                    L.marker([point.lat, point.lng], { icon: chainIcon })
+                        .addTo(map)
+                        .bindPopup(`
+                            <div class="p-2">
+                                <strong>${point.description}</strong><br>
+                                <small>Crime Chain Connection</small>
+                            </div>
+                        `);
+                });
+                
+                // Update crime chains panel
+                updateCrimeChainsPanel();
+            }
+            
+            // Update crime chains panel
+            function updateCrimeChainsPanel() {
+                const chainsList = document.getElementById('crimeChainsList');
+                chainsList.innerHTML = `
+                    <div class="bg-white rounded-lg p-3 border-l-4 border-purple-500">
+                        <h5 class="font-semibold text-sm text-gray-900 mb-2">Commonwealth Area Chain</h5>
+                        <div class="text-xs text-gray-600 space-y-1">
+                            <div class="flex items-center">
+                                <span class="w-4 h-4 bg-purple-500 rounded-full text-white text-xs flex items-center justify-center mr-2">A</span>
+                                <span>Theft Incident 1</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="w-4 h-4 bg-purple-500 rounded-full text-white text-xs flex items-center justify-center mr-2">B</span>
+                                <span>Theft Incident 2</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="w-4 h-4 bg-purple-500 rounded-full text-white text-xs flex items-center justify-center mr-2">C</span>
+                                <span>Robbery Incident</span>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-xs text-orange-600">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            Pattern: Multiple theft incidents leading to robbery
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-3 border-l-4 border-orange-500">
+                        <h5 class="font-semibold text-sm text-gray-900 mb-2">Pattern Analysis</h5>
+                        <div class="text-xs text-gray-600 space-y-1">
+                            <div>• 3 theft incidents within 24 hours</div>
+                            <div>• Same geographic area</div>
+                            <div>• Escalation to robbery</div>
+                            <div>• Possible organized activity</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Get crime color by type
+            function getCrimeColor(type) {
+                const colors = {
+                    'theft': '#ef4444',      // red
+                    'robbery': '#f97316',    // orange
+                    'assault': '#eab308'     // yellow
+                };
+                return colors[type] || '#6b7280';
+            }
+            
+            // Map control functions
+            document.getElementById('showCurrentHotspots').addEventListener('click', function() {
+                // Reset map view to show all current crime data
+                map.setView([14.6760, 121.0437], 13);
+                this.classList.add('ring-2', 'ring-red-300');
+                setTimeout(() => this.classList.remove('ring-2', 'ring-red-300'), 1000);
+            });
+            
+            document.getElementById('showPredictedHotspots').addEventListener('click', function() {
+                // Show predicted expansion areas
+                showPredictedAreas();
+                this.classList.add('ring-2', 'ring-orange-300');
+                setTimeout(() => this.classList.remove('ring-2', 'ring-orange-300'), 1000);
+            });
+            
+            document.getElementById('showCrimeChains').addEventListener('click', function() {
+                // Focus on crime chains
+                map.setView([14.7507, 121.0510], 15);
+                this.classList.add('ring-2', 'ring-purple-300');
+                setTimeout(() => this.classList.remove('ring-2', 'ring-purple-300'), 1000);
+            });
+            
+            document.getElementById('toggleSimulation').addEventListener('click', function() {
+                simulationActive = !simulationActive;
+                if (simulationActive) {
+                    this.innerHTML = '<i class="fas fa-pause mr-1"></i>Stop Simulation';
+                    this.classList.remove('bg-green-600', 'hover:bg-green-700');
+                    this.classList.add('bg-red-600', 'hover:bg-red-700');
+                    startSimulation();
+                } else {
+                    this.innerHTML = '<i class="fas fa-play mr-1"></i>Simulation';
+                    this.classList.remove('bg-red-600', 'hover:bg-red-700');
+                    this.classList.add('bg-green-600', 'hover:bg-green-700');
+                    stopSimulation();
                 }
             });
-        }
+            
+            // Show predicted expansion areas
+            function showPredictedAreas() {
+                // Clear existing prediction layers
+                map.eachLayer(layer => {
+                    if (layer instanceof L.Circle && layer.options.isPrediction) {
+                        map.removeLayer(layer);
+                    }
+                });
+                
+                // Add prediction circles around hotspots
+                const hotspots = [
+                    { lat: 14.7507, lng: 121.0510, radius: 800 }, // Commonwealth
+                    { lat: 14.6121, lng: 121.0487, radius: 600 }, // Cubao
+                    { lat: 14.6084, lng: 121.0966, radius: 500 }  // Eastwood
+                ];
+                
+                hotspots.forEach(hotspot => {
+                    L.circle([hotspot.lat, hotspot.lng], {
+                        color: '#3b82f6',
+                        fillColor: '#3b82f6',
+                        fillOpacity: 0.2,
+                        radius: hotspot.radius,
+                        isPrediction: true
+                    }).addTo(map).bindPopup('Predicted expansion area if theft increases by 10%');
+                });
+            }
+            
+            // Simulation functions
+            let simulationInterval;
+            function startSimulation() {
+                let step = 0;
+                simulationInterval = setInterval(() => {
+                    if (step >= 5) {
+                        stopSimulation();
+                        return;
+                    }
+                    
+                    // Simulate crime spread
+                    simulateCrimeSpread(step);
+                    step++;
+                }, 2000);
+            }
+            
+            function stopSimulation() {
+                if (simulationInterval) {
+                    clearInterval(simulationInterval);
+                }
+                simulationActive = false;
+                const btn = document.getElementById('toggleSimulation');
+                btn.innerHTML = '<i class="fas fa-play mr-1"></i>Simulation';
+                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                btn.classList.add('bg-green-600', 'hover:bg-green-700');
+            }
+            
+            function simulateCrimeSpread(step) {
+                // Add temporary markers to show spread
+                const spreadPoints = [
+                    { lat: 14.7489 + (step * 0.002), lng: 121.0495 + (step * 0.002) },
+                    { lat: 14.7501 + (step * 0.001), lng: 121.0512 + (step * 0.001) }
+                ];
+                
+                spreadPoints.forEach(point => {
+                    const tempIcon = L.divIcon({
+                        className: 'simulation-marker',
+                        html: `<div style="background-color: #3b82f6; width: 15px; height: 15px; border-radius: 50%; border: 2px solid white; opacity: 0.7; animation: pulse 1s infinite;"></div>`,
+                        iconSize: [15, 15]
+                    });
+                    
+                    const tempMarker = L.marker([point.lat, point.lng], { icon: tempIcon })
+                        .addTo(map)
+                        .bindPopup('Predicted crime spread');
+                    
+                    // Remove after animation
+                    setTimeout(() => map.removeLayer(tempMarker), 1500);
+                });
+            }
+            
+            // Initialize map when page loads
+            initializeMap();
+            // Analysis type card selection
+            const analysisCards = document.querySelectorAll('.analysis-type-card');
+            analysisCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    // Remove active state from all cards
+                    analysisCards.forEach(c => {
+                        c.classList.remove('border-alertara-500', 'bg-alertara-50');
+                        c.classList.add('border-gray-200');
+                    });
+                    
+                    // Add active state to selected card
+                    this.classList.remove('border-gray-200');
+                    this.classList.add('border-alertara-500', 'bg-alertara-50');
+                    
+                    // Update hidden input
+                    document.getElementById('analysisType').value = this.dataset.type;
+                });
+            });
 
-        function initializePatternNetworkChart() {
-            const ctx = document.getElementById('patternNetworkChart')?.getContext('2d');
-            if (!ctx) return;
+            // Set default active card
+            document.querySelector('[data-type="temporal"]').click();
 
-            // Generate network data
-            const patterns = [
-                {x: 50, y: 50, r: 20, label: 'Theft Cluster'},
-                {x: 30, y: 30, r: 15, label: 'Burglary Pattern'},
-                {x: 70, y: 30, r: 12, label: 'Vehicle Theft'},
-                {x: 30, y: 70, r: 10, label: 'Vandalism'},
-                {x: 70, y: 70, r: 8, label: 'Assault Pattern'},
-                {x: 50, y: 20, r: 6, label: 'Drug Related'},
-                {x: 20, y: 50, r: 6, label: 'Fraud Pattern'}
-            ];
+            // Reset filters button
+            document.getElementById('resetFilters').addEventListener('click', function() {
+                document.getElementById('analysisType').value = 'temporal';
+                document.getElementById('patternCrimeType').value = '';
+                document.getElementById('startDate').value = '';
+                document.getElementById('endDate').value = '';
+                document.getElementById('dayOfWeek').value = '';
+                document.getElementById('timeOfDay').value = '';
+                document.getElementById('location').value = '';
+                document.getElementById('sensitivity').value = 'medium';
+                
+                // Reset analysis type selection
+                document.querySelector('[data-type="temporal"]').click();
+                
+                // Hide results
+                document.getElementById('analysisResults').classList.add('hidden');
+                document.getElementById('simulationResults').classList.add('hidden');
+            });
 
-            patternNetworkChart = new Chart(ctx, {
-                type: 'bubble',
-                data: {
-                    datasets: [{
-                        label: 'Pattern Connections',
-                        data: patterns,
-                        backgroundColor: function(context) {
-                            const colors = ['#8b5cf6', '#6366f1', '#ec4899', '#f43f5e', '#f59e0b'];
-                            return colors[context.dataIndex % colors.length];
+            // Apply filters button
+            document.getElementById('applyFilters').addEventListener('click', function() {
+                const filters = {
+                    analysisType: document.getElementById('analysisType').value,
+                    crimeType: document.getElementById('patternCrimeType').value,
+                    startDate: document.getElementById('startDate').value,
+                    endDate: document.getElementById('endDate').value,
+                    dayOfWeek: document.getElementById('dayOfWeek').value,
+                    timeOfDay: document.getElementById('timeOfDay').value,
+                    location: document.getElementById('location').value,
+                    sensitivity: document.getElementById('sensitivity').value
+                };
+
+                console.log('Pattern Detection Filters Applied:', filters);
+                performAnalysis(filters);
+            });
+
+            // Run simulation button
+            document.getElementById('runSimulation').addEventListener('click', function() {
+                const filters = {
+                    analysisType: document.getElementById('analysisType').value,
+                    crimeType: document.getElementById('patternCrimeType').value,
+                    startDate: document.getElementById('startDate').value,
+                    endDate: document.getElementById('endDate').value,
+                    location: document.getElementById('location').value
+                };
+
+                console.log('Running Simulation with filters:', filters);
+                runSimulation(filters);
+            });
+
+            // Perform analysis function
+            function performAnalysis(filters) {
+                const resultsDiv = document.getElementById('analysisResults');
+                const patternsList = document.getElementById('patternsList');
+                
+                // Sample patterns based on analysis type
+                let patterns = [];
+                
+                if (filters.analysisType === 'temporal') {
+                    patterns = [
+                        {
+                            title: 'Weekend Peak Pattern',
+                            description: 'Crime rates increase by 35% during Friday-Saturday nights',
+                            confidence: 87,
+                            icon: 'fa-calendar-week'
                         },
-                        borderColor: '#fff',
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return context.raw.label;
-                                }
-                            }
+                        {
+                            title: 'Monthly Cycle',
+                            description: 'Notable spike in incidents during mid-month periods',
+                            confidence: 72,
+                            icon: 'fa-calendar-alt'
                         }
-                    },
-                    scales: {
-                        x: { display: false },
-                        y: { display: false }
-                    }
-                }
-            });
-        }
-
-        function initializeFrequencyPatternChart() {
-            const ctx = document.getElementById('frequencyPatternChart')?.getContext('2d');
-            if (!ctx) return;
-
-            frequencyPatternChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                    datasets: [{
-                        label: 'Pattern Frequency',
-                        data: [12, 15, 18, 14, 25, 42, 38],
-                        backgroundColor: function(context) {
-                            const value = context.raw;
-                            if (value > 35) return '#8b5cf6';
-                            if (value > 25) return '#6366f1';
-                            return '#a78bfa';
+                    ];
+                } else if (filters.analysisType === 'spatial') {
+                    patterns = [
+                        {
+                            title: 'Downtown Hotspot',
+                            description: 'High concentration of incidents in commercial district',
+                            confidence: 91,
+                            icon: 'fa-map-marker-alt'
+                        },
+                        {
+                            title: 'Transportation Corridor',
+                            description: 'Pattern along main highway and bus routes',
+                            confidence: 78,
+                            icon: 'fa-road'
                         }
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: { beginAtZero: true }
-                    }
-                }
-            });
-        }
-
-        function initializeSequencePatternChart() {
-            const ctx = document.getElementById('sequencePatternChart')?.getContext('2d');
-            if (!ctx) return;
-
-            sequencePatternChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: ['Step 1', 'Step 2', 'Step 3', 'Step 4', 'Step 5', 'Step 6'],
-                    datasets: [{
-                        label: 'Common Sequence',
-                        data: [85, 72, 68, 45, 32, 15],
-                        borderColor: '#ec4899',
-                        backgroundColor: 'rgba(236, 72, 153, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }, {
-                        label: 'Alternative Sequence',
-                        data: [45, 68, 85, 72, 50, 25],
-                        borderColor: '#f43f5e',
-                        backgroundColor: 'rgba(244, 63, 94, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top' }
-                    },
-                    scales: {
-                        y: { 
-                            beginAtZero: true,
-                            max: 100,
-                            title: {
-                                display: true,
-                                text: 'Probability (%)'
-                            }
+                    ];
+                } else if (filters.analysisType === 'predictive') {
+                    patterns = [
+                        {
+                            title: ' Rising Trend Alert',
+                            description: '15% increase expected in next 30 days based on current patterns',
+                            confidence: 82,
+                            icon: 'fa-chart-line'
+                        },
+                        {
+                            title: 'Seasonal Pattern',
+                            description: 'Historical data suggests upcoming seasonal variation',
+                            confidence: 76,
+                            icon: 'fa-snowflake'
                         }
-                    }
+                    ];
                 }
-            });
-        }
 
-        function initializeAnomalyDetectionChart() {
-            const ctx = document.getElementById('anomalyDetectionChart')?.getContext('2d');
-            if (!ctx) return;
+                // Display patterns
+                patternsList.innerHTML = patterns.map(pattern => `
+                    <div class="bg-gray-50 rounded-lg p-4 border-l-4 border-alertara-500">
+                        <div class="flex items-start">
+                            <i class="fas ${pattern.icon} text-alertara-600 mt-1 mr-3"></i>
+                            <div class="flex-1">
+                                <h5 class="font-semibold text-gray-900">${pattern.title}</h5>
+                                <p class="text-sm text-gray-600 mt-1">${pattern.description}</p>
+                                <div class="mt-2">
+                                    <span class="text-xs bg-alertara-100 text-alertara-800 px-2 py-1 rounded-full">
+                                        ${pattern.confidence}% Confidence
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
 
-            const labels = Array.from({length: 30}, (_, i) => `Day ${i + 1}`);
-            const normalData = labels.map(() => Math.floor(Math.random() * 20 + 30));
-            const anomalyData = labels.map(() => null);
-
-            // Insert some anomalies
-            anomalyData[5] = 85;
-            anomalyData[12] = 78;
-            anomalyData[18] = 92;
-            anomalyData[25] = 71;
-
-            anomalyDetectionChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Normal Activity',
-                        data: normalData,
-                        borderColor: '#274d4c',
-                        backgroundColor: 'rgba(39, 77, 76, 0.1)',
-                        tension: 0.4
-                    }, {
-                        label: 'Anomalies',
-                        data: anomalyData,
-                        borderColor: '#ef4444',
-                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
-                        pointRadius: 8,
-                        pointHoverRadius: 10,
-                        showLine: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top' }
-                    },
-                    scales: {
-                        y: { 
-                            beginAtZero: true,
-                            max: 100,
-                            title: {
-                                display: true,
-                                text: 'Activity Level'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function setupEventListeners() {
-            document.getElementById('analysisType').addEventListener('change', runPatternDetection);
-            document.getElementById('timeRange').addEventListener('change', runPatternDetection);
-            document.getElementById('sensitivity').addEventListener('change', runPatternDetection);
-            document.getElementById('patternCrimeType').addEventListener('change', runPatternDetection);
-        }
-
-        function runPatternDetection() {
-            // Simulate pattern detection
-            const analysisType = document.getElementById('analysisType').value;
-            const sensitivity = document.getElementById('sensitivity').value;
-            
-            // Update statistics based on analysis
-            let patternsFound = Math.floor(Math.random() * 20 + 15);
-            let anomaliesDetected = Math.floor(Math.random() * 8 + 3);
-            let correlations = Math.floor(Math.random() * 10 + 8);
-            let accuracy = Math.floor(Math.random() * 10 + 85);
-            
-            if (sensitivity === 'high') {
-                patternsFound += 10;
-                anomaliesDetected += 3;
-                accuracy -= 5;
+                resultsDiv.classList.remove('hidden');
             }
-            
-            document.getElementById('patternsFound').textContent = patternsFound;
-            document.getElementById('anomaliesDetected').textContent = anomaliesDetected;
-            document.getElementById('correlations').textContent = correlations;
-            document.getElementById('detectionAccuracy').textContent = accuracy + '%';
-            
-            // Refresh charts
-            refreshCharts();
-        }
 
-        function refreshCharts() {
-            // Simulate chart refresh
-            if (temporalPatternChart) temporalPatternChart.update();
-            if (patternNetworkChart) patternNetworkChart.update();
-            if (frequencyPatternChart) frequencyPatternChart.update();
-            if (sequencePatternChart) sequencePatternChart.update();
-            if (anomalyDetectionChart) anomalyDetectionChart.update();
-        }
+            // Run simulation function
+            function runSimulation(filters) {
+                const resultsDiv = document.getElementById('simulationResults');
+                const predictionsList = document.getElementById('predictionsList');
+                const recommendationsList = document.getElementById('recommendationsList');
+                
+                // Sample predictions
+                const predictions = [
+                    {
+                        type: 'warning',
+                        text: 'If current trend continues, crime rate may increase by 12% next month',
+                        impact: 'high'
+                    },
+                    {
+                        type: 'info',
+                        text: 'Historical patterns suggest 8% decrease during upcoming holiday period',
+                        impact: 'medium'
+                    },
+                    {
+                        type: 'success',
+                        text: 'Increased police patrols could reduce incidents by up to 25%',
+                        impact: 'high'
+                    }
+                ];
 
-        function exportPatterns() {
-            alert('Pattern detection report exported successfully!');
-        }
+                // Sample recommendations
+                const recommendations = [
+                    {
+                        priority: 'urgent',
+                        text: 'Deploy additional mobile patrols to identified hotspot areas',
+                        icon: 'fa-car'
+                    },
+                    {
+                        priority: 'medium',
+                        text: 'Increase surveillance during peak hours (7PM - 11PM)',
+                        icon: 'fa-video'
+                    },
+                    {
+                        priority: 'low',
+                        text: 'Community outreach programs in vulnerable neighborhoods',
+                        icon: 'fa-users'
+                    }
+                ];
 
-        function comparePatterns() {
-            alert('Pattern comparison feature coming soon!');
-        }
+                // Display predictions
+                predictionsList.innerHTML = predictions.map(pred => {
+                    const bgColor = pred.type === 'warning' ? 'bg-red-100 text-red-800' : 
+                                   pred.type === 'success' ? 'bg-green-100 text-green-800' : 
+                                   'bg-blue-100 text-blue-800';
+                    return `
+                        <div class="flex items-center p-3 ${bgColor} rounded-lg">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            <span class="text-sm">${pred.text}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                // Display recommendations
+                recommendationsList.innerHTML = recommendations.map(rec => {
+                    const priorityColor = rec.priority === 'urgent' ? 'border-red-500' : 
+                                        rec.priority === 'medium' ? 'border-yellow-500' : 
+                                        'border-green-500';
+                    return `
+                        <div class="flex items-center p-3 bg-white border-l-4 ${priorityColor} rounded">
+                            <i class="fas ${rec.icon} mr-3 text-gray-600"></i>
+                            <span class="text-sm">${rec.text}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                // Draw sample chart
+                drawSimulationChart();
+                
+                resultsDiv.classList.remove('hidden');
+            }
+
+            // Draw simulation chart
+            function drawSimulationChart() {
+                const canvas = document.getElementById('simulationChart');
+                const ctx = canvas.getContext('2d');
+                
+                // Simple line chart simulation
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Sample data points
+                const data = [30, 35, 32, 38, 42, 45, 48, 52, 49, 46, 43, 40];
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                
+                const padding = 40;
+                const chartWidth = canvas.width - padding * 2;
+                const chartHeight = canvas.height - padding * 2;
+                const maxValue = Math.max(...data);
+                
+                // Draw axes
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(padding, padding);
+                ctx.lineTo(padding, canvas.height - padding);
+                ctx.lineTo(canvas.width - padding, canvas.height - padding);
+                ctx.stroke();
+                
+                // Draw data line
+                ctx.strokeStyle = '#274d4c';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                data.forEach((value, index) => {
+                    const x = padding + (index / (data.length - 1)) * chartWidth;
+                    const y = canvas.height - padding - (value / maxValue) * chartHeight;
+                    
+                    if (index === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                
+                ctx.stroke();
+                
+                // Draw data points
+                data.forEach((value, index) => {
+                    const x = padding + (index / (data.length - 1)) * chartWidth;
+                    const y = canvas.height - padding - (value / maxValue) * chartHeight;
+                    
+                    ctx.fillStyle = '#274d4c';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+
+            // Set default date range (last 30 days)
+            const today = new Date().toISOString().split('T')[0];
+            const thirtyDaysAgo = new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
+            document.getElementById('startDate').value = thirtyDaysAgo;
+            document.getElementById('endDate').value = today;
+        });
     </script>
 @endsection
