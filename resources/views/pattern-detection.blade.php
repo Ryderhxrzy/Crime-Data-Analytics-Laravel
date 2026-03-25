@@ -122,7 +122,6 @@ if (request()->query('token')) {
                     </select>
                 </div>
 
-                <!-- Time of Day -->
                 <div>
                     <label class="block text-sm font-medium text-alertara-800 mb-2">Time of Day</label>
                     <select id="timeOfDay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
