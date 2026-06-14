@@ -1,846 +1,641 @@
-@php
-// Handle JWT token from centralized login URL
-if (request()->query('token')) {
-    session(['jwt_token' => request()->query('token')]);
-}
-@endphp
-
 @extends('layouts.app')
-@section('title', 'Pattern Detection')
+
+@section('title', 'Pattern Detection Simulation')
+
 @section('content')
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <style>
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 0.7; }
-            50% { transform: scale(1.2); opacity: 0.4; }
-            100% { transform: scale(1); opacity: 0.7; }
-        }
-        
-        .custom-marker, .chain-marker, .simulation-marker {
-            background: transparent !important;
-            border: none !important;
-        }
-        
-        #crimeMap {
-            z-index: 1;
-        }
-    </style>
-    
-    <div class="p-4 lg:p-6 pt-0 lg:pt-0 pb-12">
-        <!-- Page Header -->
-        <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                    <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">
-                        <i class="fas fa-magnifying-glass mr-3" style="color: #274d4c;"></i>Pattern Detection
-                    </h1>
-                    <p class="text-gray-600 mt-1 text-sm lg:text-base">Advanced pattern recognition and anomaly detection in crime data</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Analysis Type Selection -->
-        <div class="bg-white rounded-xl p-6 mb-6 border border-gray-200">
-            <div class="mb-4 pb-4 border-b border-gray-200">
-                <h3 class="text-sm font-bold text-gray-900">
-                    <i class="fas fa-chart-line mr-2 text-alertara-700"></i>Analysis Type
-                </h3>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="analysis-type-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-alertara-500 transition" data-type="temporal">
-                    <div class="flex items-center mb-2">
-                        <i class="fas fa-clock text-2xl text-alertara-600 mr-3"></i>
-                        <h4 class="font-semibold text-gray-900">Temporal Analysis</h4>
-                    </div>
-                    <p class="text-sm text-gray-600">Detect time-based patterns and trends in crime data</p>
-                </div>
-                <div class="analysis-type-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-alertara-500 transition" data-type="spatial">
-                    <div class="flex items-center mb-2">
-                        <i class="fas fa-map-marker-alt text-2xl text-alertara-600 mr-3"></i>
-                        <h4 class="font-semibold text-gray-900">Spatial Analysis</h4>
-                    </div>
-                    <p class="text-sm text-gray-600">Identify geographic hotspots and location patterns</p>
-                </div>
-                <div class="analysis-type-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-alertara-500 transition" data-type="predictive">
-                    <div class="flex items-center mb-2">
-                        <i class="fas fa-crystal-ball text-2xl text-alertara-600 mr-3"></i>
-                        <h4 class="font-semibold text-gray-900">Predictive Analysis</h4>
-                    </div>
-                    <p class="text-sm text-gray-600">Forecast future crime trends and patterns</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Standardized Filter Section -->
-        <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
-            <div class="mb-4 pb-4 border-b border-gray-200">
-                <h3 class="text-sm font-bold text-gray-900">
-                    <i class="fas fa-filter mr-2 text-alertara-700"></i>Customize Your Search
-                </h3>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                <!-- Analysis Type Hidden (selected via cards) -->
-                <input type="hidden" id="analysisType" value="temporal">
-
-                <!-- Crime Category -->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Type</label>
-                    <select id="patternCrimeType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="">All Types</option>
-                        @foreach($crimeCategories as $category)
-                            <option value="{{ $category->id }}">{{ $category->category_name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <!-- Specific Date -->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Start Date</label>
-                    <input type="date" id="startDate" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                </div>
-
-                <!-- End Date -->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">End Date</label>
-                    <input type="date" id="endDate" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                </div>
-
-                <!-- Day of Week s-->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Day of Week</label>
-                    <select id="dayOfWeek" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="">All Days</option>
-                        <option value="monday">Monday</option>
-                        <option value="tuesday">Tuesday</option>
-                        <option value="wednesday">Wednesday</option>
-                        <option value="thursday">Thursday</option>
-                        <option value="friday">Friday</option>
-                        <option value="saturday">Saturday</option>
-                        <option value="sunday">Sunday</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Time of Day</label>
-                    <select id="timeOfDay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="">All Hours</option>
-                        <option value="morning">Morning (5AM - 12PM)</option>
-                        <option value="afternoon">Afternoon (12PM - 5PM)</option>
-                        <option value="evening">Evening (5PM - 9PM)</option>
-                        <option value="night">Night (9PM - 5AM)</option>
-                    </select>
-                </div>
-
-                <!-- Location/Barangay -->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Location</label>
-                    <input type="text" id="location" placeholder="Enter barangay or area" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                </div>
-
-                <!-- Sensitivity Level -->
-                <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Sensitivity</label>
-                    <select id="sensitivity" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="low">Low - Broad Patterns</option>
-                        <option value="medium" selected>Medium - Balanced</option>
-                        <option value="high">High - Specific Patterns</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="mt-4 flex gap-2 justify-end">
-                <button id="resetFilters" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition">
-                    <i class="fas fa-redo mr-2"></i>Reset
-                </button>
-                <button id="applyFilters" class="px-4 py-2 bg-alertara-700 hover:bg-alertara-800 text-white rounded-lg font-medium transition">
-                    <i class="fas fa-search mr-2"></i>Analyze
-                </button>
-                <button id="runSimulation" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition">
-                    <i class="fas fa-play mr-2"></i>Run Simulation
-                </button>
-            </div>
-        </div>
-
-        <!-- Simulation Results Section -->
-        <div id="simulationResults" class="bg-white rounded-xl p-6 mb-6 border border-gray-200 hidden">
-            <div class="mb-4 pb-4 border-b border-gray-200">
-                <h3 class="text-sm font-bold text-gray-900">
-                    <i class="fas fa-chart-bar mr-2 text-alertara-700"></i>Simulation Results
-                </h3>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Predictions -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-gray-900 mb-3">
-                        <i class="fas fa-crystal-ball mr-2 text-blue-600"></i>Predictions
-                    </h4>
-                    <div id="predictionsList" class="space-y-2">
-                        <!-- Predictions will be populated here -->
-                    </div>
-                </div>
-                <!-- Recommendations -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-gray-900 mb-3">
-                        <i class="fas fa-lightbulb mr-2 text-yellow-600"></i>Recommendations
-                    </h4>
-                    <div id="recommendationsList" class="space-y-2">
-                        <!-- Recommendations will be populated here -->
-                    </div>
-                </div>
-            </div>
-            <!-- Simulation Chart -->
-            <div class="mt-6">
-                <h4 class="font-semibold text-gray-900 mb-3">
-                    <i class="fas fa-chart-line mr-2 text-green-600"></i>Trend Analysis
-                </h4>
-                <div class="bg-gray-50 rounded-lg p-4 h-64 flex items-center justify-center">
-                    <canvas id="simulationChart" class="w-full h-full"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Analysis Results Section -->
-        <div id="analysisResults" class="bg-white rounded-xl p-6 mb-6 border border-gray-200 hidden">
-            <div class="mb-4 pb-4 border-b border-gray-200">
-                <h3 class="text-sm font-bold text-gray-900">
-                    <i class="fas fa-magnifying-glass mr-2 text-alertara-700"></i>Analysis Results
-                </h3>
-            </div>
-            <div id="patternsList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Pattern results will be populated here -->
-            </div>
-        </div>
-
-        <!-- Map Visualization Section -->
-        <div class="bg-white rounded-xl p-6 mb-6 border border-gray-200">
-            <div class="mb-4 pb-4 border-b border-gray-200">
-                <h3 class="text-sm font-bold text-gray-900">
-                    <i class="fas fa-map mr-2 text-alertara-700"></i>Crime Map Visualization - Quezon City
-                </h3>
+<div class="p-4 lg:p-6 pt-0 lg:pt-0 pb-12" id="simulationApp">
+    <!-- Page Header & Mode Selection -->
+    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div>
+                <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Pattern Detection Simulation</h1>
+                <p class="text-gray-600 mt-1 text-sm lg:text-base">Run "What-If" scenarios to predict crime reduction through strategic interventions.</p>
             </div>
             
-            <!-- Map Controls -->
-            <div class="mb-4 flex flex-wrap gap-2">
-                <button id="showCurrentHotspots" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition">
-                    <i class="fas fa-fire mr-1"></i>Current Hotspots
-                </button>
-                <button id="showPredictedHotspots" class="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition">
-                    <i class="fas fa-chart-line mr-1"></i>Predicted Hotspots
-                </button>
-                <button id="showCrimeChains" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition">
-                    <i class="fas fa-link mr-1"></i>Crime Chains
-                </button>
-                <button id="toggleSimulation" class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition">
-                    <i class="fas fa-play mr-1"></i>Simulation
-                </button>
-            </div>
-
-            <!-- Map Container -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Map -->
-                <div class="lg:col-span-2">
-                    <div id="crimeMap" class="h-96 rounded-lg border border-gray-300"></div>
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                <div class="flex flex-col">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase mb-1">Simulation Mode</span>
+                    <select id="simMode" class="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold text-blue-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all cursor-pointer">
+                        <option value="historical">Historical Signature</option>
+                        <option value="predictive" selected>AI Predictive Model</option>
+                        <option value="randomized">Randomized Stress Test</option>
+                    </select>
                 </div>
-                
-                <!-- Crime Chain Panel -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-gray-900 mb-3">
-                        <i class="fas fa-link mr-2 text-purple-600"></i>Crime Chains
-                    </h4>
-                    <div id="crimeChainsList" class="space-y-3">
-                        <!-- Crime chains will be populated here -->
+                <div class="h-10 w-[1px] bg-gray-200 hidden sm:block"></div>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        <span class="text-xs font-medium text-gray-600" id="simStatus">Engine Ready</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- Legend -->
-            <div class="mt-4 flex flex-wrap gap-4 text-sm">
-                <div class="flex items-center">
-                    <div class="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
-                    <span>Theft</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
-                    <span>Robbery</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-4 h-4 bg-yellow-500 rounded-full mr-2"></div>
-                    <span>Assault</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-4 h-4 bg-purple-500 rounded-full mr-2"></div>
-                    <span>Crime Chain</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-4 h-4 bg-blue-300 rounded-full mr-2 opacity-50"></div>
-                    <span>Predicted Area</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Leaflet JavaScript -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize map
-            let map;
-            let markers = [];
-            let crimeChains = [];
-            let simulationActive = false;
-            
-            function initializeMap() {
-                // Initialize map centered on Quezon City
-                map = L.map('crimeMap').setView([14.6760, 121.0437], 13);
+    <div class="flex flex-col lg:flex-row gap-6">
+        <!-- Sidebar: Intervention Controls -->
+        <aside class="w-full lg:w-80 flex-shrink-0 space-y-6">
+            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden lg:sticky lg:top-20 transition-all hover:shadow-md">
+                <div class="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
+                    <h2 class="font-bold text-gray-900 flex items-center gap-2 text-sm">
+                        <i class="fas fa-tools text-blue-600"></i> What-If Interventions
+                    </h2>
+                    <button id="resetInterventions" class="text-[10px] bg-white border border-gray-200 px-2 py-1 rounded hover:bg-gray-50 transition-colors text-gray-500 font-bold uppercase tracking-tighter">Reset</button>
+                </div>
                 
-                // Add OpenStreetMap tiles
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(map);
-                
-                // Add sample crime data
-                addSampleCrimeData();
-                addCrimeChains();
-            }
-            
-            // Sample crime data for Quezon City
-            function addSampleCrimeData() {
-                const crimeData = [
-                    // Commonwealth Area
-                    { lat: 14.7489, lng: 121.0495, type: 'theft', description: 'Theft - Commonwealth Ave', severity: 'high' },
-                    { lat: 14.7501, lng: 121.0512, type: 'theft', description: 'Theft - near SM Fairview', severity: 'high' },
-                    { lat: 14.7523, lng: 121.0487, type: 'theft', description: 'Theft - Commonwealth Market', severity: 'high' },
-                    { lat: 14.7515, lng: 121.0528, type: 'robbery', description: 'Robbery - Commonwealth', severity: 'critical' },
-                    
-                    // Cubao Area
-                    { lat: 14.6121, lng: 121.0487, type: 'assault', description: 'Assault - Cubao', severity: 'medium' },
-                    { lat: 14.6134, lng: 121.0501, type: 'robbery', description: 'Robbery - Ali Mall', severity: 'high' },
-                    { lat: 14.6109, lng: 121.0472, type: 'theft', description: 'Theft - Cubao Station', severity: 'medium' },
-                    
-                    // UP Diliman Area
-                    { lat: 14.6539, lng: 121.0684, type: 'theft', description: 'Theft - UP Diliman', severity: 'low' },
-                    { lat: 14.6551, lng: 121.0692, type: 'assault', description: 'Assault - UP Village', severity: 'medium' },
-                    
-                    // Eastwood Area
-                    { lat: 14.6084, lng: 121.0966, type: 'robbery', description: 'Robbery - Eastwood', severity: 'high' },
-                    { lat: 14.6072, lng: 121.0951, type: 'theft', description: 'Theft - Eastwood Mall', severity: 'medium' }
-                ];
-                
-                crimeData.forEach(crime => {
-                    const color = getCrimeColor(crime.type);
-                    const icon = L.divIcon({
-                        className: 'custom-marker',
-                        html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                        iconSize: [20, 20]
-                    });
-                    
-                    const marker = L.marker([crime.lat, crime.lng], { icon: icon })
-                        .addTo(map)
-                        .bindPopup(`
-                            <div class="p-2">
-                                <strong>${crime.description}</strong><br>
-                                <small>Type: ${crime.type}</small><br>
-                                <small>Severity: ${crime.severity}</small>
-                            </div>
-                        `);
-                    
-                    markers.push({ marker, type: crime.type, data: crime });
-                });
-            }
-            
-            // Add crime chains visualization
-            function addCrimeChains() {
-                // Commonwealth Area Crime Chain
-                const commonwealthChain = [
-                    { lat: 14.7489, lng: 121.0495, description: 'Point A: Theft Incident 1' },
-                    { lat: 14.7501, lng: 121.0512, description: 'Point B: Theft Incident 2' },
-                    { lat: 14.7515, lng: 121.0528, description: 'Point C: Robbery Incident' }
-                ];
-                
-                // Draw chain line
-                const chainLine = L.polyline(
-                    commonwealthChain.map(point => [point.lat, point.lng]),
-                    { color: 'purple', weight: 3, opacity: 0.7, dashArray: '10, 5' }
-                ).addTo(map);
-                
-                // Add chain markers
-                commonwealthChain.forEach((point, index) => {
-                    const chainIcon = L.divIcon({
-                        className: 'chain-marker',
-                        html: `<div style="background-color: purple; width: 25px; height: 25px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">${String.fromCharCode(65 + index)}</div>`,
-                        iconSize: [25, 25]
-                    });
-                    
-                    L.marker([point.lat, point.lng], { icon: chainIcon })
-                        .addTo(map)
-                        .bindPopup(`
-                            <div class="p-2">
-                                <strong>${point.description}</strong><br>
-                                <small>Crime Chain Connection</small>
-                            </div>
-                        `);
-                });
-                
-                // Update crime chains panel
-                updateCrimeChainsPanel();
-            }
-            
-            // Update crime chains panel
-            function updateCrimeChainsPanel() {
-                const chainsList = document.getElementById('crimeChainsList');
-                chainsList.innerHTML = `
-                    <div class="bg-white rounded-lg p-3 border-l-4 border-purple-500">
-                        <h5 class="font-semibold text-sm text-gray-900 mb-2">Commonwealth Area Chain</h5>
-                        <div class="text-xs text-gray-600 space-y-1">
-                            <div class="flex items-center">
-                                <span class="w-4 h-4 bg-purple-500 rounded-full text-white text-xs flex items-center justify-center mr-2">A</span>
-                                <span>Theft Incident 1</span>
-                            </div>
-                            <div class="flex items-center">
-                                <span class="w-4 h-4 bg-purple-500 rounded-full text-white text-xs flex items-center justify-center mr-2">B</span>
-                                <span>Theft Incident 2</span>
-                            </div>
-                            <div class="flex items-center">
-                                <span class="w-4 h-4 bg-purple-500 rounded-full text-white text-xs flex items-center justify-center mr-2">C</span>
-                                <span>Robbery Incident</span>
-                            </div>
+                <div class="p-5 space-y-6">
+                    <!-- Police Patrol Level -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Police Patrol Level</label>
+                            <span id="patrolLabel" class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">Medium</span>
                         </div>
-                        <div class="mt-2 text-xs text-orange-600">
-                            <i class="fas fa-exclamation-triangle mr-1"></i>
-                            Pattern: Multiple theft incidents leading to robbery
+                        <div class="relative pt-1">
+                            <input type="range" id="patrolSlider" min="0" max="2" value="1" step="1" class="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                            <div class="flex justify-between text-[10px] text-gray-400 mt-2 px-1">
+                                <span>Low</span>
+                                <span>Medium</span>
+                                <span>High</span>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="bg-white rounded-lg p-3 border-l-4 border-orange-500">
-                        <h5 class="font-semibold text-sm text-gray-900 mb-2">Pattern Analysis</h5>
-                        <div class="text-xs text-gray-600 space-y-1">
-                            <div>• 3 theft incidents within 24 hours</div>
-                            <div>• Same geographic area</div>
-                            <div>• Escalation to robbery</div>
-                            <div>• Possible organized activity</div>
+
+                    <!-- CCTV Coverage -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">CCTV Infrastructure</label>
+                        </div>
+                        <select id="cctvSelect" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            <option value="none">No Coverage</option>
+                            <option value="partial">Partial (Strategic Points)</option>
+                            <option value="full" selected>Full (High Density)</option>
+                            <option value="custom">-- Add Custom Value --</option>
+                        </select>
+                        <!-- Custom CCTV Input (Hidden by default) -->
+                        <div id="customCctvEntry" class="hidden animate-fade-in">
+                            <div class="relative">
+                                <input type="number" id="customCctvValue" placeholder="E.g. 5 New CCTV Units" class="w-full pl-3 pr-10 py-2 border border-blue-200 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                                <span class="absolute right-3 top-2.5 text-xs text-gray-400">Units</span>
+                            </div>
                         </div>
                     </div>
-                `;
-            }
+
+                    <!-- Environment Toggles -->
+                    <div class="space-y-3">
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-3">Environmental Safety</label>
+                        
+                        <!-- Street Lighting -->
+                        <label class="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-xl cursor-pointer hover:bg-white hover:border-blue-200 transition-all group">
+                            <span class="flex flex-col">
+                                <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700">Street Lighting</span>
+                                <span class="text-[10px] text-gray-400">Reduce concealment spots</span>
+                            </span>
+                            <div class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lightingToggle" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </div>
+                        </label>
+
+                        <!-- Community Watch -->
+                        <label class="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-xl cursor-pointer hover:bg-white hover:border-blue-200 transition-all group">
+                            <span class="flex flex-col">
+                                <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700">Community Watch</span>
+                                <span class="text-[10px] text-gray-400">Resident vigilance programs</span>
+                            </span>
+                            <div class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="communityToggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </div>
+                        </label>
+
+                        <!-- Restricted Access -->
+                        <label class="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-xl cursor-pointer hover:bg-white hover:border-blue-200 transition-all group">
+                            <span class="flex flex-col">
+                                <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700">Checkpoints</span>
+                                <span class="text-[10px] text-gray-400">Entry/Exit monitoring</span>
+                            </span>
+                            <div class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="accessToggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <button id="runSimulation" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 mt-4 overflow-hidden relative group">
+                        <span class="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-10 transition-opacity"></span>
+                        <i class="fas fa-play text-xs" id="runIcon"></i> 
+                        <span id="runText">Run Simulation</span>
+                    </button>
+                </div>
+            </div>
             
-            // Get crime color by type
-            function getCrimeColor(type) {
-                const colors = {
-                    'theft': '#ef4444',      // red
-                    'robbery': '#f97316',    // orange
-                    'assault': '#eab308'     // yellow
-                };
-                return colors[type] || '#6b7280';
-            }
-            
-            // Map control functions
-            document.getElementById('showCurrentHotspots').addEventListener('click', function() {
-                // Reset map view to show all current crime data
-                map.setView([14.6760, 121.0437], 13);
-                this.classList.add('ring-2', 'ring-red-300');
-                setTimeout(() => this.classList.remove('ring-2', 'ring-red-300'), 1000);
-            });
-            
-            document.getElementById('showPredictedHotspots').addEventListener('click', function() {
-                // Show predicted expansion areas
-                showPredictedAreas();
-                this.classList.add('ring-2', 'ring-orange-300');
-                setTimeout(() => this.classList.remove('ring-2', 'ring-orange-300'), 1000);
-            });
-            
-            document.getElementById('showCrimeChains').addEventListener('click', function() {
-                // Focus on crime chains
-                map.setView([14.7507, 121.0510], 15);
-                this.classList.add('ring-2', 'ring-purple-300');
-                setTimeout(() => this.classList.remove('ring-2', 'ring-purple-300'), 1000);
-            });
-            
-            document.getElementById('toggleSimulation').addEventListener('click', function() {
-                simulationActive = !simulationActive;
-                if (simulationActive) {
-                    this.innerHTML = '<i class="fas fa-pause mr-1"></i>Stop Simulation';
-                    this.classList.remove('bg-green-600', 'hover:bg-green-700');
-                    this.classList.add('bg-red-600', 'hover:bg-red-700');
-                    startSimulation();
-                } else {
-                    this.innerHTML = '<i class="fas fa-play mr-1"></i>Simulation';
-                    this.classList.remove('bg-red-600', 'hover:bg-red-700');
-                    this.classList.add('bg-green-600', 'hover:bg-green-700');
-                    stopSimulation();
-                }
-            });
-            
-            // Show predicted expansion areas
-            function showPredictedAreas() {
-                // Clear existing prediction layers
-                map.eachLayer(layer => {
-                    if (layer instanceof L.Circle && layer.options.isPrediction) {
-                        map.removeLayer(layer);
-                    }
-                });
-                
-                // Add prediction circles around hotspots
-                const hotspots = [
-                    { lat: 14.7507, lng: 121.0510, radius: 800 }, // Commonwealth
-                    { lat: 14.6121, lng: 121.0487, radius: 600 }, // Cubao
-                    { lat: 14.6084, lng: 121.0966, radius: 500 }  // Eastwood
-                ];
-                
-                hotspots.forEach(hotspot => {
-                    L.circle([hotspot.lat, hotspot.lng], {
-                        color: '#3b82f6',
-                        fillColor: '#3b82f6',
-                        fillOpacity: 0.2,
-                        radius: hotspot.radius,
-                        isPrediction: true
-                    }).addTo(map).bindPopup('Predicted expansion area if theft increases by 10%');
-                });
-            }
-            
-            // Simulation functions
-            let simulationInterval;
-            function startSimulation() {
-                let step = 0;
-                simulationInterval = setInterval(() => {
-                    if (step >= 5) {
-                        stopSimulation();
-                        return;
-                    }
+            <!-- Quick Insights Card -->
+            <div class="bg-gradient-to-br from-gray-900 to-gray-800 p-6 rounded-2xl border border-gray-700 shadow-xl text-white">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Real-time Metrics</h3>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-300">Total Simulated Crimes</span>
+                        <span id="metricTotal" class="text-xl font-bold text-blue-400 animate-pulse">48</span>
+                    </div>
+                    <div class="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                        <div id="metricTotalBar" class="bg-blue-400 h-full w-[48%] transition-all duration-700 overflow-hidden"></div>
+                    </div>
                     
-                    // Simulate crime spread
-                    simulateCrimeSpread(step);
-                    step++;
-                }, 2000);
-            }
-            
-            function stopSimulation() {
-                if (simulationInterval) {
-                    clearInterval(simulationInterval);
-                }
-                simulationActive = false;
-                const btn = document.getElementById('toggleSimulation');
-                btn.innerHTML = '<i class="fas fa-play mr-1"></i>Simulation';
-                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
-                btn.classList.add('bg-green-600', 'hover:bg-green-700');
-            }
-            
-            function simulateCrimeSpread(step) {
-                // Add temporary markers to show spread
-                const spreadPoints = [
-                    { lat: 14.7489 + (step * 0.002), lng: 121.0495 + (step * 0.002) },
-                    { lat: 14.7501 + (step * 0.001), lng: 121.0512 + (step * 0.001) }
-                ];
-                
-                spreadPoints.forEach(point => {
-                    const tempIcon = L.divIcon({
-                        className: 'simulation-marker',
-                        html: `<div style="background-color: #3b82f6; width: 15px; height: 15px; border-radius: 50%; border: 2px solid white; opacity: 0.7; animation: pulse 1s infinite;"></div>`,
-                        iconSize: [15, 15]
-                    });
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-300">Hotspots Detected</span>
+                        <span id="metricHotspots" class="text-xl font-bold text-amber-400">4</span>
+                    </div>
+                    <div class="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                        <div id="metricHotspotsBar" class="bg-amber-400 h-full w-[25%] transition-all duration-700 overflow-hidden"></div>
+                    </div>
                     
-                    const tempMarker = L.marker([point.lat, point.lng], { icon: tempIcon })
-                        .addTo(map)
-                        .bindPopup('Predicted crime spread');
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-300">High-Risk Coverage</span>
+                        <span id="metricRisk" class="text-xl font-bold text-red-500">22%</span>
+                    </div>
+                    <div class="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                        <div id="metricRiskBar" class="bg-red-500 h-full w-[22%] transition-all duration-700 overflow-hidden"></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Display: Map & Outputs -->
+        <div class="flex-grow space-y-6">
+            <!-- Applied Filters Badge Section -->
+            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm min-h-[60px] flex flex-wrap items-center gap-2">
+                <span class="text-[10px] font-bold text-gray-400 uppercase mr-2 tracking-widest">Active Filters:</span>
+                <div id="activeFilters" class="flex flex-wrap gap-2">
+                    <!-- Badges populated by JS -->
+                    <span class="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-[10px] font-bold flex items-center gap-2">
+                        <i class="fas fa-robot text-[8px]"></i> Predictive Mode
+                    </span>
+                    <span class="px-3 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-full text-[10px] font-bold flex items-center gap-2">
+                        <i class="fas fa-lightbulb text-[8px]"></i> Street Lighting ON
+                    </span>
+                </div>
+                <div id="noFilters" class="hidden text-xs text-gray-400 italic font-medium">No active intervention filters applied.</div>
+            </div>
+
+            <!-- Visualization Section -->
+            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[650px] relative">
+                <!-- Map Controls Overlay -->
+                <div class="absolute top-4 left-4 z-10 flex flex-col gap-2">
+                    <button class="w-10 h-10 bg-white border border-gray-200 rounded-xl shadow-lg flex items-center justify-center text-gray-600 hover:text-blue-600 transition-all hover:scale-105">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="w-10 h-10 bg-white border border-gray-200 rounded-xl shadow-lg flex items-center justify-center text-gray-600 hover:text-blue-600 transition-all hover:scale-105">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+                
+                <div class="absolute top-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
+                    <div class="bg-white/95 backdrop-blur-sm p-4 rounded-2xl border border-gray-200 shadow-xl space-y-3 min-w-[180px]">
+                        <h4 class="text-[10px] font-bold text-gray-400 uppercase border-b border-gray-100 pb-2">Visualization Legend</h4>
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+                                <span class="text-[10px] font-bold text-gray-600">Historical Crimes</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-red-500 border-2 border-white shadow-sm ring-4 ring-red-100"></div>
+                                <span class="text-[10px] font-bold text-gray-600">Simulated Crimes</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-10 h-4 bg-orange-100/50 border border-dashed border-orange-300 rounded-sm"></div>
+                                <span class="text-[10px] font-bold text-gray-600">Identified Hotspot</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation Progress Overlay -->
+                <div id="simProcessing" class="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 hidden items-center justify-center flex-col gap-6 animate-fade-in">
+                    <div class="relative w-24 h-24">
+                        <div class="absolute inset-0 border-4 border-gray-100 rounded-full"></div>
+                        <div class="absolute inset-0 border-4 border-t-blue-600 rounded-full animate-spin"></div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <i class="fas fa-brain text-blue-600 text-2xl animate-pulse"></i>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <h3 class="text-lg font-bold text-gray-900 mb-1">Recalculating Patterns</h3>
+                        <p class="text-xs text-gray-500" id="processingText">Applying interventions through Predictive Engine...</p>
+                    </div>
+                </div>
+
+                <!-- Map Container Placeholder -->
+                <div id="mapCanvas" class="flex-grow bg-[#f0f2f5] overflow-hidden relative group transition-opacity duration-500">
+                    <!-- SVG-Based Fake Map Grid -->
+                    <svg class="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                        <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+                            <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(0,0,0,0.03)" stroke-width="1"/>
+                        </pattern>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
+                        
+                        <!-- Simple Road Layout -->
+                        <g opacity="0.4" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round">
+                            <path d="M 0,200 Q 400,200 800,400" />
+                            <path d="M 400,0 L 400,800" />
+                            <path d="M 0,550 L 1000,550" />
+                        </g>
+
+                        <!-- Hotspot Circles (Dynamic) -->
+                        <g id="hotspotGroup" class="transition-all duration-[1500ms]">
+                            <!-- SVG render updated by JS -->
+                        </g>
+
+                        <!-- Marker Particles (Dynamic) -->
+                        <g id="markerGroup" class="transition-all duration-[1000ms]">
+                            <!-- Individual markers for Historical & simulated -->
+                        </g>
+                    </svg>
                     
-                    // Remove after animation
-                    setTimeout(() => map.removeLayer(tempMarker), 1500);
-                });
-            }
-            
-            // Initialize map when page loads
-            initializeMap();
-            // Analysis type card selection
-            const analysisCards = document.querySelectorAll('.analysis-type-card');
-            analysisCards.forEach(card => {
-                card.addEventListener('click', function() {
-                    // Remove active state from all cards
-                    analysisCards.forEach(c => {
-                        c.classList.remove('border-alertara-500', 'bg-alertara-50');
-                        c.classList.add('border-gray-200');
-                    });
-                    
-                    // Add active state to selected card
-                    this.classList.remove('border-gray-200');
-                    this.classList.add('border-alertara-500', 'bg-alertara-50');
-                    
-                    // Update hidden input
-                    document.getElementById('analysisType').value = this.dataset.type;
-                });
-            });
+                    <!-- Floating Coordinates -->
+                    <div class="absolute bottom-6 left-6 text-[9px] font-mono text-gray-400 bg-white/60 px-3 py-1 rounded-full border border-gray-200 backdrop-blur-sm">
+                        VIEWPORT CACHE: 14.6542° N, 121.0336° E
+                    </div>
+                </div>
+            </div>
 
-            // Set default active card
-            document.querySelector('[data-type="temporal"]').click();
+            <!-- Simulation Intelligence Report -->
+            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="p-5 border-b border-gray-200 bg-gray-50/50 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                        <i class="fas fa-file-contract"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-gray-900 leading-tight">Simulation Intelligence Report</h2>
+                        <span class="text-[10px] text-gray-400 font-bold uppercase">Dynamic Analysis Output</span>
+                    </div>
+                </div>
+                <div class="p-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                        <div class="space-y-6">
+                            <div>
+                                <h4 class="text-[11px] font-extrabold text-blue-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                                    Intervention Effect Analysis
+                                </h4>
+                                <div id="analysisText" class="p-6 bg-blue-50/50 border border-blue-100 rounded-2xl leading-relaxed text-sm text-gray-700 italic border-l-4">
+                                    Current simulation predicts that by enabling <span class="font-bold text-blue-700">Full CCTV Coverage</span> and <span class="font-bold text-blue-700">Street Lighting</span>, property-related crimes are likely to decrease by <span class="font-bold text-green-600 text-lg">18-22%</span> in the central residential block.
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
+                                    <span class="block text-[10px] text-gray-400 font-bold uppercase mb-2">Sim Confidence</span>
+                                    <div class="flex items-baseline gap-1">
+                                        <span id="confidenceValue" class="text-2xl font-bold text-gray-900">88.5</span>
+                                        <span class="text-xs text-gray-400">%</span>
+                                    </div>
+                                    <div class="mt-3 w-full bg-gray-200 h-1 rounded-full overflow-hidden">
+                                        <div class="bg-blue-600 h-full w-[88%]"></div>
+                                    </div>
+                                </div>
+                                <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
+                                    <span class="block text-[10px] text-gray-400 font-bold uppercase mb-2">Crime Displacement</span>
+                                    <div class="flex items-baseline gap-1 text-amber-600">
+                                        <span id="displacementValue" class="text-2xl font-bold">Low</span>
+                                    </div>
+                                    <div class="mt-3 w-full bg-gray-200 h-1 rounded-full overflow-hidden">
+                                        <div class="bg-amber-500 h-full w-[30%]"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-            // Reset filters button
-            document.getElementById('resetFilters').addEventListener('click', function() {
-                document.getElementById('analysisType').value = 'temporal';
-                document.getElementById('patternCrimeType').value = '';
-                document.getElementById('startDate').value = '';
-                document.getElementById('endDate').value = '';
-                document.getElementById('dayOfWeek').value = '';
-                document.getElementById('timeOfDay').value = '';
-                document.getElementById('location').value = '';
-                document.getElementById('sensitivity').value = 'medium';
-                
-                // Reset analysis type selection
-                document.querySelector('[data-type="temporal"]').click();
-                
-                // Hide results
-                document.getElementById('analysisResults').classList.add('hidden');
-                document.getElementById('simulationResults').classList.add('hidden');
-            });
-
-            // Apply filters button
-            document.getElementById('applyFilters').addEventListener('click', function() {
-                const filters = {
-                    analysisType: document.getElementById('analysisType').value,
-                    crimeType: document.getElementById('patternCrimeType').value,
-                    startDate: document.getElementById('startDate').value,
-                    endDate: document.getElementById('endDate').value,
-                    dayOfWeek: document.getElementById('dayOfWeek').value,
-                    timeOfDay: document.getElementById('timeOfDay').value,
-                    location: document.getElementById('location').value,
-                    sensitivity: document.getElementById('sensitivity').value
-                };
-
-                console.log('Pattern Detection Filters Applied:', filters);
-                performAnalysis(filters);
-            });
-
-            // Run simulation button
-            document.getElementById('runSimulation').addEventListener('click', function() {
-                const filters = {
-                    analysisType: document.getElementById('analysisType').value,
-                    crimeType: document.getElementById('patternCrimeType').value,
-                    startDate: document.getElementById('startDate').value,
-                    endDate: document.getElementById('endDate').value,
-                    location: document.getElementById('location').value
-                };
-
-                console.log('Running Simulation with filters:', filters);
-                runSimulation(filters);
-            });
-
-            // Perform analysis function
-            function performAnalysis(filters) {
-                const resultsDiv = document.getElementById('analysisResults');
-                const patternsList = document.getElementById('patternsList');
-                
-                // Sample patterns based on analysis type
-                let patterns = [];
-                
-                if (filters.analysisType === 'temporal') {
-                    patterns = [
-                        {
-                            title: 'Weekend Peak Pattern',
-                            description: 'Crime rates increase by 35% during Friday-Saturday nights',
-                            confidence: 87,
-                            icon: 'fa-calendar-week'
-                        },
-                        {
-                            title: 'Monthly Cycle',
-                            description: 'Notable spike in incidents during mid-month periods',
-                            confidence: 72,
-                            icon: 'fa-calendar-alt'
-                        }
-                    ];
-                } else if (filters.analysisType === 'spatial') {
-                    patterns = [
-                        {
-                            title: 'Downtown Hotspot',
-                            description: 'High concentration of incidents in commercial district',
-                            confidence: 91,
-                            icon: 'fa-map-marker-alt'
-                        },
-                        {
-                            title: 'Transportation Corridor',
-                            description: 'Pattern along main highway and bus routes',
-                            confidence: 78,
-                            icon: 'fa-road'
-                        }
-                    ];
-                } else if (filters.analysisType === 'predictive') {
-                    patterns = [
-                        {
-                            title: ' Rising Trend Alert',
-                            description: '15% increase expected in next 30 days based on current patterns',
-                            confidence: 82,
-                            icon: 'fa-chart-line'
-                        },
-                        {
-                            title: 'Seasonal Pattern',
-                            description: 'Historical data suggests upcoming seasonal variation',
-                            confidence: 76,
-                            icon: 'fa-snowflake'
-                        }
-                    ];
-                }
-
-                // Display patterns
-                patternsList.innerHTML = patterns.map(pattern => `
-                    <div class="bg-gray-50 rounded-lg p-4 border-l-4 border-alertara-500">
-                        <div class="flex items-start">
-                            <i class="fas ${pattern.icon} text-alertara-600 mt-1 mr-3"></i>
-                            <div class="flex-1">
-                                <h5 class="font-semibold text-gray-900">${pattern.title}</h5>
-                                <p class="text-sm text-gray-600 mt-1">${pattern.description}</p>
-                                <div class="mt-2">
-                                    <span class="text-xs bg-alertara-100 text-alertara-800 px-2 py-1 rounded-full">
-                                        ${pattern.confidence}% Confidence
-                                    </span>
+                        <div class="space-y-6">
+                            <h4 class="text-[11px] font-extrabold text-amber-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                                Top Predicted Impacts
+                            </h4>
+                            <div id="impactList" class="space-y-4">
+                                <!-- Populated by JS -->
+                                <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-gray-50/80 transition-all border border-transparent hover:border-gray-100 group">
+                                    <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0 group-hover:scale-110 transition-transform">
+                                        <i class="fas fa-arrow-down text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <span class="block text-sm font-bold text-gray-800">Theft Suppression</span>
+                                        <p class="text-xs text-gray-500">Predicted reduction in Bagong Pag-asa central market area due to checkpoints.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-gray-50/80 transition-all border border-transparent hover:border-gray-100 group">
+                                    <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0 group-hover:scale-110 transition-transform">
+                                        <i class="fas fa-exclamation-circle text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <span class="block text-sm font-bold text-gray-800">Night-time Vulnerability</span>
+                                        <p class="text-xs text-gray-500">Despite lighting, unauthorized access persists in northern perimeter parks.</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                `).join('');
-
-                resultsDiv.classList.remove('hidden');
-            }
-
-            // Run simulation function
-            function runSimulation(filters) {
-                const resultsDiv = document.getElementById('simulationResults');
-                const predictionsList = document.getElementById('predictionsList');
-                const recommendationsList = document.getElementById('recommendationsList');
-                
-                // Sample predictions
-                const predictions = [
-                    {
-                        type: 'warning',
-                        text: 'If current trend continues, crime rate may increase by 12% next month',
-                        impact: 'high'
-                    },
-                    {
-                        type: 'info',
-                        text: 'Historical patterns suggest 8% decrease during upcoming holiday period',
-                        impact: 'medium'
-                    },
-                    {
-                        type: 'success',
-                        text: 'Increased police patrols could reduce incidents by up to 25%',
-                        impact: 'high'
-                    }
-                ];
-
-                // Sample recommendations
-                const recommendations = [
-                    {
-                        priority: 'urgent',
-                        text: 'Deploy additional mobile patrols to identified hotspot areas',
-                        icon: 'fa-car'
-                    },
-                    {
-                        priority: 'medium',
-                        text: 'Increase surveillance during peak hours (7PM - 11PM)',
-                        icon: 'fa-video'
-                    },
-                    {
-                        priority: 'low',
-                        text: 'Community outreach programs in vulnerable neighborhoods',
-                        icon: 'fa-users'
-                    }
-                ];
-
-                // Display predictions
-                predictionsList.innerHTML = predictions.map(pred => {
-                    const bgColor = pred.type === 'warning' ? 'bg-red-100 text-red-800' : 
-                                   pred.type === 'success' ? 'bg-green-100 text-green-800' : 
-                                   'bg-blue-100 text-blue-800';
-                    return `
-                        <div class="flex items-center p-3 ${bgColor} rounded-lg">
-                            <i class="fas fa-exclamation-triangle mr-2"></i>
-                            <span class="text-sm">${pred.text}</span>
-                        </div>
-                    `;
-                }).join('');
-
-                // Display recommendations
-                recommendationsList.innerHTML = recommendations.map(rec => {
-                    const priorityColor = rec.priority === 'urgent' ? 'border-red-500' : 
-                                        rec.priority === 'medium' ? 'border-yellow-500' : 
-                                        'border-green-500';
-                    return `
-                        <div class="flex items-center p-3 bg-white border-l-4 ${priorityColor} rounded">
-                            <i class="fas ${rec.icon} mr-3 text-gray-600"></i>
-                            <span class="text-sm">${rec.text}</span>
-                        </div>
-                    `;
-                }).join('');
-
-                // Draw sample chart
-                drawSimulationChart();
-                
-                resultsDiv.classList.remove('hidden');
-            }
-
-            // Draw simulation chart
-            function drawSimulationChart() {
-                const canvas = document.getElementById('simulationChart');
-                const ctx = canvas.getContext('2d');
-                
-                // Simple line chart simulation
-                canvas.width = canvas.offsetWidth;
-                canvas.height = canvas.offsetHeight;
-                
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                
-                // Sample data points
-                const data = [30, 35, 32, 38, 42, 45, 48, 52, 49, 46, 43, 40];
-                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                
-                const padding = 40;
-                const chartWidth = canvas.width - padding * 2;
-                const chartHeight = canvas.height - padding * 2;
-                const maxValue = Math.max(...data);
-                
-                // Draw axes
-                ctx.strokeStyle = '#e5e7eb';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(padding, padding);
-                ctx.lineTo(padding, canvas.height - padding);
-                ctx.lineTo(canvas.width - padding, canvas.height - padding);
-                ctx.stroke();
-                
-                // Draw data line
-                ctx.strokeStyle = '#274d4c';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                
-                data.forEach((value, index) => {
-                    const x = padding + (index / (data.length - 1)) * chartWidth;
-                    const y = canvas.height - padding - (value / maxValue) * chartHeight;
-                    
-                    if (index === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                });
-                
-                ctx.stroke();
-                
-                // Draw data points
-                data.forEach((value, index) => {
-                    const x = padding + (index / (data.length - 1)) * chartWidth;
-                    const y = canvas.height - padding - (value / maxValue) * chartHeight;
-                    
-                    ctx.fillStyle = '#274d4c';
-                    ctx.beginPath();
-                    ctx.arc(x, y, 4, 0, 2 * Math.PI);
-                    ctx.fill();
-                });
-            }
-
-            // Set default date range (last 30 days)
-            const today = new Date().toISOString().split('T')[0];
-            const thirtyDaysAgo = new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
-            document.getElementById('startDate').value = thirtyDaysAgo;
-            document.getElementById('endDate').value = today;
-        });
-    </script>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
+
+@push('scripts')
+<script>
+/**
+ * Pattern Detection Simulation Engine (Frontend Mockup)
+ * No backend API calls - logic resides here for demonstration.
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM ELements
+    const runBtn = document.getElementById('runSimulation');
+    const simProcessing = document.getElementById('simProcessing');
+    const mapCanvas = document.getElementById('mapCanvas');
+    const analysisText = document.getElementById('analysisText');
+    const metricTotal = document.getElementById('metricTotal');
+    const metricHotspots = document.getElementById('metricHotspots');
+    const metricRisk = document.getElementById('metricRisk');
+    const activeFiltersContainer = document.getElementById('activeFilters');
+    const noFiltersMsg = document.getElementById('noFilters');
+    
+    // Intervention Field ELements
+    const simMode = document.getElementById('simMode');
+    const patrolSlider = document.getElementById('patrolSlider');
+    const patrolLabel = document.getElementById('patrolLabel');
+    const cctvSelect = document.getElementById('cctvSelect');
+    const customCctvEntry = document.getElementById('customCctvEntry');
+    const customCctvValue = document.getElementById('customCctvValue');
+    const lightingToggle = document.getElementById('lightingToggle');
+    const communityToggle = document.getElementById('communityToggle');
+    const accessToggle = document.getElementById('accessToggle');
+    const resetBtn = document.getElementById('resetInterventions');
+
+    // State
+    let simulationData = {
+        historical: [],
+        simulated: [],
+        hotspots: []
+    };
+
+    // --- UTILS ---
+    
+    function getRandomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function showProcessing(show) {
+        if (show) {
+            simProcessing.classList.remove('hidden');
+            simProcessing.classList.add('flex');
+            runBtn.disabled = true;
+            runBtn.classList.add('opacity-70');
+        } else {
+            simProcessing.classList.remove('flex');
+            simProcessing.classList.add('hidden');
+            runBtn.disabled = false;
+            runBtn.classList.remove('opacity-70');
+        }
+    }
+
+    // --- LOGIC ---
+
+    function generateSimulation() {
+        // Collect current settings
+        const mode = simMode.value;
+        const patrol = parseInt(patrolSlider.value);
+        const cctv = cctvSelect.value;
+        const cctvCustom = customCctvValue.value;
+        const lighting = lightingToggle.checked;
+        const community = communityToggle.checked;
+        const access = accessToggle.checked;
+
+        // Base values per mode
+        let baseCount = mode === 'historical' ? 40 : (mode === 'predictive' ? 55 : 70);
+        let hotspotCount = mode === 'historical' ? 3 : (mode === 'predictive' ? 5 : 8);
+
+        // Apply Intervention "Math" (Simulated purely for UI)
+        let reduction = 0;
+        if (patrol === 2) reduction += 15;
+        if (patrol === 1) reduction += 5;
+        if (cctv === 'full') reduction += 12;
+        if (cctv === 'partial') reduction += 4;
+        if (cctv === 'custom' && cctvCustom > 0) reduction += Math.min(20, cctvCustom * 2);
+        if (lighting) reduction += 8;
+        if (community) reduction += 10;
+        if (access) reduction += 14;
+
+        // Cap reduction to realistic amount
+        reduction = Math.min(60, reduction);
+        
+        const finalCount = Math.max(5, Math.round(baseCount * (1 - (reduction / 100))));
+        const finalHotspots = Math.max(1, Math.round(hotspotCount * (1 - (reduction / 150))));
+
+        // Update Markers Store
+        simulationData.historical = [];
+        for(let i=0; i<30; i++) {
+            simulationData.historical.push({ x: getRandomInt(50, 750), y: getRandomInt(50, 550) });
+        }
+
+        simulationData.simulated = [];
+        for(let i=0; i<finalCount; i++) {
+            simulationData.simulated.push({ x: getRandomInt(50, 750), y: getRandomInt(50, 550) });
+        }
+
+        simulationData.hotspots = [];
+        for(let i=0; i<finalHotspots; i++) {
+            simulationData.hotspots.push({ 
+                x: getRandomInt(100, 700), 
+                y: getRandomInt(100, 500), 
+                r: getRandomInt(40, 100),
+                severity: getRandomInt(1, 10)
+            });
+        }
+
+        updateUI(finalCount, finalHotspots, reduction, mode);
+        renderMap();
+        updateFilterBadges();
+    }
+
+    function updateUI(count, hotspotNum, reductionPerc, mode) {
+        metricTotal.innerText = count;
+        document.getElementById('metricTotalBar').style.width = Math.min(100, (count/80)*100) + '%';
+        
+        metricHotspots.innerText = hotspotNum;
+        document.getElementById('metricHotspotsBar').style.width = Math.min(100, (hotspotNum/10)*100) + '%';
+
+        const riskVal = Math.max(5, 45 - reductionPerc);
+        metricRisk.innerText = Math.round(riskVal) + '%';
+        document.getElementById('metricRiskBar').style.width = riskVal + '%';
+
+        // Update Report Text
+        const interventions = [];
+        if (parseInt(patrolSlider.value) > 0) interventions.push("Enhanced Patrols");
+        if (cctvSelect.value !== 'none') interventions.push("CCTV Implementation");
+        if (lightingToggle.checked) interventions.push("Improved Lighting");
+        if (communityToggle.checked) interventions.push("Community Policing");
+        if (accessToggle.checked) interventions.push("Access Controls");
+
+        let text = "";
+        if (interventions.length === 0) {
+            text = `Under a <span class="font-bold text-blue-700">${mode}</span> scenario with no interventions, patterns suggest high volatility in residential sections. Stability index is currenty at <span class="text-red-500 font-bold">low levels</span>.`;
+        } else {
+            text = `Combined application of <span class="font-bold text-blue-700">${interventions.join(', ')}</span> has suppressed predictive signatures by <span class="font-bold text-green-600 text-lg">${reductionPerc}%</span>. Major hotspots have been ${reductionPerc > 30 ? 'dismantled' : 'contained'}.`;
+        }
+        analysisText.innerHTML = text;
+
+        document.getElementById('confidenceValue').innerText = (80 + Math.random() * 15).toFixed(1);
+    }
+
+    function renderMap() {
+        const markerGroup = document.getElementById('markerGroup');
+        const hotspotGroup = document.getElementById('hotspotGroup');
+        
+        markerGroup.innerHTML = '';
+        hotspotGroup.innerHTML = '';
+
+        // Render Hotspots (Bottom layer)
+        simulationData.hotspots.forEach(h => {
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", h.x);
+            circle.setAttribute("cy", h.y);
+            circle.setAttribute("r", h.r);
+            circle.setAttribute("fill", "rgba(245, 158, 11, 0.08)");
+            circle.setAttribute("stroke", "rgba(245, 158, 11, 0.3)");
+            circle.setAttribute("stroke-width", "1.5");
+            circle.setAttribute("stroke-dasharray", "4,2");
+            circle.classList.add("animate-pulse");
+            hotspotGroup.appendChild(circle);
+        });
+
+        // Render Historical (Middle)
+        simulationData.historical.forEach(m => {
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", m.x);
+            circle.setAttribute("cy", m.y);
+            circle.setAttribute("r", "2.5");
+            circle.setAttribute("fill", "#94a3b8");
+            circle.setAttribute("opacity", "0.6");
+            circle.setAttribute("stroke", "#fff");
+            circle.setAttribute("stroke-width", "0.5");
+            markerGroup.appendChild(circle);
+        });
+
+        // Render Simulated (Top)
+        simulationData.simulated.forEach(m => {
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", m.x);
+            circle.setAttribute("cy", m.y);
+            circle.setAttribute("r", "3.5");
+            circle.setAttribute("fill", "#ef4444");
+            circle.setAttribute("stroke", "#fff");
+            circle.setAttribute("stroke-width", "1");
+            circle.classList.add("transition-all", "duration-1000");
+            
+            // Interaction
+            circle.style.cursor = "pointer";
+            circle.addEventListener('mouseover', () => circle.setAttribute('r', '6'));
+            circle.addEventListener('mouseout', () => circle.setAttribute('r', '3.5'));
+            
+            markerGroup.appendChild(circle);
+        });
+    }
+
+    function updateFilterBadges() {
+        const createBadge = (text, icon, colorClass = 'bg-blue-50 text-blue-700 border-blue-100') => {
+            return `<span class="px-3 py-1 ${colorClass} border rounded-full text-[10px] font-bold animate-fade-in flex items-center gap-2">
+                <i class="${icon} text-[8px]"></i> ${text}
+            </span>`;
+        };
+
+        let html = '';
+        html += createBadge(simMode.selectedOptions[0].text, 'fas fa-server');
+        
+        const patrolVal = parseInt(patrolSlider.value);
+        if (patrolVal === 2) html += createBadge('High Patrols', 'fas fa-user-shield');
+        if (patrolVal === 1) html += createBadge('Medium Patrols', 'fas fa-user-shield');
+        
+        if (cctvSelect.value === 'full') html += createBadge('Full CCTV', 'fas fa-video');
+        if (cctvSelect.value === 'partial') html += createBadge('Partial CCTV', 'fas fa-video');
+        if (cctvSelect.value === 'custom' && customCctvValue.value) html += createBadge(`+${customCctvValue.value} CCTV Units`, 'fas fa-video', 'bg-purple-50 text-purple-700 border-purple-100');
+        
+        if (lightingToggle.checked) html += createBadge('Street Lighting', 'fas fa-lightbulb', 'bg-amber-50 text-amber-700 border-amber-100');
+        if (communityToggle.checked) html += createBadge('Watch Program', 'fas fa-users');
+        if (accessToggle.checked) html += createBadge('Checkpoints', 'fas fa-door-closed');
+
+        activeFiltersContainer.innerHTML = html;
+        if (!html) {
+            noFiltersMsg.classList.remove('hidden');
+        } else {
+            noFiltersMsg.classList.add('hidden');
+        }
+    }
+
+    // --- EVENTS ---
+
+    patrolSlider.oninput = function() {
+        const labels = ['Low', 'Medium', 'High'];
+        patrolLabel.innerText = labels[this.value];
+    };
+
+    cctvSelect.onchange = function() {
+        if(this.value === 'custom') {
+            customCctvEntry.classList.remove('hidden');
+        } else {
+            customCctvEntry.classList.add('hidden');
+        }
+    };
+
+    runBtn.onclick = function() {
+        showProcessing(true);
+        // Simulate "Thinking" time
+        setTimeout(() => {
+            generateSimulation();
+            showProcessing(false);
+        }, 1200);
+    };
+
+    resetBtn.onclick = function() {
+        simMode.value = 'predictive';
+        patrolSlider.value = 1;
+        patrolLabel.innerText = 'Medium';
+        cctvSelect.value = 'full';
+        customCctvEntry.classList.add('hidden');
+        customCctvValue.value = '';
+        lightingToggle.checked = true;
+        communityToggle.checked = false;
+        accessToggle.checked = false;
+        generateSimulation();
+    };
+
+    // Initial Run
+    generateSimulation();
+});
+</script>
+@endpush
+
+@push('styles')
+<style>
+    @keyframes fade-in {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fade-in 0.3s ease-out forwards;
+    }
+    
+    /* Specialized slider for simulation */
+    input[type='range']::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        background: #2563eb;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        cursor: pointer;
+    }
+</style>
+@endpush
