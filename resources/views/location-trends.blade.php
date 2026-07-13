@@ -33,10 +33,10 @@ if (request()->query('token')) {
                 <div>
                     <label class="block text-sm font-medium text-alertara-800 mb-2">Time Period</label>
                     <select id="timePeriod" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <option value="all" selected>All Time</option>
                         <option value="30">Last 30 Days</option>
-                        <option value="90" selected>Last 90 Days</option>
+                        <option value="90">Last 90 Days</option>
                         <option value="180">Last 6 Months</option>
-                        <option value="all">All Time</option>
                     </select>
                 </div>
 
@@ -256,7 +256,7 @@ if (request()->query('token')) {
         }
 
         function resetFilters() {
-            document.getElementById('timePeriod').value = '90';
+            document.getElementById('timePeriod').value = 'all';
             document.getElementById('barangay').value = '';
             document.getElementById('crimeType').value = '';
             document.getElementById('caseStatus').value = '';

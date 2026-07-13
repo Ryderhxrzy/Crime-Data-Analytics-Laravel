@@ -415,38 +415,25 @@ if (request()->query('token')) {
                                     <label class="text-sm font-medium text-gray-700">Filter by Location:</label>
                                     <select id="locationFilter" class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                         <option value="all">All Locations</option>
-                                        @foreach($locationData as $locationId => $location)
-                                            <option value="{{ $locationId }}">{{ $location['name'] }}</option>
-                                        @endforeach
                                     </select>
-                                    <button onclick="filterLocationData()" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors">
-                                        <i class="fas fa-filter mr-2"></i>Apply Filter
-                                    </button>
                                     <button onclick="resetLocationFilter()" class="bg-gray-500 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-600 transition-colors">
                                         <i class="fas fa-redo mr-2"></i>Reset
                                     </button>
                                 </div>
                             </div>
-                            
+
                             <div style="position: relative; height: 400px;">
                                 <canvas id="modalCrimeTypeByLocationChart"></canvas>
                             </div>
-                            
+
                             <!-- Crime Breakdown by Location -->
                             <div class="mt-6">
                                 <h4 class="font-semibold text-gray-900 mb-4">Crime Breakdown by Location</h4>
                                 <div class="overflow-x-auto">
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead class="bg-gray-50">
-                                            <tr>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Theft</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assault</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vandalism</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Burglary</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fraud</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risk Level</th>
+                                            <tr id="locationCrimeTableHead">
+                                                <!-- Columns are built from the real crime categories -->
                                             </tr>
                                         </thead>
                                         <tbody id="locationCrimeTable" class="bg-white divide-y divide-gray-200">
@@ -728,29 +715,44 @@ if (request()->query('token')) {
             });
         }
 
-        // Location crime data from database
-        const locationCrimeData = @json($locationData);
-
-        // Populate location crime table
+        // Build the per-location table from the real crime categories returned by the API
         function populateLocationCrimeTable() {
+            const head = document.getElementById('locationCrimeTableHead');
             const tableBody = document.getElementById('locationCrimeTable');
-            if (!tableBody) return;
-            
-            let tableHTML = '';
-            for (const [locationId, data] of Object.entries(locationCrimeData)) {
-                const riskLevel = data.total > 100 ? 'High' : data.total > 50 ? 'Medium' : 'Low';
-                const riskColor = riskLevel === 'High' ? 'red' : riskLevel === 'Medium' ? 'yellow' : 'green';
-                const riskBgColor = riskLevel === 'High' ? 'bg-red-100 text-red-800' : riskLevel === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800';
-                
-                tableHTML += `
-                    <tr data-location="${locationId}">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.name}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.theft}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.assault}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.vandalism}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.burglary}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.fraud}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.total}</td>
+            if (!head || !tableBody || !crimeTypeData) return;
+
+            const { labels, totals, datasets } = crimeTypeData.by_location;
+            const th = (text) => `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${text}</th>`;
+
+            head.innerHTML = th('Location')
+                + datasets.map(d => th(d.name)).join('')
+                + th('Total') + th('Risk Level');
+
+            if (!labels.length) {
+                tableBody.innerHTML = `<tr><td colspan="${datasets.length + 3}" class="px-6 py-6 text-center text-sm text-gray-500">No location data for the selected filters.</td></tr>`;
+                return;
+            }
+
+            // Risk thresholds are relative to the busiest area in this result set
+            const maxTotal = Math.max(...totals, 1);
+
+            tableBody.innerHTML = labels.map((name, areaIdx) => {
+                const total = totals[areaIdx];
+                const ratio = total / maxTotal;
+                const riskLevel = ratio >= 0.66 ? 'High' : ratio >= 0.33 ? 'Medium' : 'Low';
+                const riskBgColor = riskLevel === 'High' ? 'bg-red-100 text-red-800'
+                    : riskLevel === 'Medium' ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-green-100 text-green-800';
+
+                const categoryCells = datasets.map(d =>
+                    `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${d.values[areaIdx] ?? 0}</td>`
+                ).join('');
+
+                return `
+                    <tr data-location="${name}">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${name}</td>
+                        ${categoryCells}
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${total}</td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${riskBgColor}">
                                 ${riskLevel}
@@ -758,39 +760,26 @@ if (request()->query('token')) {
                         </td>
                     </tr>
                 `;
-            }
-            
-            tableBody.innerHTML = tableHTML;
+            }).join('');
         }
 
-        // Setup location filter
+        // Populate the location dropdown with the real barangay names, then wire filtering
         function setupLocationFilter() {
             const filter = document.getElementById('locationFilter');
-            if (filter) {
-                filter.addEventListener('change', filterLocationData);
-            }
+            if (!filter || !crimeTypeData) return;
+
+            filter.innerHTML = '<option value="all">All Locations</option>'
+                + crimeTypeData.by_location.labels.map(name => `<option value="${name}">${name}</option>`).join('');
+
+            filter.addEventListener('change', filterLocationData);
         }
 
-        // Filter location data
+        // Show only the selected barangay's row
         function filterLocationData() {
             const filterValue = document.getElementById('locationFilter').value;
-            const rows = document.querySelectorAll('#locationCrimeTable tr');
-            
-            rows.forEach(row => {
-                if (filterValue === 'all') {
-                    row.style.display = '';
-                } else {
-                    const locationId = row.getAttribute('data-location');
-                    const locationData = locationCrimeData[locationId];
-                    if (locationData) {
-                        // Check if location name matches filter
-                        const locationName = locationData.name.toLowerCase().replace(/\s+/g, '');
-                        const filterName = filterValue.toLowerCase();
-                        row.style.display = locationName.includes(filterName) ? '' : 'none';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                }
+
+            document.querySelectorAll('#locationCrimeTable tr[data-location]').forEach(row => {
+                row.style.display = (filterValue === 'all' || row.getAttribute('data-location') === filterValue) ? '' : 'none';
             });
         }
 

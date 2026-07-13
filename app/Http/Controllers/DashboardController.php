@@ -480,9 +480,9 @@ class DashboardController extends Controller
 
         extract($authData);
 
-        // Get cached hot data
-        $barangays = CacheService::getBarangays();
-        $crimeCategories = CacheService::getCrimeCategories();
+        // Query directly so a stale/empty cache can never blank out the filters
+        $barangays = Barangay::orderBy('barangay_name')->get();
+        $crimeCategories = CrimeCategory::orderBy('category_name')->get();
 
         return view('location-trends', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
     }
@@ -500,78 +500,27 @@ class DashboardController extends Controller
 
         extract($authData);
 
-        // Get cached hot data
-        $barangays = CacheService::getBarangays();
-        $crimeCategories = CacheService::getCrimeCategories();
-        
-        // Get crime type statistics
-        $crimeTypeStats = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as total'))
-            ->with('category')
-            ->groupBy('crime_category_id')
-            ->orderByDesc('total')
-            ->get();
+        // Query directly so a stale/empty cache can never blank out the filters.
+        // All chart/table data is fetched client-side from getCrimeTypeTrendsData(),
+        // which groups by the real crime_categories table rather than fixed buckets.
+        $barangays = Barangay::orderBy('barangay_name')->get();
+        $crimeCategories = CrimeCategory::orderBy('category_name')->get();
 
-        // Get monthly crime type trends
-        $monthlyTrends = CrimeIncident::select(
-                'crime_category_id',
-                DB::raw('DATE_FORMAT(incident_date, "%Y-%m") as month'),
-                DB::raw('COUNT(*) as count')
-            )
-            ->with('category')
-            ->where('incident_date', '>=', Carbon::now()->subMonths(6))
-            ->groupBy('crime_category_id', 'month')
-            ->orderBy('month')
-            ->orderBy('count', 'desc')
-            ->get();
+        return view('crime-type-trends', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
+    }
 
-        // Get crime type breakdown by location
-        $locationCrimeBreakdown = CrimeIncident::select(
-                'barangay_id',
-                'crime_category_id',
-                DB::raw('COUNT(*) as count')
-            )
-            ->with(['barangay', 'category'])
-            ->groupBy('barangay_id', 'crime_category_id')
-            ->orderBy('barangay_id')
-            ->orderBy('count', 'desc')
-            ->get()
-            ->groupBy('barangay_id');
+    /**
+     * Anchor date for all relative time windows.
+     *
+     * Windows are measured back from the most recent recorded incident rather
+     * than today's date, so trend/period analytics still return results when the
+     * dataset lags behind the current date.
+     */
+    private function referenceDate(): Carbon
+    {
+        $latest = CrimeIncident::max('incident_date');
 
-        // Transform data for easier use in view
-        $locationData = [];
-        foreach ($locationCrimeBreakdown as $barangayId => $incidents) {
-            $locationName = $incidents->first()->barangay->barangay_name ?? 'Unknown';
-            $locationData[$barangayId] = [
-                'name' => $locationName,
-                'theft' => 0,
-                'assault' => 0,
-                'vandalism' => 0,
-                'burglary' => 0,
-                'fraud' => 0,
-                'total' => 0
-            ];
-            
-            foreach ($incidents as $incident) {
-                $categoryName = strtolower($incident->category->category_name ?? 'other');
-                $count = $incident->count;
-                
-                if (str_contains($categoryName, 'theft')) {
-                    $locationData[$barangayId]['theft'] = $count;
-                } elseif (str_contains($categoryName, 'assault')) {
-                    $locationData[$barangayId]['assault'] = $count;
-                } elseif (str_contains($categoryName, 'vandalism')) {
-                    $locationData[$barangayId]['vandalism'] = $count;
-                } elseif (str_contains($categoryName, 'burglary')) {
-                    $locationData[$barangayId]['burglary'] = $count;
-                } elseif (str_contains($categoryName, 'fraud')) {
-                    $locationData[$barangayId]['fraud'] = $count;
-                }
-                
-                $locationData[$barangayId]['total'] += $count;
-            }
-        }
-
-        return view('crime-type-trends', compact('barangays', 'crimeCategories', 'crimeTypeStats', 'monthlyTrends', 'locationData', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
+        return $latest ? Carbon::parse($latest) : Carbon::now();
     }
 
     /**
@@ -587,9 +536,11 @@ class DashboardController extends Controller
             $status = $request->get('status', '');
             $clearance = $request->get('clearance', '');
 
-            $applyFilters = function ($query) use ($timePeriod, $barangayId, $categoryId, $status, $clearance) {
+            $reference = $this->referenceDate();
+
+            $applyFilters = function ($query) use ($timePeriod, $barangayId, $categoryId, $status, $clearance, $reference) {
                 if ($timePeriod !== 'all') {
-                    $query->where('incident_date', '>=', Carbon::now()->subDays((int) $timePeriod)->toDateString());
+                    $query->where('incident_date', '>=', $reference->copy()->subDays((int) $timePeriod)->toDateString());
                 }
                 if ($barangayId !== '') {
                     $query->where('barangay_id', $barangayId);
@@ -623,7 +574,7 @@ class DashboardController extends Controller
             $topCategoryIds = $distribution->take(5)->pluck('crime_category_id');
             $monthLabels = [];
             for ($i = 5; $i >= 0; $i--) {
-                $monthLabels[] = Carbon::now()->subMonths($i)->format('M Y');
+                $monthLabels[] = $reference->copy()->subMonths($i)->format('M Y');
             }
 
             $trendDatasets = [];
@@ -631,7 +582,7 @@ class DashboardController extends Controller
                 $row = $distribution->firstWhere('crime_category_id', $catId);
                 $values = [];
                 for ($i = 5; $i >= 0; $i--) {
-                    $date = Carbon::now()->subMonths($i);
+                    $date = $reference->copy()->subMonths($i);
                     $values[] = CrimeIncident::where('crime_category_id', $catId)
                         ->whereYear('incident_date', $date->year)
                         ->whereMonth('incident_date', $date->month)
@@ -669,12 +620,15 @@ class DashboardController extends Controller
                 'critical' => (int) ($severityCounts['critical'] ?? 0),
             ];
 
-            // 4. Trending up/down: current 30 days vs previous 30 days per category
+            // 4. Trending up/down: most recent 30 days of data vs the 30 days before it
+            $trendWindowStart = $reference->copy()->subDays(30)->toDateString();
+            $trendWindowPrevStart = $reference->copy()->subDays(60)->toDateString();
+
             $currentMonthCounts = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as total'))
-                ->where('incident_date', '>=', Carbon::now()->subDays(30)->toDateString())
+                ->where('incident_date', '>=', $trendWindowStart)
                 ->groupBy('crime_category_id')->pluck('total', 'crime_category_id');
             $previousMonthCounts = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as total'))
-                ->whereBetween('incident_date', [Carbon::now()->subDays(60)->toDateString(), Carbon::now()->subDays(30)->toDateString()])
+                ->whereBetween('incident_date', [$trendWindowPrevStart, $trendWindowStart])
                 ->groupBy('crime_category_id')->pluck('total', 'crime_category_id');
 
             $changes = [];
@@ -701,6 +655,7 @@ class DashboardController extends Controller
                 ->get();
 
             $locationLabels = $topBarangays->map(fn ($b) => $b->barangay->barangay_name ?? 'Unknown')->values();
+            $locationTotals = $topBarangays->pluck('total')->map(fn ($t) => (int) $t)->values();
             $locationDatasets = [];
             foreach ($topCategoryIds as $catId) {
                 $row = $distribution->firstWhere('crime_category_id', $catId);
@@ -729,7 +684,11 @@ class DashboardController extends Controller
                 'distribution' => $distributionOut,
                 'monthly' => ['labels' => $monthLabels, 'datasets' => $trendDatasets],
                 'severity' => $severityOut,
-                'by_location' => ['labels' => $locationLabels, 'datasets' => $locationDatasets],
+                'by_location' => [
+                    'labels' => $locationLabels,
+                    'totals' => $locationTotals,
+                    'datasets' => $locationDatasets,
+                ],
             ]);
         } catch (\Exception $e) {
             \Log::error('Error in getCrimeTypeTrendsData: ' . $e->getMessage());
@@ -744,14 +703,10 @@ class DashboardController extends Controller
     public function getLocationTrendsData(Request $request)
     {
         try {
-            $timePeriod = $request->get('time_period', '90');
+            $timePeriod = $request->get('time_period', 'all');
             $barangayId = $request->get('barangay', '');
             $crimeType = $request->get('crime_type', '');
             $caseStatus = $request->get('case_status', '');
-
-            $windowDays = $timePeriod === 'all' ? 365 : (int) $timePeriod;
-            $currentStart = Carbon::now()->subDays($windowDays)->toDateString();
-            $previousStart = Carbon::now()->subDays($windowDays * 2)->toDateString();
 
             $applyFilters = function ($query) use ($barangayId, $crimeType, $caseStatus) {
                 if ($barangayId !== '') {
@@ -765,29 +720,71 @@ class DashboardController extends Controller
                 }
             };
 
-            // Current vs previous period counts per barangay
-            $currentCounts = CrimeIncident::with('barangay')
-                ->select('barangay_id', DB::raw('COUNT(*) as total'))
-                ->where('incident_date', '>=', $currentStart)
-                ->tap($applyFilters)
-                ->groupBy('barangay_id')
-                ->get();
+            if ($timePeriod === 'all') {
+                // All Time: count everything, and derive the trend by splitting the
+                // full recorded span in half (second half vs first half).
+                $earliest = CrimeIncident::min('incident_date');
+                $latest = CrimeIncident::max('incident_date');
 
-            $previousCounts = CrimeIncident::select('barangay_id', DB::raw('COUNT(*) as total'))
-                ->whereBetween('incident_date', [$previousStart, $currentStart])
-                ->tap($applyFilters)
-                ->groupBy('barangay_id')
-                ->pluck('total', 'barangay_id');
+                $currentStart = null; // no lower bound for counting
+                if ($earliest && $latest) {
+                    $earliestDate = Carbon::parse($earliest);
+                    $latestDate = Carbon::parse($latest);
+                    $midpoint = $earliestDate->copy()->addDays((int) ($earliestDate->diffInDays($latestDate) / 2));
+                    $trendCurrentStart = $midpoint->toDateString();
+                    $trendPreviousStart = $earliestDate->toDateString();
+                    $windowDays = (int) $midpoint->diffInDays($latestDate);
+                } else {
+                    $trendCurrentStart = null;
+                    $trendPreviousStart = null;
+                    $windowDays = 0;
+                }
+            } else {
+                // Fixed window measured back from the latest recorded incident
+                $windowDays = (int) $timePeriod;
+                $reference = $this->referenceDate();
+                $currentStart = $reference->copy()->subDays($windowDays)->toDateString();
+                $trendCurrentStart = $currentStart;
+                $trendPreviousStart = $reference->copy()->subDays($windowDays * 2)->toDateString();
+            }
+
+            // Counts per barangay for the selected period
+            $currentQuery = CrimeIncident::with('barangay')
+                ->select('barangay_id', DB::raw('COUNT(*) as total'))
+                ->tap($applyFilters);
+            if ($currentStart !== null) {
+                $currentQuery->where('incident_date', '>=', $currentStart);
+            }
+            $currentCounts = $currentQuery->groupBy('barangay_id')->get();
+
+            // Comparison counts used only for the trend direction
+            $trendCurrent = collect();
+            $previousCounts = collect();
+            if ($trendCurrentStart && $trendPreviousStart) {
+                $trendCurrent = CrimeIncident::select('barangay_id', DB::raw('COUNT(*) as total'))
+                    ->where('incident_date', '>=', $trendCurrentStart)
+                    ->tap($applyFilters)
+                    ->groupBy('barangay_id')
+                    ->pluck('total', 'barangay_id');
+
+                $previousCounts = CrimeIncident::select('barangay_id', DB::raw('COUNT(*) as total'))
+                    ->whereBetween('incident_date', [$trendPreviousStart, $trendCurrentStart])
+                    ->tap($applyFilters)
+                    ->groupBy('barangay_id')
+                    ->pluck('total', 'barangay_id');
+            }
 
             $locations = [];
             foreach ($currentCounts as $row) {
                 $current = (int) $row->total;
+                // Trend compares the two comparison windows, not the display count
+                $trendNow = (int) ($trendCurrent[$row->barangay_id] ?? 0);
                 $previous = (int) ($previousCounts[$row->barangay_id] ?? 0);
 
                 if ($previous > 0) {
-                    $changePercent = round(($current - $previous) / $previous * 100);
+                    $changePercent = round(($trendNow - $previous) / $previous * 100);
                 } else {
-                    $changePercent = $current > 0 ? 100 : 0;
+                    $changePercent = $trendNow > 0 ? 100 : 0;
                 }
 
                 $locations[] = [
@@ -802,21 +799,22 @@ class DashboardController extends Controller
 
             usort($locations, fn ($a, $b) => $b['current'] <=> $a['current']);
 
-            // Monthly time series for the top 5 barangays over the window
+            // Monthly time series for the top 5 barangays, ending at the latest recorded incident
+            $reference = $this->referenceDate();
             $topBarangayIds = array_column(array_slice($locations, 0, 5), 'barangay_id');
-            $monthsCount = max(3, (int) ceil($windowDays / 30));
+            $monthsCount = $timePeriod === 'all' ? 12 : max(3, (int) ceil($windowDays / 30));
             $seriesLabels = [];
             $seriesData = [];
 
             for ($i = $monthsCount - 1; $i >= 0; $i--) {
-                $seriesLabels[] = Carbon::now()->subMonths($i)->format('M Y');
+                $seriesLabels[] = $reference->copy()->subMonths($i)->format('M Y');
             }
 
             foreach ($topBarangayIds as $id) {
                 $location = collect($locations)->firstWhere('barangay_id', $id);
                 $values = [];
                 for ($i = $monthsCount - 1; $i >= 0; $i--) {
-                    $date = Carbon::now()->subMonths($i);
+                    $date = $reference->copy()->subMonths($i);
                     $values[] = CrimeIncident::where('barangay_id', $id)
                         ->whereYear('incident_date', $date->year)
                         ->whereMonth('incident_date', $date->month)
@@ -826,18 +824,19 @@ class DashboardController extends Controller
                 $seriesData[] = ['name' => $location['name'] ?? 'Unknown', 'values' => $values];
             }
 
-            // Quarterly seasonal breakdown (current year) for the top 5 barangays
+            // Quarterly seasonal breakdown for the year of the latest incident
+            $seasonalYear = $reference->year;
             $seasonal = [];
             foreach ([1, 2, 3, 4] as $quarter) {
                 $values = [];
                 foreach ($topBarangayIds as $id) {
                     $values[] = CrimeIncident::where('barangay_id', $id)
-                        ->whereYear('incident_date', Carbon::now()->year)
+                        ->whereYear('incident_date', $seasonalYear)
                         ->whereRaw('QUARTER(incident_date) = ?', [$quarter])
                         ->tap($applyFilters)
                         ->count();
                 }
-                $seasonal[] = ['quarter' => "Q{$quarter} " . Carbon::now()->year, 'values' => $values];
+                $seasonal[] = ['quarter' => "Q{$quarter} {$seasonalYear}", 'values' => $values];
             }
 
             $increasing = array_values(array_filter($locations, fn ($l) => $l['trend'] === 'increasing'));
