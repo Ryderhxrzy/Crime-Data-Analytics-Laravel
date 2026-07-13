@@ -97,6 +97,29 @@ if (request()->query('token')) {
             </div>
         </div>
 
+        <!-- Debug Panel -->
+        <div class="bg-gray-900 text-gray-100 rounded-lg mb-6 overflow-hidden font-mono text-xs">
+            <div class="flex items-center justify-between px-4 py-2 bg-gray-800 cursor-pointer" onclick="toggleDebug()">
+                <span class="font-bold">
+                    <i class="fas fa-bug mr-2 text-green-400"></i>Debug Panel
+                    <span id="debugStatusPill" class="ml-3 px-2 py-0.5 rounded bg-gray-600">idle</span>
+                </span>
+                <i id="debugChevron" class="fas fa-chevron-down"></i>
+            </div>
+            <div id="debugBody" class="p-4 space-y-2">
+                <div><span class="text-gray-400">Request URL:</span> <span id="dbgUrl">—</span></div>
+                <div><span class="text-gray-400">HTTP Status:</span> <span id="dbgStatus">—</span></div>
+                <div><span class="text-gray-400">Duration:</span> <span id="dbgTime">—</span></div>
+                <div><span class="text-gray-400">Locations returned:</span> <span id="dbgCount">—</span></div>
+                <div><span class="text-gray-400">Window days:</span> <span id="dbgWindow">—</span></div>
+                <div><span class="text-gray-400">Chart datasets:</span> <span id="dbgSeries">—</span></div>
+                <div class="pt-2">
+                    <span class="text-gray-400">Raw JSON response:</span>
+                    <pre id="dbgJson" class="mt-1 p-3 bg-black rounded max-h-80 overflow-auto text-green-300 whitespace-pre-wrap">—</pre>
+                </div>
+            </div>
+        </div>
+
         <!-- Trend Summary Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <!-- Increasing Trends -->
@@ -263,6 +286,21 @@ if (request()->query('token')) {
             generateTrends();
         }
 
+        // --- Debug panel helpers ---
+        function toggleDebug() {
+            const body = document.getElementById('debugBody');
+            const chevron = document.getElementById('debugChevron');
+            body.classList.toggle('hidden');
+            chevron.classList.toggle('fa-chevron-down');
+            chevron.classList.toggle('fa-chevron-right');
+        }
+
+        function setDebugPill(text, colorClass) {
+            const pill = document.getElementById('debugStatusPill');
+            pill.textContent = text;
+            pill.className = `ml-3 px-2 py-0.5 rounded ${colorClass}`;
+        }
+
         // Fetch real location trend analytics from the database
         async function generateTrends() {
             const params = new URLSearchParams({
@@ -272,12 +310,47 @@ if (request()->query('token')) {
                 case_status: document.getElementById('caseStatus').value
             });
 
+            const url = `/dashboard/location-trends-data?${params}`;
+            const started = performance.now();
+
+            document.getElementById('dbgUrl').textContent = url;
+            setDebugPill('loading...', 'bg-yellow-600');
+
             try {
-                const response = await fetch(`/dashboard/location-trends-data?${params}`);
-                const data = await response.json();
+                const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                const elapsed = Math.round(performance.now() - started);
+                const rawText = await response.text();
+
+                document.getElementById('dbgStatus').textContent = `${response.status} ${response.statusText}`;
+                document.getElementById('dbgTime').textContent = `${elapsed} ms`;
+
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (parseError) {
+                    // Not JSON - almost always an HTML error/login page
+                    setDebugPill('NOT JSON', 'bg-red-600');
+                    document.getElementById('dbgJson').textContent = rawText.slice(0, 3000);
+                    document.getElementById('dbgCount').textContent = '—';
+                    throw new Error(`Server did not return JSON (HTTP ${response.status})`);
+                }
+
+                document.getElementById('dbgJson').textContent = JSON.stringify(data, null, 2);
+                document.getElementById('dbgWindow').textContent = data.window_days ?? '—';
+                document.getElementById('dbgCount').textContent = data.locations ? data.locations.length : 0;
+                document.getElementById('dbgSeries').textContent = data.series
+                    ? `${data.series.datasets.length} series x ${data.series.labels.length} months`
+                    : '—';
 
                 if (!data.success) {
+                    setDebugPill('API ERROR', 'bg-red-600');
                     throw new Error(data.error || 'Request failed');
+                }
+
+                if (!data.locations || data.locations.length === 0) {
+                    setDebugPill('OK but 0 rows', 'bg-orange-600');
+                } else {
+                    setDebugPill(`OK - ${data.locations.length} locations`, 'bg-green-600');
                 }
 
                 updateSummaryCards(data.summary);
@@ -288,8 +361,12 @@ if (request()->query('token')) {
                 renderSeasonalChart(data.seasonal);
             } catch (error) {
                 console.error('Error loading location trends:', error);
+                if (document.getElementById('debugStatusPill').textContent === 'loading...') {
+                    setDebugPill('NETWORK FAIL', 'bg-red-600');
+                    document.getElementById('dbgJson').textContent = String(error);
+                }
                 document.getElementById('trendTableBody').innerHTML =
-                    '<tr><td colspan="4" class="px-4 py-6 text-center text-red-500">Failed to load trend data. Please try again.</td></tr>';
+                    `<tr><td colspan="4" class="px-4 py-6 text-center text-red-500">Failed to load trend data: ${error.message}</td></tr>`;
             }
         }
 
