@@ -128,11 +128,12 @@ if (request()->query('token')) {
                     </div>
                 </div>
 
-                <!-- AI Prediction Filters -->
+                <!-- Hotspot Forecast Filters -->
                 <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 mb-6 border border-purple-200">
                     <div class="mb-4 pb-4 border-b border-purple-200">
                         <h3 class="text-sm font-bold text-gray-900">
-                            <i class="fas fa-brain mr-2 text-purple-700"></i>AI Hotspot Prediction
+                            <i class="fas fa-chart-line mr-2 text-purple-700"></i>Hotspot Forecast
+                            <span class="ml-2 text-xs font-normal text-purple-700">(trend projection from weekly incident history)</span>
                         </h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -181,11 +182,11 @@ if (request()->query('token')) {
                             </select>
                         </div>
 
-                        <!-- Generate Prediction Button -->
+                        <!-- Generate Forecast Button -->
                         <div class="flex items-end">
                             <button id="runPredictionBtn" class="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-semibold flex items-center justify-center gap-2 text-sm">
-                                <i class="fas fa-wand-magic-sparkles"></i>
-                                <span>Run AI Analysis</span>
+                                <i class="fas fa-chart-line"></i>
+                                <span>Run Forecast</span>
                             </button>
                         </div>
                     </div>
@@ -305,13 +306,13 @@ if (request()->query('token')) {
                 </div>
             </div>
 
-            <!-- Predicted High-Risk Areas Table -->
+            <!-- Forecasted High-Risk Areas Table -->
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm mt-6" id="predictedAreasSection" style="display: none;">
                 <div class="p-6 border-b border-gray-200">
                     <h3 class="text-lg font-bold text-gray-900">
-                        <i class="fas fa-wand-magic-sparkles mr-2 text-purple-700"></i>Predicted High-Risk Areas
+                        <i class="fas fa-chart-line mr-2 text-purple-700"></i>Forecasted High-Risk Areas
                     </h3>
-                    <p class="text-sm text-gray-600 mt-1">AI-forecasted hotspots for the next <span id="forecastDaysDisplay">14</span> days</p>
+                    <p class="text-sm text-gray-600 mt-1">Trend projection for the next <span id="forecastDaysDisplay">14</span> days — <span id="forecastMethodNote" class="italic">linear regression over weekly incident counts</span></p>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full">
@@ -319,10 +320,11 @@ if (request()->query('token')) {
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Rank</th>
                                 <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Area</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Predicted Incidents</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Historical</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Forecast</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Trend</th>
                                 <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Risk Level</th>
                                 <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Confidence</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
                             </tr>
                         </thead>
                         <tbody id="predictedAreasTable">
@@ -338,10 +340,10 @@ if (request()->query('token')) {
                     <div class="flex items-start justify-between">
                         <div>
                             <p class="text-sm font-semibold text-red-900 mb-1">
-                                <i class="fas fa-fire mr-1"></i>High-Risk Hotspots
+                                <i class="fas fa-fire mr-1"></i>Critical/High-Risk Areas
                             </p>
                             <p class="text-2xl font-bold text-red-700" id="highRiskCount">0</p>
-                            <p class="text-xs text-red-600 mt-1">Areas with >20 incidents</p>
+                            <p class="text-xs text-red-600 mt-1">Composite risk score ≥ 45</p>
                         </div>
                     </div>
                 </div>
@@ -352,7 +354,7 @@ if (request()->query('token')) {
                                 <i class="fas fa-exclamation-triangle mr-1"></i>Medium-Risk Areas
                             </p>
                             <p class="text-2xl font-bold text-yellow-700" id="mediumRiskCount">0</p>
-                            <p class="text-xs text-yellow-600 mt-1">Areas with 10-20 incidents</p>
+                            <p class="text-xs text-yellow-600 mt-1">Composite risk score 25-44</p>
                         </div>
                     </div>
                 </div>
@@ -363,7 +365,7 @@ if (request()->query('token')) {
                                 <i class="fas fa-check-circle mr-1"></i>Low-Risk Areas
                             </p>
                             <p class="text-2xl font-bold text-green-700" id="lowRiskCount">0</p>
-                            <p class="text-xs text-green-600 mt-1">Areas with <10 incidents</p>
+                            <p class="text-xs text-green-600 mt-1">Composite risk score < 25</p>
                         </div>
                     </div>
                 </div>
@@ -395,7 +397,7 @@ if (request()->query('token')) {
                             </span>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-700">Highest Density Area</span>
+                            <span class="text-sm text-gray-700">Highest Risk Area</span>
                             <span id="highestDensity" class="text-sm font-bold text-gray-900">—</span>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -405,6 +407,10 @@ if (request()->query('token')) {
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                             <span class="text-sm text-gray-700">Unsolved Cases</span>
                             <span id="unsolvedCount" class="text-sm font-bold text-red-600">0</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="text-sm text-gray-700">Night-time Incidents</span>
+                            <span id="nightPercent" class="text-sm font-bold text-indigo-600">0%</span>
                         </div>
                     </div>
                 </div>
@@ -430,10 +436,10 @@ if (request()->query('token')) {
                 </div>
             </div>
 
-            <!-- AI Insights Section -->
+            <!-- Analytical Insights Section -->
             <div class="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-6 shadow-sm mt-6">
                 <h3 class="text-lg font-bold text-purple-900 mb-4">
-                    <i class="fas fa-brain mr-2"></i>Predictive Insights & Recommendations
+                    <i class="fas fa-lightbulb mr-2"></i>Analytical Insights & Recommendations
                 </h3>
                 <div id="aiInsights" class="space-y-3">
                     <!-- Populated by JavaScript -->
@@ -579,6 +585,9 @@ if (request()->query('token')) {
                 });
         }
 
+        // Full analytics payload from the server (hotspot ranking, summary, charts)
+        let analyticsData = null;
+
         function loadHotspotData() {
             showMapLoading(true);
             const timePeriod = document.getElementById('timePeriod').value;
@@ -588,20 +597,17 @@ if (request()->query('token')) {
             const barangay = document.getElementById('barangay').value;
 
             const params = new URLSearchParams({
-                range: timePeriod,
-                crime_type: crimeType,
-                status: caseStatus,
+                timePeriod: timePeriod,
+                crimeType: crimeType,
+                caseStatus: caseStatus,
                 barangay: barangay
             });
 
-            console.log('Loading hotspot data with params:', Object.fromEntries(params));
-
-            fetch(`/api/crime-heatmap?${params}`)
+            fetch(`/api/crime-hotspots?${params}`)
                 .then(response => response.json())
                 .then(data => {
-                    console.log('Hotspot data received:', data);
-                    hotspotsData = Array.isArray(data) ? data : (data.crimes || data || []);
-                    console.log('Hotspots count:', hotspotsData.length);
+                    analyticsData = data;
+                    hotspotsData = data.crimes || [];
 
                     currentData = hotspotsData;
                     currentVisualizationMode = visualizationMode;
@@ -797,149 +803,107 @@ if (request()->query('token')) {
             return '#16a34a'; // Green
         }
 
+        const RISK_STYLES = {
+            CRITICAL: { badge: 'bg-red-100 text-red-700', bar: 'bg-red-600', icon: '🔴' },
+            HIGH: { badge: 'bg-orange-100 text-orange-700', bar: 'bg-orange-600', icon: '🟠' },
+            MEDIUM: { badge: 'bg-yellow-100 text-yellow-700', bar: 'bg-yellow-600', icon: '🟡' },
+            LOW: { badge: 'bg-green-100 text-green-700', bar: 'bg-green-600', icon: '🟢' },
+        };
+
+        function trendArrow(direction, percent) {
+            if (direction === 'increasing') return `<span class="text-red-600"><i class="fas fa-arrow-up"></i> +${percent}%</span>`;
+            if (direction === 'decreasing') return `<span class="text-green-600"><i class="fas fa-arrow-down"></i> ${percent}%</span>`;
+            return `<span class="text-gray-500"><i class="fas fa-arrows-left-right"></i> stable</span>`;
+        }
+
         function updateTopHotspots() {
-            console.log('updateTopHotspots called with data:', hotspotsData.length);
-
-            if (!hotspotsData || hotspotsData.length === 0) {
-                document.getElementById('topHotspots').innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No crime data available</div>';
-                return;
-            }
-
-            const hotspotMap = {};
-
-            hotspotsData.forEach(crime => {
-                // Try different field names for barangay
-                const barangay = crime.barangay_name || crime.location || crime.barangay || 'Unknown Barangay';
-
-                if (!hotspotMap[barangay]) {
-                    hotspotMap[barangay] = {
-                        name: barangay,
-                        count: 0,
-                        cleared: 0,
-                        uncleared: 0,
-                        crimes: []
-                    };
-                }
-                hotspotMap[barangay].count++;
-                hotspotMap[barangay].crimes.push(crime);
-                if (crime.clearance_status === 'cleared') {
-                    hotspotMap[barangay].cleared++;
-                } else {
-                    hotspotMap[barangay].uncleared++;
-                }
-            });
-
-            console.log('Hotspot map created:', Object.keys(hotspotMap).length, 'barangays');
-
-            const hotspots = Object.values(hotspotMap)
-                .map(h => ({
-                    ...h,
-                    riskLevel: h.count > 20 ? 'HIGH' : h.count > 10 ? 'MEDIUM' : 'LOW',
-                    riskColor: h.count > 20 ? 'red' : h.count > 10 ? 'yellow' : 'green',
-                    riskIcon: h.count > 20 ? '🔴' : h.count > 10 ? '🟡' : '🟢'
-                }))
-                .sort((a, b) => b.count - a.count)
-                .slice(0, 10);
-
-            console.log('Top hotspots:', hotspots);
-
+            const hotspots = (analyticsData?.hotspots || []).slice(0, 10);
             const topHotspotsDiv = document.getElementById('topHotspots');
 
-            if (hotspots.length === 0) {
-                topHotspotsDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No hotspots found</div>';
+            if (!hotspots.length) {
+                topHotspotsDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No crime data available</div>';
+                updateKeyMetrics();
                 return;
             }
 
-            // Store hotspots data globally for click handlers
             window.hotspotsData = hotspots;
 
-            topHotspotsDiv.innerHTML = hotspots.map((h, idx) => `
+            topHotspotsDiv.innerHTML = hotspots.map((h, idx) => {
+                const style = RISK_STYLES[h.risk_level] || RISK_STYLES.LOW;
+                return `
                 <div class="border-b border-gray-100 p-3 hover:bg-gray-50 cursor-pointer transition-colors hotspot-item" data-index="${idx}">
                     <div class="flex items-start justify-between mb-2">
                         <div>
                             <div class="font-semibold text-gray-900 text-sm">
-                                <span class="text-lg mr-2">${h.riskIcon}</span>${idx + 1}. ${h.name}
+                                <span class="text-lg mr-2">${style.icon}</span>${idx + 1}. ${h.area_name}
                             </div>
                             <div class="text-xs text-gray-600 mt-1">
-                                <i class="fas fa-exclamation-circle mr-1"></i>${h.count} incident(s)
+                                <i class="fas fa-exclamation-circle mr-1"></i>${h.incident_count} incident(s)
+                                ${h.crime_rate_per_1000 !== null ? ` · ${h.crime_rate_per_1000}/1k residents` : ''}
+                                · ${trendArrow(h.trend_direction, h.trend_percent)}
                             </div>
                         </div>
-                        <span class="text-xs font-bold px-2 py-1 rounded-full ${h.riskColor === 'red' ? 'bg-red-100 text-red-700' : h.riskColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">
-                            ${h.riskLevel}
-                        </span>
+                        <div class="text-right">
+                            <span class="text-xs font-bold px-2 py-1 rounded-full ${style.badge}">${h.risk_level}</span>
+                            <div class="text-[10px] text-gray-400 mt-1 font-bold">score ${h.risk_score}</div>
+                        </div>
                     </div>
                     <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                        <div class="h-full ${h.riskColor === 'red' ? 'bg-red-600' : h.riskColor === 'yellow' ? 'bg-yellow-600' : 'bg-green-600'}" style="width: ${Math.min((h.count / 30) * 100, 100)}%"></div>
+                        <div class="h-full ${style.bar}" style="width: ${Math.min(h.risk_score, 100)}%"></div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
 
-            // Add event listeners to hotspot items
             topHotspotsDiv.querySelectorAll('.hotspot-item').forEach(item => {
                 item.addEventListener('click', function() {
-                    const index = parseInt(this.dataset.index);
-                    const hotspot = window.hotspotsData[index];
-                    selectHotspot(hotspot.name, hotspot);
+                    const hotspot = window.hotspotsData[parseInt(this.dataset.index)];
+                    selectHotspot(hotspot.area_name, hotspot);
                 });
             });
 
-            console.log('Top hotspots HTML rendered with', hotspots.length, 'items');
-
-            // Update metrics and charts
-            updateKeyMetrics(hotspots);
-            updateTrendAnalysis(hotspots);
+            updateKeyMetrics();
+            updateTrendAnalysis();
             renderCrimeDistributionChart();
             renderMonthlyTrendChart();
-            generateAIInsights(hotspots);
+            generateInsights();
         }
 
-        // Update key metrics cards
-        function updateKeyMetrics(hotspots) {
-            const highRisk = hotspots.filter(h => h.count > 20).length;
-            const mediumRisk = hotspots.filter(h => h.count > 10 && h.count <= 20).length;
-            const lowRisk = hotspots.filter(h => h.count <= 10).length;
-            const totalIncidents = hotspotsData.length;
+        // Update key metrics cards from server-computed summary
+        function updateKeyMetrics() {
+            const summary = analyticsData?.summary;
+            if (!summary) return;
 
-            document.getElementById('highRiskCount').textContent = highRisk;
-            document.getElementById('mediumRiskCount').textContent = mediumRisk;
-            document.getElementById('lowRiskCount').textContent = lowRisk;
-            document.getElementById('totalIncidentsCount').textContent = totalIncidents;
+            document.getElementById('highRiskCount').textContent = summary.risk_counts.critical + summary.risk_counts.high;
+            document.getElementById('mediumRiskCount').textContent = summary.risk_counts.medium;
+            document.getElementById('lowRiskCount').textContent = summary.risk_counts.low;
+            document.getElementById('totalIncidentsCount').textContent = summary.total_incidents;
         }
 
-        // Update trend analysis indicators
-        function updateTrendAnalysis(hotspots) {
-            // Highest density area
-            const highestArea = hotspots.length > 0 ? hotspots[0].name : 'N/A';
-            document.getElementById('highestDensity').textContent = highestArea;
+        // Update trend analysis indicators from real server data
+        function updateTrendAnalysis() {
+            const summary = analyticsData?.summary;
+            if (!summary) return;
 
-            // Calculate clearance rate
-            const totalCrimes = hotspotsData.length;
-            const clearedCrimes = hotspotsData.filter(c => c.clearance_status === 'cleared').length;
-            const clearanceRate = totalCrimes > 0 ? Math.round((clearedCrimes / totalCrimes) * 100) : 0;
-            document.getElementById('clearanceRate').textContent = clearanceRate + '%';
+            document.getElementById('highestDensity').textContent = summary.highest_risk?.area_name ?? 'N/A';
+            document.getElementById('clearanceRate').textContent = summary.clearance_rate + '%';
+            document.getElementById('unsolvedCount').textContent = summary.unsolved_count;
+            document.getElementById('nightPercent').textContent = (analyticsData.day_night?.night_percent ?? 0) + '%';
 
-            // Unsolved cases
-            const unsolvedCases = totalCrimes - clearedCrimes;
-            document.getElementById('unsolvedCount').textContent = unsolvedCases;
-
-            // Trend direction (random for demo)
-            const trendDirection = Math.random() > 0.5 ? 'Increasing' : 'Decreasing';
-            const trendIcon = trendDirection === 'Increasing' ? 'arrow-up text-red-600' : 'arrow-down text-green-600';
-            const trendPercent = Math.floor(Math.random() * 30) + 5;
-            document.getElementById('overallTrend').innerHTML = `<i class="fas fa-${trendIcon} mr-1"></i>${trendDirection} ${trendPercent}%`;
+            const trend = summary.citywide_trend;
+            const label = trend.direction.charAt(0).toUpperCase() + trend.direction.slice(1);
+            const icon = trend.direction === 'increasing' ? 'arrow-up text-red-600'
+                       : trend.direction === 'decreasing' ? 'arrow-down text-green-600'
+                       : 'arrows-left-right text-gray-500';
+            document.getElementById('overallTrend').innerHTML =
+                `<i class="fas fa-${icon} mr-1"></i>${label} ${trend.percent > 0 ? '+' : ''}${trend.percent}% <span class="text-xs text-gray-400 font-normal">(vs prev ${trend.window_days}d)</span>`;
         }
 
-        // Crime Distribution Chart
+        // Crime Distribution Chart (server-computed distribution)
         let crimeDistributionChartInstance = null;
         function renderCrimeDistributionChart() {
-            const crimeTypes = {};
-            hotspotsData.forEach(crime => {
-                const type = crime.category_name || 'Unknown';
-                crimeTypes[type] = (crimeTypes[type] || 0) + 1;
-            });
-
+            const distribution = analyticsData?.type_distribution;
             const ctx = document.getElementById('crimeDistributionCanvas');
-            if (!ctx) return;
+            if (!ctx || !distribution) return;
 
             if (crimeDistributionChartInstance) {
                 crimeDistributionChartInstance.destroy();
@@ -950,10 +914,10 @@ if (request()->query('token')) {
             crimeDistributionChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: Object.keys(crimeTypes),
+                    labels: distribution.labels,
                     datasets: [{
-                        data: Object.values(crimeTypes),
-                        backgroundColor: colors.slice(0, Object.keys(crimeTypes).length),
+                        data: distribution.values,
+                        backgroundColor: colors.slice(0, distribution.labels.length),
                         borderColor: '#fff',
                         borderWidth: 2
                     }]
@@ -974,14 +938,12 @@ if (request()->query('token')) {
             });
         }
 
-        // Monthly Trend Chart
+        // Monthly Trend Chart (real 12-month incident counts from the database)
         let monthlyTrendChartInstance = null;
         function renderMonthlyTrendChart() {
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const trendData = months.map(() => Math.floor(Math.random() * 50) + 20);
-
+            const trends = analyticsData?.monthly_trends;
             const ctx = document.getElementById('monthlyTrendCanvas');
-            if (!ctx) return;
+            if (!ctx || !trends) return;
 
             if (monthlyTrendChartInstance) {
                 monthlyTrendChartInstance.destroy();
@@ -990,10 +952,10 @@ if (request()->query('token')) {
             monthlyTrendChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: months,
+                    labels: trends.labels,
                     datasets: [{
-                        label: 'Hotspot Intensity',
-                        data: trendData,
+                        label: 'Incidents',
+                        data: trends.values,
                         borderColor: '#274d4c',
                         backgroundColor: 'rgba(39, 77, 76, 0.1)',
                         tension: 0.4,
@@ -1014,18 +976,21 @@ if (request()->query('token')) {
                     scales: {
                         y: {
                             beginAtZero: true,
-                            max: 100
+                            ticks: { precision: 0 }
                         }
                     }
                 }
             });
         }
 
-        // Generate AI Insights
-        function generateAIInsights(hotspots) {
+        // Generate insights from the server-computed analytics (deterministic rules, no randomness)
+        function generateInsights() {
             const insights = [];
+            const hotspots = analyticsData?.hotspots || [];
+            const summary = analyticsData?.summary;
+            const dayNight = analyticsData?.day_night;
 
-            if (hotspots.length === 0) {
+            if (!hotspots.length || !summary) {
                 insights.push({
                     type: 'neutral',
                     icon: 'info-circle',
@@ -1033,55 +998,64 @@ if (request()->query('token')) {
                     description: 'No crime data available for the selected filters.'
                 });
             } else {
-                const topHotspot = hotspots[0];
-                const highRiskCount = hotspots.filter(h => h.count > 20).length;
-                const clearanceRate = Math.round((hotspotsData.filter(c => c.clearance_status === 'cleared').length / hotspotsData.length) * 100);
+                const top = hotspots[0];
 
-                // High density warning
-                if (topHotspot.count > 30) {
+                // Top risk area, explained via its composite score components
+                insights.push({
+                    type: top.risk_level === 'CRITICAL' || top.risk_level === 'HIGH' ? 'danger' : 'info',
+                    icon: 'fire',
+                    title: `Highest Risk: ${top.area_name} (score ${top.risk_score}/100)`,
+                    description: `${top.incident_count} incidents${top.crime_rate_per_1000 !== null ? ` (${top.crime_rate_per_1000} per 1,000 residents)` : ''}, severity index ${top.severity_index}/4, mostly ${top.top_category}. <a href="/pattern-detection" class="underline font-semibold">Simulate interventions →</a>`
+                });
+
+                // Rising areas
+                const rising = hotspots.filter(h => h.trend_direction === 'increasing');
+                if (rising.length > 0) {
                     insights.push({
-                        type: 'danger',
-                        icon: 'exclamation-circle',
-                        title: `Critical Alert: ${topHotspot.name}`,
-                        description: `${topHotspot.name} has ${topHotspot.count} incidents. Immediate patrol presence recommended.`
+                        type: 'warning',
+                        icon: 'arrow-trend-up',
+                        title: `${rising.length} Area(s) with Rising Incidents`,
+                        description: `${rising.slice(0, 3).map(h => `${h.area_name} (+${h.trend_percent}%)`).join(', ')}${rising.length > 3 ? '…' : ''} vs the previous period. Prioritize preventive deployment before these harden into hotspots.`
                     });
                 }
 
-                // Clearance rate insight
-                if (clearanceRate < 50) {
+                // Night-time concentration
+                if (dayNight && dayNight.night_percent >= 50) {
+                    insights.push({
+                        type: 'warning',
+                        icon: 'moon',
+                        title: `${dayNight.night_percent}% of Incidents Happen at Night`,
+                        description: 'Night-heavy pattern detected (6PM–6AM). Street lighting and night patrol interventions are most applicable — test them in the Pattern Detection simulator.'
+                    });
+                }
+
+                // Clearance rate insight (real)
+                if (summary.clearance_rate < 50) {
                     insights.push({
                         type: 'warning',
                         icon: 'triangle-exclamation',
                         title: 'Low Clearance Rate',
-                        description: `Only ${clearanceRate}% of cases are cleared. Focus on case resolution strategies.`
+                        description: `Only ${summary.clearance_rate}% of cases are cleared (${summary.unsolved_count} unsolved). Focus on case resolution strategies.`
                     });
                 } else {
                     insights.push({
                         type: 'success',
                         icon: 'check-circle',
                         title: 'Good Clearance Performance',
-                        description: `${clearanceRate}% of cases are solved. Maintain current investigation efforts.`
+                        description: `${summary.clearance_rate}% of cases are cleared. Maintain current investigation efforts.`
                     });
                 }
 
-                // Multiple hotspots warning
-                if (highRiskCount > 3) {
+                // Citywide trend
+                const trend = summary.citywide_trend;
+                if (trend.direction !== 'stable') {
                     insights.push({
-                        type: 'warning',
-                        icon: 'map-location-dot',
-                        title: `${highRiskCount} High-Risk Zones Detected`,
-                        description: 'Multiple areas require elevated patrol presence. Consider resource redistribution.'
+                        type: trend.direction === 'increasing' ? 'danger' : 'success',
+                        icon: trend.direction === 'increasing' ? 'arrow-up' : 'arrow-down',
+                        title: `Citywide Incidents ${trend.direction === 'increasing' ? 'Up' : 'Down'} ${Math.abs(trend.percent)}%`,
+                        description: `Compared to the previous ${trend.window_days}-day period across all filtered areas.`
                     });
                 }
-
-                // Trend insight
-                const unsolvedRate = 100 - clearanceRate;
-                insights.push({
-                    type: 'info',
-                    icon: 'chart-line',
-                    title: 'Area-Specific Recommendations',
-                    description: `${topHotspot.uncleared} unsolved cases in ${topHotspot.name}. Recommend specialized task force deployment.`
-                });
             }
 
             const insightsDiv = document.getElementById('aiInsights');
@@ -1129,59 +1103,61 @@ if (request()->query('token')) {
             riskCard.style.display = 'block';
             patrolSection.style.display = 'block';
 
-            let riskInfo = {};
-            if (hotspot.count > 20) {
-                riskInfo = { level: 'HIGH RISK ZONE', icon: '🔴', desc: 'Immediate patrol action recommended' };
-                patrolBtn.disabled = false;
-            } else if (hotspot.count > 10) {
-                riskInfo = { level: 'MEDIUM RISK ZONE', icon: '🟡', desc: 'Monitor and increase patrols as needed' };
-                patrolBtn.disabled = false;
-            } else {
-                riskInfo = { level: 'LOW RISK ZONE', icon: '🟢', desc: 'Stable crime levels, routine patrols' };
-                patrolBtn.disabled = true;
-            }
+            const style = RISK_STYLES[hotspot.risk_level] || RISK_STYLES.LOW;
+            const riskDescriptions = {
+                CRITICAL: 'Immediate patrol action recommended',
+                HIGH: 'Elevated patrol presence recommended',
+                MEDIUM: 'Monitor and increase patrols as needed',
+                LOW: 'Stable crime levels, routine patrols',
+            };
+            patrolBtn.disabled = hotspot.risk_level === 'LOW';
 
-            const crimeTypes = {};
-            hotspot.crimes.forEach(c => {
-                const type = c.category_name || 'Unknown';
-                crimeTypes[type] = (crimeTypes[type] || 0) + 1;
-            });
-            const topCrime = Object.keys(crimeTypes).sort((a, b) => crimeTypes[b] - crimeTypes[a])[0] || 'N/A';
-
-            const percentChange = Math.floor(Math.random() * 40 - 20);
-            const changeIcon = percentChange > 0 ? '📈' : '📉';
+            const pc = hotspot.trend_percent;
+            const changeIcon = pc > 0 ? '📈' : pc < 0 ? '📉' : '➖';
 
             statsDiv.innerHTML = `
                 <div class="space-y-4">
                     <div class="flex justify-between items-center pb-3 border-b border-gray-100">
                         <span class="text-sm text-gray-600">Total Incidents</span>
-                        <span class="font-bold text-lg text-gray-900">${hotspot.count}</span>
+                        <span class="font-bold text-lg text-gray-900">${hotspot.incident_count}</span>
                     </div>
                     <div class="flex justify-between items-center pb-3 border-b border-gray-100">
-                        <span class="text-sm text-gray-600">Cleared Cases</span>
-                        <span class="font-bold text-lg text-green-600">${hotspot.cleared}</span>
+                        <span class="text-sm text-gray-600">Crime Rate</span>
+                        <span class="font-bold text-sm text-gray-900">${hotspot.crime_rate_per_1000 !== null ? hotspot.crime_rate_per_1000 + ' / 1,000 residents' : 'No population data'}</span>
                     </div>
                     <div class="flex justify-between items-center pb-3 border-b border-gray-100">
-                        <span class="text-sm text-gray-600">Uncleared Cases</span>
-                        <span class="font-bold text-lg text-red-600">${hotspot.uncleared}</span>
+                        <span class="text-sm text-gray-600">Severity Index</span>
+                        <span class="font-bold text-lg text-gray-900">${hotspot.severity_index}<span class="text-xs text-gray-400 font-normal">/4</span></span>
+                    </div>
+                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+                        <span class="text-sm text-gray-600">Cleared / Uncleared</span>
+                        <span class="font-bold text-sm"><span class="text-green-600">${hotspot.cleared}</span> / <span class="text-red-600">${hotspot.uncleared}</span></span>
                     </div>
                     <div class="flex justify-between items-center pb-3 border-b border-gray-100">
                         <span class="text-sm text-gray-600">Most Common Crime</span>
-                        <span class="font-bold text-sm text-gray-900">${topCrime}</span>
+                        <span class="font-bold text-sm text-gray-900">${hotspot.top_category ?? 'N/A'}</span>
+                    </div>
+                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+                        <span class="text-sm text-gray-600">Night-time Share</span>
+                        <span class="font-bold text-sm text-indigo-600">${hotspot.night_percent}%</span>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-gray-600">Change vs Previous</span>
-                        <span class="font-bold text-lg ${percentChange > 0 ? 'text-red-600' : 'text-green-600'}">${changeIcon} ${Math.abs(percentChange)}%</span>
+                        <span class="font-bold text-lg ${pc > 0 ? 'text-red-600' : pc < 0 ? 'text-green-600' : 'text-gray-500'}">${changeIcon} ${pc > 0 ? '+' : ''}${pc}%</span>
                     </div>
+                    <a href="/pattern-detection" class="block w-full text-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold text-sm">
+                        <i class="fas fa-flask mr-2"></i>Simulate Interventions for This Area
+                    </a>
                 </div>
             `;
 
             riskBadge.innerHTML = `
-                <div class="text-5xl mb-3">${riskInfo.icon}</div>
-                <div class="text-2xl font-bold text-gray-900 mb-2">${riskInfo.level}</div>
-                <p class="text-sm text-gray-600 mb-4">Risk level based on crime density and frequency within selected time range.</p>
+                <div class="text-5xl mb-3">${style.icon}</div>
+                <div class="text-2xl font-bold text-gray-900 mb-2">${hotspot.risk_level} RISK ZONE</div>
+                <div class="text-sm font-bold text-gray-500 mb-2">Composite Risk Score: ${hotspot.risk_score}/100</div>
+                <p class="text-sm text-gray-600 mb-4">Score = 50% volume (population-adjusted rate) + 30% severity + 20% trend.</p>
                 <div class="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                    <i class="fas fa-info-circle mr-1"></i>${riskInfo.desc}
+                    <i class="fas fa-info-circle mr-1"></i>${riskDescriptions[hotspot.risk_level]}
                 </div>
             `;
             } catch (error) {
@@ -1286,111 +1262,60 @@ if (request()->query('token')) {
         let currentMapView = 'current';
         let predictedMarkersLayer = null;
 
-        // Run AI Prediction
+        // Run trend-based forecast against the backend regression endpoint
         function runAIPrediction() {
             const historicalRange = document.getElementById('historicalRange').value;
             const forecastPeriod = document.getElementById('forecastPeriod').value;
             const crimeType = document.getElementById('predictionCrimeType').value;
             const barangay = document.getElementById('predictionBarangay').value;
 
-            console.log('Running prediction with:', { historicalRange, forecastPeriod, crimeType, barangay });
-
             showMapLoading(true);
 
-            // Simulate API delay
-            setTimeout(() => {
-                // Generate mock predictions based on current data
-                currentPredictionData = generatePredictions(hotspotsData, parseInt(forecastPeriod));
-
-                // Show prediction results
-                document.getElementById('predictedAreasSection').style.display = 'block';
-                document.querySelector('[data-view="predicted"]').style.display = 'inline-block';
-                document.querySelector('[data-view="compare"]').style.display = 'inline-block';
-
-                // Display predicted hotspots
-                displayPredictedHotspots(currentPredictionData);
-                displayPredictionTable(currentPredictionData);
-
-                showMapLoading(false);
-                console.log('Prediction complete:', currentPredictionData);
-            }, 1500);
-        }
-
-        // Generate prediction data based on current hotspots
-        function generatePredictions(currentHotspots, forecastDays) {
-            const hotspotMap = {};
-
-            currentHotspots.forEach(crime => {
-                const barangay = crime.barangay_name || crime.location || crime.barangay || 'Unknown Barangay';
-                if (!hotspotMap[barangay]) {
-                    hotspotMap[barangay] = {
-                        name: barangay,
-                        currentCount: 0,
-                        cleared: 0,
-                        uncleared: 0
-                    };
-                }
-                hotspotMap[barangay].currentCount++;
-                if (crime.clearance_status === 'cleared') {
-                    hotspotMap[barangay].cleared++;
-                } else {
-                    hotspotMap[barangay].uncleared++;
-                }
+            const params = new URLSearchParams({
+                historical_days: historicalRange,
+                forecast_days: forecastPeriod,
+                crime_type: crimeType,
+                barangay: barangay
             });
 
-            // Create predictions with trend factors
-            const predictions = Object.values(hotspotMap)
-                .map(h => {
-                    const trendFactor = 0.8 + Math.random() * 0.6; // 0.8 to 1.4
-                    const predictedCount = Math.round(h.currentCount * trendFactor * (forecastDays / 30));
-                    const confidence = Math.floor(70 + Math.random() * 25); // 70-95%
-                    const riskLevel = predictedCount > 20 ? 'HIGH' : predictedCount > 10 ? 'MEDIUM' : 'LOW';
-                    const riskIcon = predictedCount > 20 ? '🔴' : predictedCount > 10 ? '🟡' : '🟢';
+            fetch(`/api/crime-hotspot-forecast?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    currentPredictionData = data.predictions || [];
 
-                    return {
-                        name: h.name,
-                        currentCount: h.currentCount,
-                        predictedCount: predictedCount,
-                        confidence: confidence,
-                        riskLevel: riskLevel,
-                        riskIcon: riskIcon,
-                        change: predictedCount - h.currentCount,
-                        changePercent: Math.round(((predictedCount - h.currentCount) / h.currentCount) * 100) || 0
-                    };
+                    document.getElementById('forecastMethodNote').textContent = data.method || '';
+                    document.getElementById('predictedAreasSection').style.display = 'block';
+                    document.querySelector('[data-view="predicted"]').style.display = 'inline-block';
+                    document.querySelector('[data-view="compare"]').style.display = 'inline-block';
+
+                    displayPredictedHotspots(currentPredictionData);
+                    displayPredictionTable(currentPredictionData);
+
+                    showMapLoading(false);
                 })
-                .sort((a, b) => b.predictedCount - a.predictedCount)
-                .slice(0, 15);
-
-            return predictions;
+                .catch(error => {
+                    console.error('Error running forecast:', error);
+                    showMapLoading(false);
+                    alert('Failed to generate forecast. Please try again.');
+                });
         }
 
-        // Display predicted hotspots on map
+        // Display forecast markers at the REAL barangay coordinates
         function displayPredictedHotspots(predictions) {
-            // Remove existing predicted markers layer first
             if (predictedMarkersLayer) {
                 map.removeLayer(predictedMarkersLayer);
                 predictedMarkersLayer = null;
             }
 
-            // Create a feature group for predicted markers
             predictedMarkersLayer = L.featureGroup();
 
-            // QC boundary coordinates for random placement
-            const qcMinLat = 14.55;
-            const qcMaxLat = 14.75;
-            const qcMinLng = 120.95;
-            const qcMaxLng = 121.15;
-
-            // Add predicted markers with different styling within QC boundary
             predictions.forEach(p => {
-                // Generate random coordinates within QC boundary
-                const randomLat = qcMinLat + Math.random() * (qcMaxLat - qcMinLat);
-                const randomLng = qcMinLng + Math.random() * (qcMaxLng - qcMinLng);
+                if (!p.latitude || !p.longitude) return;
 
-                const riskColor = p.riskLevel === 'HIGH' ? '#dc2626' : p.riskLevel === 'MEDIUM' ? '#ea580c' : '#22c55e';
+                const riskColor = p.risk_level === 'HIGH' ? '#dc2626' : p.risk_level === 'MEDIUM' ? '#ea580c' : '#22c55e';
 
-                const circle = L.circleMarker([randomLat, randomLng], {
-                    radius: 8,
+                const circle = L.circleMarker([p.latitude, p.longitude], {
+                    radius: Math.min(18, 6 + p.predicted_count * 2),
                     fillColor: riskColor,
                     color: riskColor,
                     weight: 2,
@@ -1400,32 +1325,45 @@ if (request()->query('token')) {
                 });
 
                 circle.bindPopup(`
-                    <div style="font-size: 12px; width: 200px;">
-                        <strong>${p.name}</strong><br>
-                        <strong>Predicted: ${p.predictedCount} incidents</strong><br>
-                        Confidence: ${p.confidence}%<br>
-                        Current: ${p.currentCount} | Change: <span style="color: ${p.change > 0 ? '#dc2626' : '#22c55e'};">${p.change > 0 ? '+' : ''}${p.changePercent}%</span>
+                    <div style="font-size: 12px; width: 220px;">
+                        <strong>${p.area_name}</strong><br>
+                        <strong>Forecast: ~${p.predicted_count} incident(s)</strong><br>
+                        Last ${document.getElementById('historicalRange').value} days: ${p.historical_count} (avg ${p.weekly_average}/week)<br>
+                        Trend: ${p.trend} | Confidence: ${p.confidence}%
                     </div>
                 `);
 
                 circle.addTo(predictedMarkersLayer);
             });
 
-            // Add the layer to map
             predictedMarkersLayer.addTo(map);
         }
 
-        // Display prediction table
+        // Display forecast table
         function displayPredictionTable(predictions) {
             const tableBody = document.getElementById('predictedAreasTable');
+
+            if (!predictions.length) {
+                tableBody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">Not enough historical data to generate a forecast for the selected filters.</td></tr>';
+                return;
+            }
+
+            const trendBadge = (t, changePercent) => {
+                if (t === 'rising') return `<span class="px-2 py-1 rounded-full bg-red-100 text-red-700 font-semibold text-sm"><i class="fas fa-arrow-up mr-1"></i>${changePercent > 0 ? '+' : ''}${changePercent}%</span>`;
+                if (t === 'falling') return `<span class="px-2 py-1 rounded-full bg-green-100 text-green-700 font-semibold text-sm"><i class="fas fa-arrow-down mr-1"></i>${changePercent}%</span>`;
+                return `<span class="px-2 py-1 rounded-full bg-gray-100 text-gray-600 font-semibold text-sm"><i class="fas fa-arrows-left-right mr-1"></i>flat</span>`;
+            };
+
             tableBody.innerHTML = predictions.map((p, idx) => `
                 <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                     <td class="px-6 py-4 text-sm font-bold text-gray-900">${idx + 1}</td>
-                    <td class="px-6 py-4 text-sm text-gray-700">${p.name}</td>
-                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">${p.predictedCount}</td>
+                    <td class="px-6 py-4 text-sm text-gray-700">${p.area_name}</td>
+                    <td class="px-6 py-4 text-sm text-gray-700">${p.historical_count} <span class="text-xs text-gray-400">(${p.weekly_average}/wk)</span></td>
+                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">~${p.predicted_count}</td>
+                    <td class="px-6 py-4">${trendBadge(p.trend, p.change_percent)}</td>
                     <td class="px-6 py-4">
-                        <span class="text-sm font-bold px-2 py-1 rounded-full ${p.riskLevel === 'HIGH' ? 'bg-red-100 text-red-700' : p.riskLevel === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">
-                            ${p.riskIcon} ${p.riskLevel}
+                        <span class="text-sm font-bold px-2 py-1 rounded-full ${p.risk_level === 'HIGH' ? 'bg-red-100 text-red-700' : p.risk_level === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">
+                            ${p.risk_level === 'HIGH' ? '🔴' : p.risk_level === 'MEDIUM' ? '🟡' : '🟢'} ${p.risk_level}
                         </span>
                     </td>
                     <td class="px-6 py-4">
@@ -1435,11 +1373,6 @@ if (request()->query('token')) {
                             </div>
                             <span class="text-xs font-bold text-gray-700">${p.confidence}%</span>
                         </div>
-                    </td>
-                    <td class="px-6 py-4 text-sm">
-                        <span class="px-2 py-1 rounded-full ${p.change > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'} font-semibold">
-                            <i class="fas fa-${p.change > 0 ? 'arrow-up' : 'arrow-down'} mr-1"></i>${Math.abs(p.changePercent)}%
-                        </span>
                     </td>
                 </tr>
             `).join('');
@@ -1493,7 +1426,7 @@ if (request()->query('token')) {
 
         function requestPatrol() {
             if (selectedHotspot) {
-                alert(`Patrol deployment request submitted for ${selectedHotspot.name}\n\nThis feature will be implemented in the next phase.`);
+                alert(`Patrol deployment request submitted for ${selectedHotspot.area_name}\n\nThis feature will be implemented in the next phase.`);
             }
         }
 
@@ -1512,15 +1445,14 @@ if (request()->query('token')) {
             }
 
             const csv = [
-                ['Latitude', 'Longitude', 'Barangay', 'Category', 'Status', 'Clearance Status', 'Date'].join(','),
+                ['Latitude', 'Longitude', 'Barangay', 'Category', 'Clearance Status', 'Date'].join(','),
                 ...hotspotsData.map(crime => [
                     crime.latitude,
                     crime.longitude,
                     crime.barangay_name || 'N/A',
                     crime.category_name || 'N/A',
-                    crime.case_status || 'N/A',
                     crime.clearance_status || 'N/A',
-                    crime.created_at || 'N/A'
+                    crime.incident_date || 'N/A'
                 ].join(','))
             ].join('\n');
 
