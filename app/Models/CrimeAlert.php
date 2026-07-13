@@ -12,6 +12,7 @@ class CrimeAlert extends Model
     protected $table = 'crime_department_crime_alerts';
 
     protected $fillable = [
+        'alert_rule_id',
         'alert_code',
         'alert_title',
         'alert_type',
@@ -49,6 +50,11 @@ class CrimeAlert extends Model
         return $this->belongsTo(CrimeCategory::class, 'crime_category_id');
     }
 
+    public function rule()
+    {
+        return $this->belongsTo(AlertRule::class, 'alert_rule_id');
+    }
+
     public function acknowledgedBy()
     {
         return $this->belongsTo(User::class, 'acknowledged_by');
@@ -57,5 +63,10 @@ class CrimeAlert extends Model
     public function resolvedBy()
     {
         return $this->belongsTo(User::class, 'resolved_by');
+    }
+
+    public function scopeActiveStatus($query)
+    {
+        return $query->whereIn('alert_status', ['active', 'acknowledged', 'investigating']);
     }
 }
