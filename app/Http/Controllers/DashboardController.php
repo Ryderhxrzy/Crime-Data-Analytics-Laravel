@@ -806,116 +806,25 @@ class DashboardController extends Controller
     /**
      * Get hotspot data with analytics for Crime Hotspot Analysis page (with Redis caching)
      */
-    public function getHotspotData(Request $request)
+    public function getHotspotData(Request $request, \App\Services\HotspotAnalyticsService $analytics)
     {
         try {
-            // Get filters
             $timePeriod = $request->query('timePeriod', 'all');
             $crimeType = $request->query('crimeType', '');
             $barangay = $request->query('barangay', '');
+            $caseStatus = $request->query('caseStatus', '');
 
-            // Generate cache key
-            $cacheKey = CacheService::generateCacheKey('hotspot_data', [
+            $cacheKey = CacheService::generateCacheKey('hotspot_data_v2', [
                 'timePeriod' => $timePeriod,
                 'crimeType' => $crimeType,
                 'barangay' => $barangay,
+                'caseStatus' => $caseStatus,
             ]);
 
-            // Try to get from cache first
-            $cachedData = \Illuminate\Support\Facades\Cache::get($cacheKey);
-            if ($cachedData) {
-                return response()->json($cachedData);
-            }
-
-            // Build base query for getting crimes
-            $crimeQuery = CrimeIncident::with(['category', 'barangay'])
-                ->whereNotNull('latitude')
-                ->whereNotNull('longitude');
-
-            // Apply time period filter
-            if ($timePeriod !== 'all') {
-                $days = (int)$timePeriod;
-                $crimeQuery->where('incident_date', '>=', Carbon::now()->subDays($days));
-            }
-
-            // Apply crime type filter
-            if (!empty($crimeType)) {
-                $crimeQuery->where('crime_category_id', $crimeType);
-            }
-
-            // Apply barangay filter
-            if (!empty($barangay)) {
-                $crimeQuery->where('barangay_id', $barangay);
-            }
-
-            // Get all crimes with associated data
-            $crimes = $crimeQuery->get()
-                ->map(function($crime) {
-                    return [
-                        'id' => $crime->id,
-                        'incident_title' => $crime->incident_title,
-                        'incident_date' => $crime->incident_date?->format('Y-m-d'),
-                        'latitude' => (float)$crime->latitude,
-                        'longitude' => (float)$crime->longitude,
-                        'barangay_name' => $crime->barangay?->barangay_name ?? 'Unknown',
-                        'barangay_id' => $crime->barangay_id,
-                        'crime_category_id' => $crime->crime_category_id
-                    ];
-                });
-
-            // Calculate hotspots by barangay
-            $hotspots = [];
-            $barangayGroups = $crimes->groupBy('barangay_name');
-
-            foreach ($barangayGroups as $barangayName => $incidents) {
-                if ($incidents->count() > 0) {
-                    // Calculate density score (0-10)
-                    $incidentCount = $incidents->count();
-                    $densityScore = min(10, ($incidentCount / 50) * 10);
-
-                    // Calculate average coordinates
-                    $avgLat = $incidents->average('latitude');
-                    $avgLng = $incidents->average('longitude');
-
-                    // Determine trend direction
-                    $trendDirection = $this->calculateTrendDirection($incidents->first()['barangay_id'], $timePeriod, $crimeType);
-
-                    $hotspots[] = [
-                        'area_name' => $barangayName,
-                        'incident_count' => $incidentCount,
-                        'density_score' => round($densityScore, 2),
-                        'latitude' => $avgLat,
-                        'longitude' => $avgLng,
-                        'trend_direction' => $trendDirection
-                    ];
-                }
-            }
-
-            // Sort by density score descending
-            usort($hotspots, function($a, $b) {
-                return $b['density_score'] <=> $a['density_score'];
-            });
-
-            // Calculate monthly trends
-            $monthlyTrends = $this->getMonthlyTrends($timePeriod, $crimeType, $barangay);
-
-            // Calculate crime type distribution
-            $typeDistribution = $this->getCrimeTypeDistribution($timePeriod, $crimeType, $barangay);
-
-            $response = [
-                'crimes' => $crimes,
-                'hotspots' => $hotspots,
-                'monthly_trends' => $monthlyTrends,
-                'type_distribution' => $typeDistribution
-            ];
-
-            // Cache the result for 20 minutes
-            \Illuminate\Support\Facades\Cache::remember(
+            $response = \Illuminate\Support\Facades\Cache::remember(
                 $cacheKey,
                 now()->addMinutes(CacheService::HOTSPOT_TTL),
-                function () use ($response) {
-                    return $response;
-                }
+                fn () => $analytics->analyze($timePeriod, $crimeType, $barangay, $caseStatus)
             );
 
             return response()->json($response);
@@ -926,127 +835,23 @@ class DashboardController extends Controller
     }
 
     /**
-     * Calculate trend direction for a barangay
+     * Trend-based hotspot forecast (linear regression over weekly counts).
      */
-    private function calculateTrendDirection($barangayId, $timePeriod, $crimeType)
+    public function getHotspotForecast(Request $request, \App\Services\HotspotAnalyticsService $analytics)
     {
-        // Current period count
-        $currentQuery = CrimeIncident::where('barangay_id', $barangayId);
-        if ($timePeriod !== 'all') {
-            $days = (int)$timePeriod;
-            $currentQuery->where('incident_date', '>=', Carbon::now()->subDays($days));
+        try {
+            $historicalDays = max(28, min(365, (int) $request->query('historical_days', 90)));
+            $forecastDays = max(7, min(90, (int) $request->query('forecast_days', 14)));
+            $crimeType = $request->query('crime_type', '');
+            $barangay = $request->query('barangay', '');
+
+            $result = $analytics->forecast($historicalDays, $forecastDays, $crimeType, $barangay);
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            \Log::error('Error in getHotspotForecast: ' . $e->getMessage());
+            return response()->json(['error' => 'Error generating forecast', 'message' => $e->getMessage()], 500);
         }
-        if (!empty($crimeType)) {
-            $currentQuery->where('crime_category_id', $crimeType);
-        }
-        $currentCount = $currentQuery->count();
-
-        // Previous period count
-        $previousQuery = CrimeIncident::where('barangay_id', $barangayId);
-        if ($timePeriod !== 'all') {
-            $days = (int)$timePeriod;
-            $previousQuery->whereBetween('incident_date', [
-                Carbon::now()->subDays($days * 2),
-                Carbon::now()->subDays($days)
-            ]);
-        }
-        if (!empty($crimeType)) {
-            $previousQuery->where('crime_category_id', $crimeType);
-        }
-        $previousCount = $previousQuery->count();
-
-        if ($previousCount === 0 || $currentCount === 0) return 'stable';
-
-        $percentChange = (($currentCount - $previousCount) / $previousCount) * 100;
-
-        if ($percentChange > 10) {
-            return 'increasing';
-        } elseif ($percentChange < -10) {
-            return 'decreasing';
-        } else {
-            return 'stable';
-        }
-    }
-
-    /**
-     * Get monthly trend data for the last 12 months
-     */
-    private function getMonthlyTrends($timePeriod, $crimeType, $barangay)
-    {
-        $months = [];
-        $values = [];
-
-        for ($i = 11; $i >= 0; $i--) {
-            $date = Carbon::now()->subMonths($i);
-            $month = $date->format('M');
-            $months[] = $month;
-
-            $query = CrimeIncident::query()
-                ->whereYear('incident_date', $date->year)
-                ->whereMonth('incident_date', $date->month);
-
-            if ($timePeriod !== 'all') {
-                $days = (int)$timePeriod;
-                $query->where('incident_date', '>=', Carbon::now()->subDays($days));
-            }
-
-            if (!empty($crimeType)) {
-                $query->where('crime_category_id', $crimeType);
-            }
-
-            if (!empty($barangay)) {
-                $query->where('barangay_id', $barangay);
-            }
-
-            $count = $query->count();
-            $values[] = $count;
-        }
-
-        return [
-            'labels' => $months,
-            'values' => $values
-        ];
-    }
-
-    /**
-     * Get crime type distribution in hotspots
-     */
-    private function getCrimeTypeDistribution($timePeriod, $crimeType, $barangay)
-    {
-        $query = CrimeIncident::query();
-
-        if ($timePeriod !== 'all') {
-            $days = (int)$timePeriod;
-            $query->where('incident_date', '>=', Carbon::now()->subDays($days));
-        }
-
-        if (!empty($crimeType)) {
-            $query->where('crime_category_id', $crimeType);
-        }
-
-        if (!empty($barangay)) {
-            $query->where('barangay_id', $barangay);
-        }
-
-        $distribution = $query->select('crime_category_id', DB::raw('COUNT(*) as count'))
-            ->groupBy('crime_category_id')
-            ->get();
-
-        $labels = [];
-        $values = [];
-
-        foreach ($distribution as $item) {
-            $category = CrimeCategory::find($item->crime_category_id);
-            if ($category) {
-                $labels[] = $category->category_name;
-                $values[] = $item->count;
-            }
-        }
-
-        return [
-            'labels' => $labels,
-            'values' => $values
-        ];
     }
 
     /**
