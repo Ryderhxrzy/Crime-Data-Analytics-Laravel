@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\AlertRule;
 use App\Models\AlertSettings;
 use App\Models\CrimeAlert;
+use App\Models\CrimeIncident;
 use App\Services\CrimeAlertEngine;
 use Illuminate\Support\Carbon;
 
@@ -89,9 +90,9 @@ class AlertsController extends Controller
         ]);
     }
 
-    public function resolve(Request $request, $id)
+    public function resolve(Request $request, $code)
     {
-        $alert = CrimeAlert::findOrFail($id);
+        $alert = CrimeAlert::where('alert_code', $code)->firstOrFail();
         $alert->update([
             'alert_status' => 'resolved',
             'resolved_by' => auth()->id(),
@@ -104,34 +105,62 @@ class AlertsController extends Controller
 
     private function formatAlert(CrimeAlert $alert): array
     {
+        $engine = app(CrimeAlertEngine::class);
         $windowHours = $alert->rule?->conditions_data['time_window_hours'] ?? null;
 
-        $areaName = $alert->barangay?->barangay_name ?? 'Quezon City (Citywide)';
-        if ($alert->category) {
-            $areaName .= " — {$alert->category->category_name}";
-        }
+        $barangay = $alert->barangay;
+        $cityName = $barangay?->city_municipality ?? 'Quezon City';
+        $streetText = $this->representativeIncidentFor($alert)?->address_details;
+
+        $location = $barangay
+            ? trim(($streetText ? "{$streetText}, " : '')."Brgy. {$barangay->barangay_name}, {$cityName}")
+            : $cityName;
+
+        $route = $streetText
+            ? "{$streetText}, ".($barangay ? "Barangay {$barangay->barangay_name}" : $cityName)
+            : ($barangay ? "Barangay {$barangay->barangay_name}" : $cityName);
 
         return [
-            'source_group' => self::SOURCE_GROUP,
-            'alert_id' => $alert->id,
+            'source_group' => 'group_'.self::SOURCE_GROUP,
+            'alert_id' => $alert->alert_code,
             'rule_name' => $alert->rule?->rule_name ?? $alert->alert_title,
-            'rule_type' => $alert->rule?->rule_type,
-            'severity' => $alert->severity,
-            'condition' => $alert->rule?->rule_condition ?? $alert->alert_description,
-            'area_name' => $areaName,
-            'location' => $alert->center_latitude && $alert->center_longitude
-                ? "{$alert->center_latitude},{$alert->center_longitude}"
-                : null,
-            'route' => route('mapping', array_filter([
-                'barangay_id' => $alert->barangay_id,
-                'crime_category_id' => $alert->crime_category_id,
-            ])),
+            'rule_type' => $this->ruleTypeLabel($alert->rule?->rule_type),
+            'severity' => strtoupper($alert->severity),
+            'condition' => $alert->rule ? $engine->formatCondition($alert->rule) : $alert->alert_description,
+            'area_name' => $barangay?->barangay_name ?? 'Quezon City (Citywide)',
+            'location' => $location,
+            'route' => $route,
             'incident_count' => $alert->incident_count,
-            'time_window' => $windowHours ? app(CrimeAlertEngine::class)->formatWindow($windowHours) : null,
-            'triggered_at' => optional($alert->created_at)->toIso8601String(),
-            'resolved_at' => optional($alert->resolved_at)->toIso8601String(),
+            'time_window' => $windowHours ? 'last '.$engine->formatWindow($windowHours) : null,
+            'triggered_at' => $alert->created_at?->setTimezone('Asia/Manila')->toIso8601String(),
+            'resolved_at' => $alert->resolved_at?->setTimezone('Asia/Manila')->toIso8601String(),
             'status' => $alert->alert_status,
         ];
+    }
+
+    private function ruleTypeLabel(?string $ruleType): ?string
+    {
+        return match ($ruleType) {
+            'crime_surge' => 'Crime Surge',
+            'hotspot' => 'Hotspot',
+            'pattern' => 'Pattern',
+            'threshold' => 'Threshold',
+            default => $ruleType,
+        };
+    }
+
+    private function representativeIncidentFor(CrimeAlert $alert): ?CrimeIncident
+    {
+        $ids = array_filter(explode(',', (string) $alert->related_incidents));
+
+        if (! $ids) {
+            return null;
+        }
+
+        return CrimeIncident::whereIn('id', $ids)
+            ->orderByDesc('incident_date')
+            ->orderByDesc('incident_time')
+            ->first();
     }
 
     public function settings()

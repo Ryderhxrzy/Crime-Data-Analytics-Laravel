@@ -219,7 +219,7 @@
                 const status = STATUS_STYLES[alert.status] || STATUS_STYLES.resolved;
                 return `
                     <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">ALT-${String(alert.alert_id).padStart(4, '0')}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${alert.alert_id}</td>
                         <td class="px-6 py-4 text-sm text-gray-900">${alert.rule_type ?? ''}</td>
                         <td class="px-6 py-4 text-sm text-gray-900">${alert.area_name ?? ''}</td>
                         <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(alert.triggered_at)}</td>

@@ -180,10 +180,40 @@ class CrimeAlertEngine
         return $hours === 1 ? '1 hour' : "{$hours} hours";
     }
 
+    /**
+     * Machine-readable condition formula for a rule, e.g. "crime in barangay >= 2",
+     * "crime (critical) >= 1". Used by the alerts API - kept separate from
+     * AlertRule::rule_condition, which stays a free-text human description.
+     */
+    public function formatCondition(AlertRule $rule): string
+    {
+        $config = $rule->conditions_data ?? [];
+        $scope = $config['scope'] ?? null;
+        $threshold = $config['threshold'] ?? 1;
+        $operator = $config['operator'] ?? '>=';
+        $severityFilter = $config['severity_filter'] ?? null;
+
+        $subject = match ($scope) {
+            'barangay' => 'crime in barangay',
+            'category' => 'crime in category',
+            'barangay_category' => 'crime in barangay & category',
+            'category_severity', 'citywide_severity' => $severityFilter
+                ? 'crime ('.implode('/', (array) $severityFilter).')'
+                : 'crime',
+            default => 'crime',
+        };
+
+        return "{$subject} {$operator} {$threshold}";
+    }
+
     protected function generateAlertCode(): string
     {
+        $year = now()->format('Y');
+        $sequence = CrimeAlert::whereYear('created_at', $year)->count() + 1;
+
         do {
-            $code = 'ALT-'.now()->format('Y').'-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
+            $code = "ALT-{$year}-".str_pad((string) $sequence, 3, '0', STR_PAD_LEFT);
+            $sequence++;
         } while (CrimeAlert::where('alert_code', $code)->exists());
 
         return $code;

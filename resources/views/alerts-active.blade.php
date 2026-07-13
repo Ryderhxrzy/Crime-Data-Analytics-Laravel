@@ -219,21 +219,23 @@
             }
 
             tbody.innerHTML = alerts.map(alert => {
-                const style = SEVERITY_STYLES[alert.severity] || SEVERITY_STYLES.medium;
+                const style = SEVERITY_STYLES[(alert.severity || '').toLowerCase()] || SEVERITY_STYLES.medium;
                 return `
                     <tr class="hover:bg-gray-50 transition-colors">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${style.badge}">
-                                <i class="fas ${style.icon} mr-1"></i> ${alert.severity.toUpperCase()}
+                                <i class="fas ${style.icon} mr-1"></i> ${alert.severity}
                             </span>
                         </td>
                         <td class="px-6 py-4 text-sm text-gray-900 font-medium">${alert.rule_name ?? ''}</td>
-                        <td class="px-6 py-4 text-sm text-gray-900">${alert.area_name ?? ''}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${alert.condition ?? ''} (${alert.incident_count} incident${alert.incident_count === 1 ? '' : 's'}, last ${alert.time_window ?? ''})</td>
+                        <td class="px-6 py-4 text-sm text-gray-900">
+                            ${alert.area_name ?? ''}
+                            <div class="text-xs text-gray-500">${alert.route ?? ''}</div>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${alert.condition ?? ''} — ${alert.incident_count} incident${alert.incident_count === 1 ? '' : 's'} (${alert.time_window ?? ''})</td>
                         <td class="px-6 py-4 text-sm text-gray-600">${timeAgo(alert.triggered_at)}</td>
                         <td class="px-6 py-4 text-sm">
-                            <a href="${alert.route}" class="text-alertara-600 hover:text-alertara-800 font-medium mr-3">View</a>
-                            <button onclick="resolveAlert(${alert.alert_id})" class="text-green-600 hover:text-green-800 font-medium">Resolve</button>
+                            <button onclick="resolveAlert('${alert.alert_id}')" class="text-green-600 hover:text-green-800 font-medium">Resolve</button>
                         </td>
                     </tr>
                 `;
