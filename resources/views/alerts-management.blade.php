@@ -63,7 +63,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-600 text-sm font-medium">Total Rules</p>
-                            <p class="text-3xl font-bold text-alertara-600 mt-1">12</p>
+                            <p class="text-3xl font-bold text-alertara-600 mt-1">{{ $alertRules->count() }}</p>
                         </div>
                         <i class="fas fa-bell text-4xl text-alertara-200"></i>
                     </div>
@@ -72,7 +72,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-600 text-sm font-medium">Active Rules</p>
-                            <p class="text-3xl font-bold text-green-600 mt-1">10</p>
+                            <p class="text-3xl font-bold text-green-600 mt-1">{{ $alertRules->where('enabled', true)->count() }}</p>
                         </div>
                         <i class="fas fa-check-circle text-4xl text-green-200"></i>
                     </div>
@@ -81,7 +81,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-600 text-sm font-medium">Disabled Rules</p>
-                            <p class="text-3xl font-bold text-gray-600 mt-1">2</p>
+                            <p class="text-3xl font-bold text-gray-600 mt-1">{{ $alertRules->where('enabled', false)->count() }}</p>
                         </div>
                         <i class="fas fa-pause-circle text-4xl text-gray-200"></i>
                     </div>
@@ -115,90 +115,52 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
+                        @php
+                            $ruleTypeLabels = [
+                                'crime_surge' => 'Crime Surge',
+                                'hotspot' => 'Hotspot Detection',
+                                'pattern' => 'Pattern Detected',
+                                'threshold' => 'Threshold Alert',
+                            ];
+                            $severityBadges = [
+                                'critical' => 'bg-red-100 text-red-800',
+                                'high' => 'bg-orange-100 text-orange-800',
+                                'medium' => 'bg-yellow-100 text-yellow-800',
+                                'low' => 'bg-blue-100 text-blue-800',
+                            ];
+                        @endphp
                         <tbody class="divide-y divide-gray-200">
-                            <!-- Rule 1 -->
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 text-sm font-medium text-gray-900">High Crime Surge</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Crime Surge</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                                        CRITICAL
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Incidents > 15 per 2 hours</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                                        <i class="fas fa-check-circle mr-1"></i> Active
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-sm">
-                                    <button onclick="editRule(1)" class="text-alertara-600 hover:text-alertara-800 font-medium mr-3">Edit</button>
-                                    <button onclick="deleteRule(1)" class="text-red-600 hover:text-red-800 font-medium">Delete</button>
-                                </td>
-                            </tr>
-
-                            <!-- Rule 2 -->
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 text-sm font-medium text-gray-900">Hotspot Detection</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Hotspot</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                                        CRITICAL
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Crime density > 8 in area</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                                        <i class="fas fa-check-circle mr-1"></i> Active
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-sm">
-                                    <button onclick="editRule(2)" class="text-alertara-600 hover:text-alertara-800 font-medium mr-3">Edit</button>
-                                    <button onclick="deleteRule(2)" class="text-red-600 hover:text-red-800 font-medium">Delete</button>
-                                </td>
-                            </tr>
-
-                            <!-- Rule 3 -->
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 text-sm font-medium text-gray-900">Pattern Detected</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Pattern</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
-                                        HIGH
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Repeat offender detected</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                                        <i class="fas fa-check-circle mr-1"></i> Active
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-sm">
-                                    <button onclick="editRule(3)" class="text-alertara-600 hover:text-alertara-800 font-medium mr-3">Edit</button>
-                                    <button onclick="deleteRule(3)" class="text-red-600 hover:text-red-800 font-medium">Delete</button>
-                                </td>
-                            </tr>
-
-                            <!-- Rule 4 -->
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 text-sm font-medium text-gray-900">Threshold Alert</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Threshold</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
-                                        MEDIUM
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Property crimes > 20 per day</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
-                                        <i class="fas fa-pause-circle mr-1"></i> Disabled
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-sm">
-                                    <button onclick="editRule(4)" class="text-alertara-600 hover:text-alertara-800 font-medium mr-3">Edit</button>
-                                    <button onclick="deleteRule(4)" class="text-red-600 hover:text-red-800 font-medium">Delete</button>
-                                </td>
-                            </tr>
+                            @forelse ($alertRules as $rule)
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ $rule->rule_name }}</td>
+                                    <td class="px-6 py-4 text-sm text-gray-900">{{ $ruleTypeLabels[$rule->rule_type] ?? $rule->rule_type }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {{ $severityBadges[$rule->severity] ?? 'bg-gray-100 text-gray-800' }}">
+                                            {{ strtoupper($rule->severity) }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">{{ $rule->rule_condition }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        @if ($rule->enabled)
+                                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                                                <i class="fas fa-check-circle mr-1"></i> Active
+                                            </span>
+                                        @else
+                                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
+                                                <i class="fas fa-pause-circle mr-1"></i> Disabled
+                                            </span>
+                                        @endif
+                                    </td>
+                                    <td class="px-6 py-4 text-sm">
+                                        <button onclick='editRule(@json($rule))' class="text-alertara-600 hover:text-alertara-800 font-medium mr-3">Edit</button>
+                                        <button onclick="deleteRule({{ $rule->id }})" class="text-red-600 hover:text-red-800 font-medium">Delete</button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">No alert rules yet. Click "Create Rule" to add one.</td>
+                                </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
@@ -206,7 +168,7 @@
                 <div class="p-4 border-t border-gray-200">
                     <div class="flex items-center justify-between">
                         <div class="text-sm text-gray-700">
-                            Showing 4 of 12 rules
+                            Showing {{ $alertRules->count() }} of {{ $alertRules->count() }} rules
                         </div>
                         <div class="flex gap-2">
                             <button class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">Previous</button>
@@ -231,7 +193,7 @@
                     </button>
                 </div>
             </div>
-            <form id="ruleForm" onsubmit="submitRuleForm(event)" class="p-6">
+            <form id="ruleForm" method="POST" action="{{ route('alerts.create-rule') }}" class="p-6">
                 @csrf
                 <div class="space-y-6">
                     <!-- Rule Name -->
@@ -305,15 +267,26 @@
     </div>
 
     <script>
+        const CREATE_RULE_URL = '{{ route('alerts.create-rule') }}';
+
         function openCreateRuleModal() {
             document.getElementById('modalTitle').textContent = 'Create New Alert Rule';
-            document.getElementById('ruleForm').reset();
+            const form = document.getElementById('ruleForm');
+            form.reset();
+            form.action = CREATE_RULE_URL;
+            document.getElementById('enableRule').checked = true;
             document.getElementById('ruleModal').classList.remove('hidden');
         }
 
-        function editRule(ruleId) {
+        function editRule(rule) {
             document.getElementById('modalTitle').textContent = 'Edit Alert Rule';
-            // TODO: Load rule data and populate form
+            const form = document.getElementById('ruleForm');
+            form.action = `/alerts/update-rule/${rule.id}`;
+            document.getElementById('ruleName').value = rule.rule_name;
+            document.getElementById('ruleType').value = rule.rule_type;
+            document.getElementById('severity').value = rule.severity;
+            document.getElementById('rule_condition').value = rule.rule_condition;
+            document.getElementById('enableRule').checked = !!rule.enabled;
             document.getElementById('ruleModal').classList.remove('hidden');
         }
 
@@ -321,18 +294,23 @@
             document.getElementById('ruleModal').classList.add('hidden');
         }
 
-        function deleteRule(ruleId) {
-            if (confirm('Are you sure you want to delete this alert rule?')) {
-                // TODO: Send delete request to backend
-                location.reload();
-            }
-        }
+        async function deleteRule(ruleId) {
+            if (!confirm('Are you sure you want to delete this alert rule?')) return;
 
-        function submitRuleForm(event) {
-            event.preventDefault();
-            // TODO: Submit form to backend
-            console.log('Form submitted');
-            // location.reload();
+            try {
+                const res = await fetch(`/alerts/delete-rule/${ruleId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    }
+                });
+                if (res.ok || res.redirected) {
+                    location.reload();
+                }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         // Close modal on background click
@@ -342,6 +320,8 @@
             }
         });
     </script>
+
+    @include('partials.toastr')
 
     @stack('scripts')
 </body>

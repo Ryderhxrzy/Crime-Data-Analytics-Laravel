@@ -201,7 +201,7 @@ class AlertsController extends Controller
 
     public function management()
     {
-        $alertRules = AlertRule::all();
+        $alertRules = AlertRule::orderByDesc('created_at')->get();
         return view('alerts-management', ['alertRules' => $alertRules]);
     }
 
