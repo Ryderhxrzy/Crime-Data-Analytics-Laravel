@@ -774,6 +774,36 @@ class DashboardController extends Controller
     }
 
     /**
+     * Run a "what-if" crime pattern simulation against real baseline incident data.
+     * Not a trained predictive model - projects real data using published
+     * crime-prevention research effect sizes (see PatternSimulationService).
+     */
+    public function simulatePatterns(Request $request, \App\Services\PatternSimulationService $simulator)
+    {
+        try {
+            $result = $simulator->run([
+                'mode' => $request->input('mode', 'predictive'),
+                'time_period_days' => $request->input('time_period_days', 90),
+                'barangay_id' => $request->input('barangay_id'),
+                'category_id' => $request->input('category_id'),
+                'cctv' => $request->input('cctv', 'none'),
+                'cctv_custom_units' => $request->input('cctv_custom_units', 0),
+                'lighting' => $request->input('lighting', false),
+                'patrol' => $request->input('patrol', 0),
+                'community' => $request->input('community', false),
+                'checkpoints' => $request->input('checkpoints', false),
+                'stress_multiplier' => $request->input('stress_multiplier', 1.5),
+            ]);
+
+            return response()->json($result, 200, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in simulatePatterns: '.$e->getMessage());
+
+            return response()->json(['error' => 'Error running simulation', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get hotspot data with analytics for Crime Hotspot Analysis page (with Redis caching)
      */
     public function getHotspotData(Request $request)
