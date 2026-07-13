@@ -58,6 +58,11 @@ if (request()->query('token')) {
                     <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Type</label>
                     <select id="crimeType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="">All Types</option>
+                        @if(isset($crimeCategories))
+                            @foreach($crimeCategories as $category)
+                                <option value="{{ $category->id }}">{{ $category->category_name }}</option>
+                            @endforeach
+                        @endif
                     </select>
                 </div>
 
@@ -230,118 +235,18 @@ if (request()->query('token')) {
     <script>
         let locationTrendChart, comparisonChart, seasonalChart;
 
+        const SERIES_COLORS = [
+            { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
+            { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
+            { border: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
+            { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
+            { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' }
+        ];
+
         document.addEventListener('DOMContentLoaded', function() {
-            initializeCharts();
             setupEventListeners();
             generateTrends();
         });
-
-        function initializeCharts() {
-            // Main Trend Chart
-            const trendCtx = document.getElementById('locationTrendChart')?.getContext('2d');
-            if (trendCtx) {
-                locationTrendChart = new Chart(trendCtx, {
-                    type: 'line',
-                    data: {
-                        labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6'],
-                        datasets: [
-                            {
-                                label: 'Barangay A',
-                                data: [25, 30, 28, 35, 40, 45],
-                                borderColor: '#ef4444',
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                tension: 0.4,
-                                fill: true
-                            },
-                            {
-                                label: 'Barangay B',
-                                data: [20, 22, 20, 18, 15, 12],
-                                borderColor: '#22c55e',
-                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                                tension: 0.4,
-                                fill: true
-                            },
-                            {
-                                label: 'Barangay C',
-                                data: [30, 28, 30, 32, 31, 30],
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                tension: 0.4,
-                                fill: true
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'top' }
-                        },
-                        scales: {
-                            y: { beginAtZero: true }
-                        }
-                    }
-                });
-            }
-
-            // Comparison Chart
-            const compCtx = document.getElementById('comparisonChart')?.getContext('2d');
-            if (compCtx) {
-                comparisonChart = new Chart(compCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['Barangay A', 'Barangay B', 'Barangay C', 'Barangay D', 'Barangay E'],
-                        datasets: [{
-                            label: 'Current Period',
-                            data: [45, 12, 30, 28, 35],
-                            backgroundColor: '#274d4c'
-                        },
-                        {
-                            label: 'Previous Period',
-                            data: [30, 20, 28, 25, 32],
-                            backgroundColor: '#9ca3af'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'top' }
-                        }
-                    }
-                });
-            }
-
-            // Seasonal Chart
-            const seasonalCtx = document.getElementById('seasonalChart')?.getContext('2d');
-            if (seasonalCtx) {
-                seasonalChart = new Chart(seasonalCtx, {
-                    type: 'radar',
-                    data: {
-                        labels: ['Barangay A', 'Barangay B', 'Barangay C', 'Barangay D', 'Barangay E'],
-                        datasets: [{
-                            label: 'Q1 2024',
-                            data: [65, 45, 70, 50, 60],
-                            borderColor: '#ef4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.2)'
-                        },
-                        {
-                            label: 'Q2 2024',
-                            data: [55, 35, 75, 45, 55],
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.2)'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'bottom' }
-                        }
-                    }
-                });
-            }
-        }
 
         function setupEventListeners() {
             document.getElementById('timePeriod').addEventListener('change', generateTrends);
@@ -358,67 +263,162 @@ if (request()->query('token')) {
             generateTrends();
         }
 
-        function generateTrends() {
-            console.log('Generating location trends...');
+        // Fetch real location trend analytics from the database
+        async function generateTrends() {
+            const params = new URLSearchParams({
+                time_period: document.getElementById('timePeriod').value,
+                barangay: document.getElementById('barangay').value,
+                crime_type: document.getElementById('crimeType').value,
+                case_status: document.getElementById('caseStatus').value
+            });
 
-            // Update summary cards
-            document.getElementById('increasingCount').textContent = Math.floor(Math.random() * 5 + 3);
-            document.getElementById('decreasingCount').textContent = Math.floor(Math.random() * 4 + 2);
-            document.getElementById('fastestGrowing').textContent = 'Barangay ' + String.fromCharCode(65 + Math.floor(Math.random() * 5));
-            document.getElementById('stableLocation').textContent = 'Barangay ' + String.fromCharCode(65 + Math.floor(Math.random() * 5));
+            try {
+                const response = await fetch(`/dashboard/location-trends-data?${params}`);
+                const data = await response.json();
 
-            // Update trend table
-            updateTrendTable();
+                if (!data.success) {
+                    throw new Error(data.error || 'Request failed');
+                }
 
-            // Update migration data
-            updateHotspotMigration();
-
-            // Update charts
-            if (locationTrendChart) locationTrendChart.update();
-            if (comparisonChart) comparisonChart.update();
-            if (seasonalChart) seasonalChart.update();
+                updateSummaryCards(data.summary);
+                updateTrendTable(data.locations);
+                updateHotspotMigration(data.migration);
+                renderTrendChart(data.series);
+                renderComparisonChart(data.locations);
+                renderSeasonalChart(data.seasonal);
+            } catch (error) {
+                console.error('Error loading location trends:', error);
+                document.getElementById('trendTableBody').innerHTML =
+                    '<tr><td colspan="4" class="px-4 py-6 text-center text-red-500">Failed to load trend data. Please try again.</td></tr>';
+            }
         }
 
-        function updateTrendTable() {
-            const barangays = ['Barangay A', 'Barangay B', 'Barangay C', 'Barangay D', 'Barangay E'];
+        function updateSummaryCards(summary) {
+            document.getElementById('increasingCount').textContent = summary.increasing_count;
+            document.getElementById('decreasingCount').textContent = summary.decreasing_count;
+            document.getElementById('fastestGrowing').textContent = summary.fastest_growing
+                ? `${summary.fastest_growing.name} (+${summary.fastest_growing.change_percent}%)`
+                : 'None';
+            document.getElementById('stableLocation').textContent = summary.most_stable
+                ? summary.most_stable.name
+                : 'None';
+        }
+
+        function updateTrendTable(locations) {
             const tbody = document.getElementById('trendTableBody');
-            tbody.innerHTML = '';
 
-            barangays.forEach(barangay => {
-                const incidents = Math.floor(Math.random() * 50 + 10);
-                const change = Math.floor(Math.random() * 30 - 15);
-                const trend = change > 5 ? '📈' : change < -5 ? '📉' : '→';
-                const color = change > 5 ? 'text-red-600' : change < -5 ? 'text-green-600' : 'text-gray-600';
+            if (!locations.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">No incidents recorded for the selected filters.</td></tr>';
+                return;
+            }
 
-                tbody.innerHTML += `
+            tbody.innerHTML = locations.slice(0, 10).map(loc => {
+                const trendIcon = loc.trend === 'increasing' ? '📈' : loc.trend === 'decreasing' ? '📉' : '→';
+                const color = loc.trend === 'increasing' ? 'text-red-600' : loc.trend === 'decreasing' ? 'text-green-600' : 'text-gray-600';
+                return `
                     <tr class="border-b border-gray-200 hover:bg-gray-50">
-                        <td class="px-4 py-3 font-medium text-gray-900">${barangay}</td>
-                        <td class="px-4 py-3 text-gray-700">${incidents}</td>
-                        <td class="px-4 py-3 text-xl">${trend}</td>
-                        <td class="px-4 py-3 font-semibold ${color}">${change > 0 ? '+' : ''}${change}%</td>
+                        <td class="px-4 py-3 font-medium text-gray-900">${loc.name}</td>
+                        <td class="px-4 py-3 text-gray-700">${loc.current}</td>
+                        <td class="px-4 py-3 text-xl">${trendIcon}</td>
+                        <td class="px-4 py-3 font-semibold ${color}">${loc.change_percent > 0 ? '+' : ''}${loc.change_percent}%</td>
                     </tr>
                 `;
+            }).join('');
+        }
+
+        function updateHotspotMigration(migration) {
+            const renderList = (areas, arrow, colorClass, suffix) => areas.length
+                ? areas.map(a => `<div class="flex items-center gap-2"><span class="${colorClass}">${arrow}</span><span>${a.name} (${suffix(a)})</span></div>`).join('')
+                : '<div class="text-gray-400 italic">None in this period</div>';
+
+            document.getElementById('gainingAreas').innerHTML =
+                renderList(migration.gaining, '↑', 'text-red-600', a => `+${a.change_percent}%`);
+            document.getElementById('losingAreas').innerHTML =
+                renderList(migration.losing, '↓', 'text-green-600', a => `${a.change_percent}%`);
+            document.getElementById('stableAreas').innerHTML =
+                renderList(migration.stable, '→', 'text-blue-600', a => `${a.current} incident${a.current === 1 ? '' : 's'}`);
+        }
+
+        function renderTrendChart(series) {
+            const ctx = document.getElementById('locationTrendChart')?.getContext('2d');
+            if (!ctx) return;
+            if (locationTrendChart) locationTrendChart.destroy();
+
+            locationTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: series.labels,
+                    datasets: series.datasets.map((s, i) => ({
+                        label: s.name,
+                        data: s.values,
+                        borderColor: SERIES_COLORS[i % SERIES_COLORS.length].border,
+                        backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length].bg,
+                        tension: 0.4,
+                        fill: true
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
             });
         }
 
-        function updateHotspotMigration() {
-            const barangays = ['Barangay A', 'Barangay B', 'Barangay C', 'Barangay D', 'Barangay E'];
+        function renderComparisonChart(locations) {
+            const ctx = document.getElementById('comparisonChart')?.getContext('2d');
+            if (!ctx) return;
+            if (comparisonChart) comparisonChart.destroy();
 
-            const gaining = barangays.slice(0, 2);
-            const losing = barangays.slice(2, 4);
-            const stable = barangays.slice(4);
+            const top = locations.slice(0, 8);
+            comparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: top.map(l => l.name),
+                    datasets: [
+                        { label: 'Current Period', data: top.map(l => l.current), backgroundColor: '#274d4c' },
+                        { label: 'Previous Period', data: top.map(l => l.previous), backgroundColor: '#9ca3af' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+        }
 
-            document.getElementById('gainingAreas').innerHTML = gaining.map(b =>
-                `<div class="flex items-center gap-2"><span class="text-red-600">↑</span><span>${b}</span></div>`
-            ).join('');
+        function renderSeasonalChart(seasonal) {
+            const ctx = document.getElementById('seasonalChart')?.getContext('2d');
+            if (!ctx) return;
+            if (seasonalChart) seasonalChart.destroy();
 
-            document.getElementById('losingAreas').innerHTML = losing.map(b =>
-                `<div class="flex items-center gap-2"><span class="text-green-600">↓</span><span>${b}</span></div>`
-            ).join('');
+            const quarterColors = [
+                { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' },
+                { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.2)' },
+                { border: '#22c55e', bg: 'rgba(34, 197, 94, 0.2)' },
+                { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' }
+            ];
 
-            document.getElementById('stableAreas').innerHTML = stable.map(b =>
-                `<div class="flex items-center gap-2"><span class="text-blue-600">→</span><span>${b}</span></div>`
-            ).join('');
+            seasonalChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: seasonal.areas,
+                    datasets: seasonal.quarters.map((q, i) => ({
+                        label: q.quarter,
+                        data: q.values,
+                        borderColor: quarterColors[i % quarterColors.length].border,
+                        backgroundColor: quarterColors[i % quarterColors.length].bg
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
         }
     </script>
 @endsection

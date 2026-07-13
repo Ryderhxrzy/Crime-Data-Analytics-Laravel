@@ -51,6 +51,7 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/location-trends', [DashboardController::class, 'locationTrends'])->name('location-trends');
     Route::get('/crime-type-trends', [DashboardController::class, 'crimeTypeTrends'])->name('crime-type-trends');
     Route::post('/dashboard/location-charts', [DashboardController::class, 'getLocationChartData'])->name('dashboard.location.charts');
+    Route::get('/dashboard/location-trends-data', [DashboardController::class, 'getLocationTrendsData'])->name('dashboard.location.trends-data');
     Route::get('/dashboard/location-trends', [DashboardController::class, 'locationTrends'])->name('dashboard.location.trends');
     Route::get('/mapping', [LandingController::class, 'mapping'])->name('mapping');
     Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');

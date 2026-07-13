@@ -575,6 +575,142 @@ class DashboardController extends Controller
     }
 
     /**
+     * Location trends data: per-barangay current-vs-previous comparison,
+     * monthly time series for the top areas, and quarterly seasonal breakdown.
+     */
+    public function getLocationTrendsData(Request $request)
+    {
+        try {
+            $timePeriod = $request->get('time_period', '90');
+            $barangayId = $request->get('barangay', '');
+            $crimeType = $request->get('crime_type', '');
+            $caseStatus = $request->get('case_status', '');
+
+            $windowDays = $timePeriod === 'all' ? 365 : (int) $timePeriod;
+            $currentStart = Carbon::now()->subDays($windowDays)->toDateString();
+            $previousStart = Carbon::now()->subDays($windowDays * 2)->toDateString();
+
+            $applyFilters = function ($query) use ($barangayId, $crimeType, $caseStatus) {
+                if ($barangayId !== '') {
+                    $query->where('barangay_id', $barangayId);
+                }
+                if ($crimeType !== '') {
+                    $query->where('crime_category_id', $crimeType);
+                }
+                if ($caseStatus !== '') {
+                    $query->where('status', $caseStatus);
+                }
+            };
+
+            // Current vs previous period counts per barangay
+            $currentCounts = CrimeIncident::with('barangay')
+                ->select('barangay_id', DB::raw('COUNT(*) as total'))
+                ->where('incident_date', '>=', $currentStart)
+                ->tap($applyFilters)
+                ->groupBy('barangay_id')
+                ->get();
+
+            $previousCounts = CrimeIncident::select('barangay_id', DB::raw('COUNT(*) as total'))
+                ->whereBetween('incident_date', [$previousStart, $currentStart])
+                ->tap($applyFilters)
+                ->groupBy('barangay_id')
+                ->pluck('total', 'barangay_id');
+
+            $locations = [];
+            foreach ($currentCounts as $row) {
+                $current = (int) $row->total;
+                $previous = (int) ($previousCounts[$row->barangay_id] ?? 0);
+
+                if ($previous > 0) {
+                    $changePercent = round(($current - $previous) / $previous * 100);
+                } else {
+                    $changePercent = $current > 0 ? 100 : 0;
+                }
+
+                $locations[] = [
+                    'barangay_id' => $row->barangay_id,
+                    'name' => $row->barangay->barangay_name ?? 'Unknown',
+                    'current' => $current,
+                    'previous' => $previous,
+                    'change_percent' => $changePercent,
+                    'trend' => $changePercent > 10 ? 'increasing' : ($changePercent < -10 ? 'decreasing' : 'stable'),
+                ];
+            }
+
+            usort($locations, fn ($a, $b) => $b['current'] <=> $a['current']);
+
+            // Monthly time series for the top 5 barangays over the window
+            $topBarangayIds = array_column(array_slice($locations, 0, 5), 'barangay_id');
+            $monthsCount = max(3, (int) ceil($windowDays / 30));
+            $seriesLabels = [];
+            $seriesData = [];
+
+            for ($i = $monthsCount - 1; $i >= 0; $i--) {
+                $seriesLabels[] = Carbon::now()->subMonths($i)->format('M Y');
+            }
+
+            foreach ($topBarangayIds as $id) {
+                $location = collect($locations)->firstWhere('barangay_id', $id);
+                $values = [];
+                for ($i = $monthsCount - 1; $i >= 0; $i--) {
+                    $date = Carbon::now()->subMonths($i);
+                    $values[] = CrimeIncident::where('barangay_id', $id)
+                        ->whereYear('incident_date', $date->year)
+                        ->whereMonth('incident_date', $date->month)
+                        ->tap($applyFilters)
+                        ->count();
+                }
+                $seriesData[] = ['name' => $location['name'] ?? 'Unknown', 'values' => $values];
+            }
+
+            // Quarterly seasonal breakdown (current year) for the top 5 barangays
+            $seasonal = [];
+            foreach ([1, 2, 3, 4] as $quarter) {
+                $values = [];
+                foreach ($topBarangayIds as $id) {
+                    $values[] = CrimeIncident::where('barangay_id', $id)
+                        ->whereYear('incident_date', Carbon::now()->year)
+                        ->whereRaw('QUARTER(incident_date) = ?', [$quarter])
+                        ->tap($applyFilters)
+                        ->count();
+                }
+                $seasonal[] = ['quarter' => "Q{$quarter} " . Carbon::now()->year, 'values' => $values];
+            }
+
+            $increasing = array_values(array_filter($locations, fn ($l) => $l['trend'] === 'increasing'));
+            $decreasing = array_values(array_filter($locations, fn ($l) => $l['trend'] === 'decreasing'));
+            $stable = array_values(array_filter($locations, fn ($l) => $l['trend'] === 'stable'));
+
+            $fastestGrowing = collect($increasing)->sortByDesc('change_percent')->first();
+            $mostStable = collect($locations)->filter(fn ($l) => $l['current'] > 0)
+                ->sortBy(fn ($l) => abs($l['change_percent']))->first();
+
+            return response()->json([
+                'success' => true,
+                'window_days' => $windowDays,
+                'summary' => [
+                    'increasing_count' => count($increasing),
+                    'decreasing_count' => count($decreasing),
+                    'stable_count' => count($stable),
+                    'fastest_growing' => $fastestGrowing,
+                    'most_stable' => $mostStable,
+                ],
+                'locations' => $locations,
+                'series' => ['labels' => $seriesLabels, 'datasets' => $seriesData],
+                'seasonal' => ['areas' => array_map(fn ($id) => collect($locations)->firstWhere('barangay_id', $id)['name'] ?? 'Unknown', $topBarangayIds), 'quarters' => $seasonal],
+                'migration' => [
+                    'gaining' => array_slice($increasing, 0, 5),
+                    'losing' => array_slice($decreasing, 0, 5),
+                    'stable' => array_slice($stable, 0, 5),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in getLocationTrendsData: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get filtered location chart data via AJAX
      */
     public function getLocationChartData(Request $request)
