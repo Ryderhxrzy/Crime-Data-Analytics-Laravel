@@ -74,15 +74,6 @@ class AlertRule extends Model
     }
 
     /**
-     * Check if this rule should trigger based on crime data
-     */
-    public function shouldTrigger($crimeData)
-    {
-        // TODO: Implement rule trigger logic based on rule_type and conditions
-        return false;
-    }
-
-    /**
      * Record a trigger event for this rule
      */
     public function recordTrigger()
