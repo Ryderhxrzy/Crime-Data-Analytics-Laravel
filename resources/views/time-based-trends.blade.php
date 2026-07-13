@@ -330,24 +330,23 @@ if (request()->query('token')) {
 
         // Initialize page on load
         document.addEventListener('DOMContentLoaded', function() {
-            // Load crime categories and barangays
+            // Load crime categories filter options
             loadCrimeCategories();
-            loadBarangays();
 
-            // Initialize charts
+            // Initialize charts from server-rendered data
             initializeTimeBasedTrendsCharts({{ now()->year }}, null);
             loadTimeBasedTrendsInsights();
-            
-            // Initialize new features
-            initializeCrimeHeatmap();
+
+            // Load real heatmap data from the server
+            loadRealHeatmap();
         });
 
-        // Load crime categories
+        // Load crime categories into the trend filter
         async function loadCrimeCategories() {
             try {
                 const response = await fetch('/api/crime-categories');
                 const categories = await response.json();
-                const select = document.getElementById('trendCrimeType');
+                const select = document.getElementById('trendFilterCrimeType');
                 if (select) {
                     categories.forEach(cat => {
                         const option = document.createElement('option');
@@ -361,23 +360,16 @@ if (request()->query('token')) {
             }
         }
 
-        // Load barangays
-        async function loadBarangays() {
-            try {
-                const response = await fetch('/api/barangays');
-                const barangays = await response.json();
-                const select = document.getElementById('trendBarangay');
-                if (select) {
-                    barangays.forEach(barangay => {
-                        const option = document.createElement('option');
-                        option.value = barangay.id;
-                        option.textContent = barangay.barangay_name;
-                        select.appendChild(option);
-                    });
-                }
-            } catch (error) {
-                console.error('Error loading barangays:', error);
-            }
+        // Compute trend direction from real monthly counts (last vs previous month)
+        function computeTrendDirection(monthValues) {
+            if (!monthValues || monthValues.length < 2) return '📊 No trend data';
+            const last = monthValues[monthValues.length - 1];
+            const prev = monthValues[monthValues.length - 2];
+            if (prev === 0) return last > 0 ? '📈 Rising' : '➖ Stable';
+            const change = Math.round(((last - prev) / prev) * 100);
+            if (change > 10) return `📈 Rising ${change}%`;
+            if (change < -10) return `📉 Falling ${Math.abs(change)}%`;
+            return '➖ Stable';
         }
 
         // Initialize Time-Based Trends Charts
@@ -403,128 +395,42 @@ if (request()->query('token')) {
             window.currentHourLabels = hourLabels;
             window.currentHourData = hourData;
 
-            // Daily Trend Chart
+            // Daily Trend Chart - real incident counts per day of week from the database
             const dailyCtx = document.getElementById('dailyTrendChart')?.getContext('2d');
             if (dailyCtx) {
                 if (window.dailyChart && typeof window.dailyChart.destroy === 'function') {
                     window.dailyChart.destroy();
                 }
-                
-                // Get current month and year for comparison
-                const currentMonth = document.getElementById('trendFilterMonth')?.value || '';
-                const currentYear = document.getElementById('trendFilterYear')?.value || new Date().getFullYear();
-                
-                // Generate comparison data for all days of month
-                const daysInMonth = currentMonth ? new Date(currentYear, currentMonth, 0).getDate() : 31;
-                const allDays = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
-                
-                // Generate sample data for all days of month
-                const monthData = dayData.length === daysInMonth ? dayData : 
-                    Array.from({length: daysInMonth}, (_, i) => {
-                        // Generate realistic crime numbers based on day of month
-                        const dayIndex = i % 7;
-                        const baseValue = 25 + Math.random() * 20; // Base crime count
-                        
-                        // Special case for January - multiple Sundays with different values
-                        let crimeCount = Math.round(baseValue * 1.2); // Default multiplier
-                        
-                        if (currentMonth === '1') { // January
-                            // Simulate real January data with varied crime counts
-                            if (dayIndex === 0) { // Sundays in January
-                                // Different Sundays have different crime counts
-                                const sundayIndex = Math.floor(i / 7); // Which Sunday of the month
-                                if (sundayIndex === 0) crimeCount = 4;      // 1st Sunday: 4 crimes
-                                else if (sundayIndex === 1) crimeCount = 6;      // 2nd Sunday: 6 crimes
-                                else if (sundayIndex === 2) crimeCount = 3;      // 3rd Sunday: 3 crimes
-                                else if (sundayIndex === 3) crimeCount = 5;      // 4th Sunday: 5 crimes
-                                else crimeCount = 2;                   // Other Sundays: 2 crimes
-                            } else if (dayIndex === 6) { // Saturdays
-                                crimeCount = Math.round(baseValue * 1.5); // Higher weekend activity
-                            } else {
-                                // Regular weekdays
-                                crimeCount = Math.round(baseValue * (0.9 + Math.random() * 0.3));
-                            }
-                        } else {
-                            // Other months with standard patterns
-                            const weekendMultiplier = (dayIndex === 0 || dayIndex === 6) ? 0.8 : 1.2;
-                            crimeCount = Math.round(baseValue * weekendMultiplier);
-                        }
-                        
-                        return crimeCount;
-                    });
-                
-                // Previous month data for comparison
-                const previousMonthData = Array.from({length: daysInMonth}, (_, i) => {
-                    const dayIndex = i % 7;
-                    const baseValue = 20 + Math.random() * 12;
-                    
-                    let crimeCount = Math.round(baseValue * 1.1);
-                    if (currentMonth === '1') { // January comparison
-                        if (dayIndex === 0) crimeCount = 3;      // Previous month Sundays: 3 crimes
-                        else if (dayIndex === 6) crimeCount = 4;      // Previous month Saturdays: 4 crimes
-                        else crimeCount = Math.round(baseValue * (0.8 + Math.random() * 0.2));
-                    } else {
-                        const weekendMultiplier = (dayIndex === 0 || dayIndex === 6) ? 0.7 : 1.1;
-                        crimeCount = Math.round(baseValue * weekendMultiplier);
-                    }
-                    
-                    return crimeCount;
-                });
 
                 window.dailyChart = new Chart(dailyCtx, {
                     type: 'bar',
                     data: {
-                        labels: allDays,
-                        datasets: [
-                            {
-                                label: currentMonth ? `Current Month (${currentMonth})` : 'Current Period',
-                                data: monthData,
-                                backgroundColor: '#274d4c',
-                                borderColor: '#274d4c',
-                                borderWidth: 2,
-                                borderRadius: 6
-                            },
-                            {
-                                label: 'Previous Month',
-                                data: previousMonthData,
-                                backgroundColor: '#94a3b8',
-                                borderColor: '#94a3b8',
-                                borderWidth: 2,
-                                borderRadius: 6
-                            }
-                        ]
+                        labels: dayLabels,
+                        datasets: [{
+                            label: 'Incidents by Day of Week',
+                            data: dayData,
+                            backgroundColor: [
+                                '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#0ea5e9'
+                            ],
+                            borderRadius: 6,
+                            borderWidth: 0
+                        }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { 
-                            legend: { 
-                                display: true, 
-                                position: 'top',
-                                labels: {
-                                    font: { size: 11 },
-                                    padding: 15,
-                                    usePointStyle: true
-                                }
-                            } 
-                        },
-                        scales: { 
-                            y: { 
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: {
                                 beginAtZero: true,
+                                ticks: { precision: 0 },
                                 title: {
                                     display: true,
                                     text: 'Number of Incidents',
                                     font: { size: 12 }
                                 }
                             },
-                            x: { 
-                                grid: { display: false },
-                                ticks: {
-                                    maxRotation: 45,
-                                    minRotation: 45,
-                                    font: { size: 10 }
-                                }
-                            }
+                            x: { grid: { display: false } }
                         }
                     }
                 });
@@ -596,8 +502,8 @@ if (request()->query('token')) {
             document.getElementById('weekdayBar').style.width = ((weekdaySum / total) * 100) + '%';
             document.getElementById('weekendBar').style.width = ((weekendSum / total) * 100) + '%';
 
-            // Trend direction
-            document.getElementById('trendDirectionDisplay').textContent = '📈 Rising';
+            // Trend direction computed from real monthly counts
+            document.getElementById('trendDirectionDisplay').textContent = computeTrendDirection(monthData);
         }
 
         // Load insights based on data
@@ -643,52 +549,25 @@ if (request()->query('token')) {
             document.getElementById('insight3').textContent = 'Weekday crimes account for ' + weekdayPercent + '% of total incidents - allocate more resources for weekday operations.';
         }
 
-        // Initialize Crime Heatmap
-        function initializeCrimeHeatmap() {
+        // Load the real Day-vs-Hour heatmap from the database
+        async function loadRealHeatmap() {
             const container = document.getElementById('heatmapContainer');
-            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const hours = Array.from({length: 24}, (_, i) => i.toString().padStart(2, '0') + ':00');
-            
-            // Generate sample data - replace with actual data from API
-            const heatmapData = generateSampleHeatmapData();
-            
-            let html = '<table class="w-full border-collapse">';
-            html += '<thead><tr><th class="p-2 text-xs font-semibold text-gray-600">Hour</th>';
-            days.forEach(day => {
-                html += `<th class="p-2 text-xs font-semibold text-gray-600">${day}</th>`;
-            });
-            html += '</tr></thead><tbody>';
-            
-            hours.forEach((hour, hourIndex) => {
-                html += `<tr><td class="p-2 text-xs font-medium text-gray-700">${hour}</td>`;
-                days.forEach((day, dayIndex) => {
-                    const value = heatmapData[dayIndex][hourIndex];
-                    const color = getHeatmapColor(value);
-                    html += `<td class="p-1 text-center cursor-pointer transition-all hover:scale-110" style="background-color: ${color}; color: ${value > 5 ? 'white' : '#374151'};" title="${day} ${hour}: ${value} incidents"><span class="text-xs font-semibold">${value}</span></td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table>';
-            
-            container.innerHTML = html;
-        }
+            container.innerHTML = '<div class="p-6 text-center text-sm text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading heatmap...</div>';
 
-        // Generate sample heatmap data (replace with actual API call)
-        function generateSampleHeatmapData() {
-            const data = [];
-            for (let day = 0; day < 7; day++) {
-                const dayData = [];
-                for (let hour = 0; hour < 24; hour++) {
-                    // Simulate realistic crime patterns
-                    let baseValue = Math.random() * 3;
-                    if (hour >= 18 && hour <= 23) baseValue += 4; // Evening peak
-                    if (hour >= 0 && hour <= 3) baseValue += 2; // Night activity
-                    if (day >= 1 && day <= 5) baseValue += 1; // Weekday increase
-                    dayData.push(Math.floor(baseValue));
+            try {
+                const year = document.getElementById('trendFilterYear')?.value || new Date().getFullYear();
+                const response = await fetch(`/dashboard/charts?year=${year}`);
+                const data = await response.json();
+
+                if (data.heatmapData) {
+                    updateHeatmapWithData(data.heatmapData);
+                } else {
+                    container.innerHTML = '<div class="p-6 text-center text-sm text-gray-500">No heatmap data available.</div>';
                 }
-                data.push(dayData);
+            } catch (error) {
+                console.error('Error loading heatmap:', error);
+                container.innerHTML = '<div class="p-6 text-center text-sm text-red-500">Failed to load heatmap data.</div>';
             }
-            return data;
         }
 
         // Get color based on crime intensity
@@ -703,36 +582,32 @@ if (request()->query('token')) {
         
         // Auto-apply filter functionality
         async function applyTrendFilter() {
-            const week = document.getElementById('trendFilterWeek').value;
             const year = document.getElementById('trendFilterYear').value;
             const month = document.getElementById('trendFilterMonth').value;
             const dayOfWeek = document.getElementById('trendDayOfWeek').value;
             const timeOfDay = document.getElementById('trendTimeOfDay').value;
+            const crimeType = document.getElementById('trendFilterCrimeType').value;
 
-            // Show loading state
+            // Show loading state (loader element is optional)
             const loader = document.getElementById('trendFilterLoader');
-            loader.classList.add('active');
+            loader?.classList.add('active');
 
             try {
                 // Fetch filtered data from server
                 const params = new URLSearchParams();
-                if (week) params.append('week', week);
                 params.append('year', year);
                 if (month) params.append('month', month);
                 if (dayOfWeek) params.append('day_of_week', dayOfWeek);
                 if (timeOfDay) params.append('time_of_day', timeOfDay);
-
-                console.log('Fetching time-based trends with params:', params.toString());
+                if (crimeType) params.append('crime_type', crimeType);
 
                 const response = await fetch(`/dashboard/charts?${params.toString()}`);
                 if (!response.ok) {
-                    console.error('API response error:', response.status);
-                    console.error('Response status:', response.status, response.statusText);
+                    console.error('API response error:', response.status, response.statusText);
                     return;
                 }
 
                 const responseData = await response.json();
-                console.log('Received time-based data:', responseData);
 
                 // Update charts with new data
                 updateTimeBasedChartsWithFilteredData(
@@ -743,14 +618,14 @@ if (request()->query('token')) {
 
                 // Reload insights with new data
                 loadTimeBasedTrendsInsights();
-                
+
                 // Refresh heatmap with filtered data
                 refreshNewFeaturesWithFilteredData(responseData);
             } catch (error) {
                 console.error('Error fetching filtered time data:', error);
             } finally {
                 // Hide loading state
-                loader.classList.remove('active');
+                loader?.classList.remove('active');
             }
         }
 
@@ -919,8 +794,8 @@ if (request()->query('token')) {
                 }
             }
 
-            // Trend direction
-            document.getElementById('trendDirectionDisplay').textContent = '📈 Rising';
+            // Trend direction computed from real monthly counts
+            document.getElementById('trendDirectionDisplay').textContent = computeTrendDirection(monthData);
         }
 
         // Refresh new features with filtered data
@@ -928,9 +803,6 @@ if (request()->query('token')) {
             // Update heatmap with new data if available
             if (responseData.heatmapData) {
                 updateHeatmapWithData(responseData.heatmapData);
-            } else {
-                // Regenerate with current filters
-                initializeCrimeHeatmap();
             }
         }
 
@@ -1011,25 +883,25 @@ if (request()->query('token')) {
         });
 
         // Auto-apply on time filter change
-        document.getElementById('trendFilterWeek').addEventListener('change', applyTrendFilter);
         document.getElementById('trendFilterYear').addEventListener('change', applyTrendFilter);
         document.getElementById('trendFilterMonth').addEventListener('change', applyTrendFilter);
         document.getElementById('trendDayOfWeek').addEventListener('change', applyTrendFilter);
         document.getElementById('trendTimeOfDay').addEventListener('change', applyTrendFilter);
+        document.getElementById('trendFilterCrimeType').addEventListener('change', applyTrendFilter);
 
         // Reset button
         document.getElementById('resetTrendFilter').addEventListener('click', function() {
-            document.getElementById('trendFilterWeek').value = '';
             document.getElementById('trendFilterYear').value = '{{ now()->year }}';
             document.getElementById('trendFilterMonth').value = '';
             document.getElementById('trendDayOfWeek').value = '';
             document.getElementById('trendTimeOfDay').value = '';
-            
+            document.getElementById('trendFilterCrimeType').value = '';
+
             // Remove active class from all date range buttons
             document.querySelectorAll('.dateRangeBtn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            
+
             // Apply reset filters
             applyTrendFilter();
         });
@@ -1145,9 +1017,15 @@ if (request()->query('token')) {
             const ctx = document.getElementById('timePeriodComparisonChart')?.getContext('2d');
             if (!ctx) return;
 
-            // Generate sample time period data
+            // Compute real time-period totals from the current hourly data
+            const hourData = window.currentHourData || {!! $hourlyData !!};
             const periods = ['Morning (6AM-12PM)', 'Afternoon (12PM-6PM)', 'Evening (6PM-12AM)', 'Night (12AM-6AM)'];
-            const data = [45, 62, 78, 35]; // Sample data
+            const data = [
+                hourData.slice(6, 12).reduce((a, b) => a + b, 0),
+                hourData.slice(12, 18).reduce((a, b) => a + b, 0),
+                hourData.slice(18, 24).reduce((a, b) => a + b, 0),
+                hourData.slice(0, 6).reduce((a, b) => a + b, 0)
+            ];
 
             new Chart(ctx, {
                 type: 'doughnut',
@@ -1194,28 +1072,55 @@ if (request()->query('token')) {
         }
 
         function generateModalInsights() {
+            // Compute insights from the real current datasets
+            const dayLabels = window.currentDayLabels || {!! $dailyLabels !!};
+            const dayData = window.currentDayData || {!! $dailyData !!};
+            const hourData = window.currentHourData || {!! $hourlyData !!};
+            const hourLabels = window.currentHourLabels || {!! $hourlyLabels !!};
+
+            const total = hourData.reduce((a, b) => a + b, 0) || 1;
+            const periodSums = {
+                'morning (6AM-12PM)': hourData.slice(6, 12).reduce((a, b) => a + b, 0),
+                'afternoon (12PM-6PM)': hourData.slice(12, 18).reduce((a, b) => a + b, 0),
+                'evening (6PM-12AM)': hourData.slice(18, 24).reduce((a, b) => a + b, 0),
+                'night (12AM-6AM)': hourData.slice(0, 6).reduce((a, b) => a + b, 0)
+            };
+            const topPeriod = Object.entries(periodSums).sort((a, b) => b[1] - a[1])[0];
+            const topPeriodShare = Math.round(topPeriod[1] / total * 100);
+
+            const weekdaySum = dayData.slice(1, 6).reduce((a, b) => a + b, 0);
+            const weekendSum = (dayData[0] || 0) + (dayData[6] || 0);
+            const weekendAvg = weekendSum / 2;
+            const weekdayAvg = weekdaySum / 5;
+            const weekendVsWeekday = weekdayAvg > 0 ? Math.round((weekendAvg - weekdayAvg) / weekdayAvg * 100) : 0;
+
+            const peakDay = dayLabels[dayData.indexOf(Math.max(...dayData))];
+            const peakHour = hourLabels[hourData.indexOf(Math.max(...hourData))];
+
             const insights = [
                 {
                     title: 'Peak Activity Analysis',
-                    description: 'Crime incidents peak during evening hours (6PM-12AM) with a 35% increase compared to other time periods.',
+                    description: `Incidents are highest during the ${topPeriod[0]} window, accounting for ${topPeriodShare}% of recorded incidents in the current selection.`,
                     icon: 'fa-chart-line',
                     color: 'alertara'
                 },
                 {
                     title: 'Weekly Pattern',
-                    description: 'Weekend days show 20% higher incident rates, particularly Friday and Saturday nights.',
+                    description: weekendVsWeekday > 0
+                        ? `Weekend days average ${weekendVsWeekday}% more incidents than weekdays, with ${peakDay} as the overall peak day.`
+                        : `Weekdays average ${Math.abs(weekendVsWeekday)}% more incidents than weekends, with ${peakDay} as the overall peak day.`,
                     icon: 'fa-calendar-week',
                     color: 'orange'
                 },
                 {
                     title: 'Risk Assessment',
-                    description: 'Based on current trends, high-risk periods identified for increased patrol deployment.',
+                    description: `The highest-risk window is around ${peakHour} on ${peakDay}s based on recorded incident frequency.`,
                     icon: 'fa-exclamation-triangle',
                     color: 'red'
                 },
                 {
                     title: 'Recommendation',
-                    description: 'Increase surveillance during peak hours and consider community watch programs for weekends.',
+                    description: `Prioritize patrol deployment during the ${topPeriod[0]} period${weekendVsWeekday > 0 ? ', especially on weekends' : ' on weekdays'}, when incident concentration is highest.`,
                     icon: 'fa-lightbulb',
                     color: 'green'
                 }
@@ -1346,11 +1251,10 @@ if (request()->query('token')) {
             }
         }
 
-        // Real-time daily comparison update
+        // Real-time daily comparison update - fetches real day-of-week counts
         function updateDailyComparison() {
-            const comparisonType = document.getElementById('dailyComparisonType')?.value || 'week-over-week';
-            const timeRange = document.getElementById('dailyTimeRange')?.value || '7';
-            const year = document.getElementById('dailyYearFilter')?.value || new Date().getFullYear();
+            const comparisonType = document.getElementById('dailyComparisonType')?.value || 'month-over-month';
+            const year = parseInt(document.getElementById('dailyYearFilter')?.value || new Date().getFullYear());
             const month = document.getElementById('dailyMonthFilter')?.value || '';
 
             // Show loading
@@ -1363,129 +1267,82 @@ if (request()->query('token')) {
             }
 
             // Debounce the update
-            window.dailyComparisonTimeout = setTimeout(() => {
-                // Generate comparison data based on filters
-                const comparisonData = generateDailyComparisonData(comparisonType, timeRange, year, month);
-                
-                // Update comparison chart
-                updateDailyComparisonChart(comparisonData);
-                
-                // Update statistics
-                updateDailyComparisonStatistics(comparisonData);
-                
-                // Hide loading
-                if (loader) loader.classList.remove('active');
+            window.dailyComparisonTimeout = setTimeout(async () => {
+                try {
+                    const comparisonData = await fetchDailyComparisonData(comparisonType, year, month);
+                    updateDailyComparisonChart(comparisonData);
+                    updateDailyComparisonStatistics(comparisonData);
+                } catch (error) {
+                    console.error('Error loading daily comparison:', error);
+                } finally {
+                    if (loader) loader.classList.remove('active');
+                }
             }, 500);
         }
 
-        function generateDailyComparisonData(type, range, year, month) {
-            // Generate different base data based on year and month for variety
-            const yearMultiplier = parseInt(year) / 2024; // Adjust based on year
-            const monthMultiplier = month ? parseInt(month) / 6 : 1; // Adjust based on month
-            const rangeMultiplier = parseInt(range) / 7; // Adjust based on range
-            
-            const baseData = [45, 62, 38, 71, 55, 48, 35].map(d => 
-                Math.round(d * yearMultiplier * monthMultiplier * rangeMultiplier)
-            );
-            
-            let datasets = [];
-            let labels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        async function fetchWeeklyDist(params) {
+            const response = await fetch(`/dashboard/charts?${new URLSearchParams(params)}`);
+            const data = await response.json();
+            return data.weeklyDist || { labels: [], data: [] };
+        }
 
-            switch(type) {
-                case 'week-over-week':
-                    datasets = [
-                        {
-                            label: 'Current Week',
-                            data: baseData,
-                            backgroundColor: '#274d4c',
-                            borderColor: '#274d4c',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        },
-                        {
-                            label: 'Previous Week',
-                            data: baseData.map(d => Math.round(d * 0.85)),
-                            backgroundColor: '#94a3b8',
-                            borderColor: '#94a3b8',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        }
-                    ];
-                    break;
-                case 'week-vs-month':
-                    datasets = [
-                        {
-                            label: 'Current Week',
-                            data: baseData,
-                            backgroundColor: '#274d4c',
-                            borderColor: '#274d4c',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        },
-                        {
-                            label: 'Last Month Same Week',
-                            data: baseData.map(d => Math.round(d * 1.15)),
-                            backgroundColor: '#f59e0b',
-                            borderColor: '#f59e0b',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        }
-                    ];
-                    break;
-                case 'weekday-vs-weekend':
-                    datasets = [
-                        {
-                            label: 'Weekday Average',
-                            data: [null, 65, 72, 78, 68, 62, null],
-                            backgroundColor: '#274d4c',
-                            borderColor: '#274d4c',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        },
-                        {
-                            label: 'Weekend Average',
-                            data: [42, null, null, null, null, null, 38],
-                            backgroundColor: '#f59e0b',
-                            borderColor: '#f59e0b',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        }
-                    ];
-                    break;
-                case 'seasonal':
-                    datasets = [
-                        {
-                            label: 'Current Season',
-                            data: baseData,
-                            backgroundColor: '#274d4c',
-                            borderColor: '#274d4c',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        },
-                        {
-                            label: 'Previous Season',
-                            data: baseData.map(d => Math.round(d * 0.9)),
-                            backgroundColor: '#94a3b8',
-                            borderColor: '#94a3b8',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        }
-                    ];
-                    break;
-                default:
-                    datasets = [
-                        {
-                            label: 'Current Period',
-                            data: baseData,
-                            backgroundColor: '#274d4c',
-                            borderColor: '#274d4c',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        }
-                    ];
+        async function fetchDailyComparisonData(type, year, month) {
+            const labels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const currentParams = { year: year };
+            if (month) currentParams.month = month;
+
+            const barStyle = (label, data, color) => ({
+                label, data,
+                backgroundColor: color, borderColor: color,
+                borderWidth: 2, borderRadius: 6
+            });
+
+            if (type === 'year-over-year') {
+                const previousParams = { year: year - 1 };
+                if (month) previousParams.month = month;
+                const [current, previous] = await Promise.all([
+                    fetchWeeklyDist(currentParams),
+                    fetchWeeklyDist(previousParams)
+                ]);
+                return {
+                    labels,
+                    datasets: [
+                        barStyle(`${year}${month ? ' (month ' + month + ')' : ''}`, current.data, '#274d4c'),
+                        barStyle(`${year - 1}${month ? ' (same month)' : ''}`, previous.data, '#94a3b8')
+                    ]
+                };
             }
 
-            return { labels, datasets };
+            if (type === 'weekday-vs-weekend') {
+                const current = await fetchWeeklyDist(currentParams);
+                const d = current.data;
+                return {
+                    labels,
+                    datasets: [
+                        barStyle('Weekdays', [null, d[1], d[2], d[3], d[4], d[5], null], '#274d4c'),
+                        barStyle('Weekends', [d[0], null, null, null, null, null, d[6]], '#f59e0b')
+                    ]
+                };
+            }
+
+            // Default: month-over-month (previous month, wrapping across years)
+            const prevMonth = month ? (parseInt(month) === 1 ? 12 : parseInt(month) - 1) : '';
+            const prevYear = month && parseInt(month) === 1 ? year - 1 : year;
+            const previousParams = { year: prevYear };
+            if (prevMonth) previousParams.month = prevMonth;
+
+            const [current, previous] = await Promise.all([
+                fetchWeeklyDist(currentParams),
+                fetchWeeklyDist(previousParams)
+            ]);
+
+            return {
+                labels,
+                datasets: [
+                    barStyle(month ? `Selected Month (${month}/${year})` : `${year}`, current.data, '#274d4c'),
+                    barStyle(month ? `Previous Month (${prevMonth}/${prevYear})` : `${year - 1}`, previous.data, '#94a3b8')
+                ]
+            };
         }
 
         function updateDailyComparisonChart(data) {
@@ -1522,111 +1379,108 @@ if (request()->query('token')) {
         }
 
         function updateDailyComparisonStatistics(data) {
-            // Calculate statistics from comparison data
+            // Calculate statistics from real comparison data
             if (data.datasets && data.datasets.length > 0) {
-                const currentData = data.datasets[0].data.filter(d => d !== null);
-                const maxValue = Math.max(...currentData);
-                const minValue = Math.min(...currentData);
-                const avgValue = Math.round(currentData.reduce((a, b) => a + b, 0) / currentData.length);
-                
-                // Update statistics cards
+                const rawData = data.datasets[0].data;
+                const nonNull = rawData.filter(d => d !== null && d !== undefined);
+                if (!nonNull.length) return;
+
+                const maxValue = Math.max(...nonNull);
+                const minValue = Math.min(...nonNull);
+
                 const peakDayElement = document.querySelector('[data-stat="peak-day"]');
                 const lowestDayElement = document.querySelector('[data-stat="lowest-day"]');
                 const weekChangeElement = document.querySelector('[data-stat="week-change"]');
-                
+
+                // Index against the ORIGINAL array so labels stay aligned when nulls exist
                 if (peakDayElement) {
-                    const peakIndex = currentData.indexOf(maxValue);
-                    peakDayElement.textContent = data.labels[peakIndex] || 'Wednesday';
+                    peakDayElement.textContent = data.labels[rawData.indexOf(maxValue)] || '--';
                 }
-                
                 if (lowestDayElement) {
-                    const lowIndex = currentData.indexOf(minValue);
-                    lowestDayElement.textContent = data.labels[lowIndex] || 'Sunday';
+                    lowestDayElement.textContent = data.labels[rawData.indexOf(minValue)] || '--';
                 }
-                
                 if (weekChangeElement) {
-                    const change = data.datasets.length > 1 ? 
-                        ((data.datasets[0].data.reduce((a,b) => a + (b || 0), 0) - 
-                          data.datasets[1].data.reduce((a,b) => a + (b || 0), 0)) / 
-                          data.datasets[1].data.reduce((a,b) => a + (b || 0), 0) * 100).toFixed(1) : 0;
-                    weekChangeElement.textContent = change >= 0 ? `+${change}%` : `${change}%`;
+                    const previousTotal = data.datasets.length > 1
+                        ? data.datasets[1].data.reduce((a, b) => a + (b || 0), 0)
+                        : 0;
+                    const trendElement = document.querySelector('[data-stat="daily-trend"]');
+                    if (previousTotal > 0) {
+                        const currentTotal = rawData.reduce((a, b) => a + (b || 0), 0);
+                        const change = ((currentTotal - previousTotal) / previousTotal * 100).toFixed(1);
+                        weekChangeElement.textContent = change >= 0 ? `+${change}%` : `${change}%`;
+                        if (trendElement) {
+                            trendElement.textContent = change > 10 ? '📈 Rising' : change < -10 ? '📉 Falling' : '➖ Stable';
+                        }
+                    } else {
+                        weekChangeElement.textContent = '--';
+                        if (trendElement) trendElement.textContent = '--';
+                    }
+                }
+
+                // Update the pattern insight paragraphs from real data
+                const weekdayInsight = document.getElementById('dailyWeekdayInsight');
+                const weekendInsight = document.getElementById('dailyWeekendInsight');
+                if (weekdayInsight && rawData.length === 7) {
+                    const weekdayAvg = rawData.slice(1, 6).reduce((a, b) => a + (b || 0), 0) / 5;
+                    const weekendAvg = ((rawData[0] || 0) + (rawData[6] || 0)) / 2;
+                    if (weekdayAvg >= weekendAvg) {
+                        const pct = weekendAvg > 0 ? Math.round((weekdayAvg - weekendAvg) / weekendAvg * 100) : 100;
+                        weekdayInsight.textContent = `Weekdays average ${pct}% more incidents than weekend days in the selected period. Consider increased patrol during weekdays.`;
+                    } else {
+                        const pct = weekdayAvg > 0 ? Math.round((weekendAvg - weekdayAvg) / weekdayAvg * 100) : 100;
+                        weekdayInsight.textContent = `Weekend days average ${pct}% more incidents than weekdays in the selected period. Consider increased weekend patrol coverage.`;
+                    }
+                }
+                if (weekendInsight && rawData.length === 7) {
+                    const peakIdx = rawData.indexOf(Math.max(...nonNull));
+                    weekendInsight.textContent = `${data.labels[peakIdx]} recorded the most incidents (${Math.max(...nonNull)}) in this comparison. Focus resources on that day.`;
                 }
             }
         }
 
         function resetDailyComparison() {
-            document.getElementById('dailyComparisonType').value = 'week-over-week';
-            document.getElementById('dailyTimeRange').value = '7';
+            document.getElementById('dailyComparisonType').value = 'month-over-month';
             document.getElementById('dailyYearFilter').value = new Date().getFullYear();
             document.getElementById('dailyMonthFilter').value = '';
-            
+
             // Remove active class from all quick filter buttons
             document.querySelectorAll('.quick-filter-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            
+
             updateDailyComparison();
         }
 
-        // Quick filter functions for daily comparison
+        // Quick filter functions for daily comparison (month-level granularity)
         function applyDailyQuickFilter(filterType) {
             const today = new Date();
             const currentYear = today.getFullYear();
             const currentMonth = today.getMonth() + 1;
-            const currentDay = today.getDay();
-            
+
             // Remove active class from all quick filter buttons
             document.querySelectorAll('.quick-filter-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            
+
             // Add active class to clicked button
             event.target.classList.add('active');
-            
+
             switch(filterType) {
-                case 'today':
-                    document.getElementById('dailyTimeRange').value = '1';
-                    document.getElementById('dailyMonthFilter').value = currentMonth;
-                    document.getElementById('dailyYearFilter').value = currentYear;
-                    break;
-                case 'yesterday':
-                    const yesterday = new Date(today);
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    document.getElementById('dailyTimeRange').value = '1';
-                    document.getElementById('dailyMonthFilter').value = yesterday.getMonth() + 1;
-                    document.getElementById('dailyYearFilter').value = yesterday.getFullYear();
-                    break;
-                case 'this-week':
-                    document.getElementById('dailyTimeRange').value = '7';
-                    document.getElementById('dailyMonthFilter').value = currentMonth;
-                    document.getElementById('dailyYearFilter').value = currentYear;
-                    break;
-                case 'last-week':
-                    const lastWeek = new Date(today);
-                    lastWeek.setDate(lastWeek.getDate() - 7);
-                    document.getElementById('dailyTimeRange').value = '7';
-                    document.getElementById('dailyMonthFilter').value = lastWeek.getMonth() + 1;
-                    document.getElementById('dailyYearFilter').value = lastWeek.getFullYear();
-                    break;
                 case 'this-month':
-                    document.getElementById('dailyTimeRange').value = '30';
                     document.getElementById('dailyMonthFilter').value = currentMonth;
                     document.getElementById('dailyYearFilter').value = currentYear;
                     break;
                 case 'last-month':
-                    const lastMonth = new Date(today);
-                    lastMonth.setMonth(lastMonth.getMonth() - 1);
-                    document.getElementById('dailyTimeRange').value = '30';
+                    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
                     document.getElementById('dailyMonthFilter').value = lastMonth.getMonth() + 1;
                     document.getElementById('dailyYearFilter').value = lastMonth.getFullYear();
                     break;
                 case 'this-year':
-                    document.getElementById('dailyTimeRange').value = '365';
                     document.getElementById('dailyMonthFilter').value = '';
                     document.getElementById('dailyYearFilter').value = currentYear;
                     break;
             }
-            
+
             // Trigger comparison update
             updateDailyComparison();
         }
@@ -1636,11 +1490,11 @@ if (request()->query('token')) {
             updateHourlyComparison();
         }
 
-        // Real-time hourly comparison update
+        // Real-time hourly comparison update - fetches real hourly counts per day type
         function updateHourlyComparison() {
             const comparisonType = document.getElementById('hourlyComparisonType')?.value || 'day-types';
             const timeView = document.getElementById('hourlyTimeView')?.value || '24';
-            const year = document.getElementById('hourlyYearFilter')?.value || new Date().getFullYear();
+            const year = parseInt(document.getElementById('hourlyYearFilter')?.value || new Date().getFullYear());
             const month = document.getElementById('hourlyMonthFilter')?.value || '';
 
             // Show loading
@@ -1653,132 +1507,80 @@ if (request()->query('token')) {
             }
 
             // Debounce the update
-            window.hourlyComparisonTimeout = setTimeout(() => {
-                // Generate comparison data based on filters
-                const comparisonData = generateHourlyComparisonData(comparisonType, timeView, year, month);
-                
-                // Update comparison chart
-                updateHourlyComparisonChart(comparisonData);
-                
-                // Update peak analysis
-                updateHourlyPeakAnalysis(comparisonData);
-                
-                // Update statistics
-                updateHourlyComparisonStatistics(comparisonData);
-                
-                // Hide loading
-                if (loader) loader.classList.remove('active');
+            window.hourlyComparisonTimeout = setTimeout(async () => {
+                try {
+                    const comparisonData = await fetchHourlyComparisonData(comparisonType, timeView, year, month);
+                    updateHourlyComparisonChart(comparisonData);
+                    updateHourlyPeakAnalysis(comparisonData);
+                    updateHourlyComparisonStatistics(comparisonData);
+                } catch (error) {
+                    console.error('Error loading hourly comparison:', error);
+                } finally {
+                    if (loader) loader.classList.remove('active');
+                }
             }, 500);
         }
 
-        function generateHourlyComparisonData(type, view, year, month) {
-            const baseWeekday = [12, 8, 15, 25, 35, 45, 52, 48, 42, 38, 45, 52, 48, 42, 38, 45, 52, 58, 62, 55, 48, 35, 25, 18];
-            const baseWeekend = [8, 5, 10, 18, 28, 35, 42, 48, 52, 48, 42, 38, 45, 52, 48, 42, 38, 45, 52, 58, 45, 35, 22, 15];
-            const baseHoliday = [15, 12, 18, 28, 38, 45, 52, 58, 62, 58, 52, 48, 55, 62, 58, 52, 48, 55, 62, 68, 55, 42, 28, 20];
+        async function fetchPeakHours(params) {
+            const response = await fetch(`/dashboard/charts?${new URLSearchParams(params)}`);
+            const data = await response.json();
+            return data.peakHours || { labels: [], data: [] };
+        }
 
-            let datasets = [];
-            let labels = Array.from({length: 24}, (_, i) => {
-                const period = i < 12 ? 'AM' : 'PM';
-                const displayHour = i === 0 ? 12 : (i > 12 ? i - 12 : i);
-                return `${displayHour}:00 ${period}`;
+        function sliceHourView(labels, series, view) {
+            const sliceAll = (arr) => {
+                switch(view) {
+                    case 'business': return arr.slice(8, 18);   // 8AM-6PM
+                    case 'evening': return arr.slice(18, 24);   // 6PM-12AM
+                    case 'night': return arr.slice(0, 6);       // 12AM-6AM
+                    default: return arr;
+                }
+            };
+            return {
+                labels: sliceAll(labels),
+                series: series.map(s => ({ ...s, data: sliceAll(s.data) }))
+            };
+        }
+
+        async function fetchHourlyComparisonData(type, view, year, month) {
+            const lineStyle = (label, data, color, bg) => ({
+                label, data,
+                borderColor: color, backgroundColor: bg,
+                borderWidth: 3, tension: 0.4, fill: true
             });
 
-            // Filter based on time view
-            let filteredLabels = labels;
-            let filteredWeekday = baseWeekday;
-            let filteredWeekend = baseWeekend;
-            let filteredHoliday = baseHoliday;
+            const baseParams = { year: year };
+            if (month) baseParams.month = month;
 
-            switch(view) {
-                case 'business':
-                    filteredLabels = labels.slice(8, 18); // 8AM-6PM
-                    filteredWeekday = baseWeekday.slice(8, 18);
-                    filteredWeekend = baseWeekend.slice(8, 18);
-                    filteredHoliday = baseHoliday.slice(8, 18);
-                    break;
-                case 'evening':
-                    filteredLabels = labels.slice(18, 24).concat(labels.slice(0, 6)); // 6PM-12AM
-                    filteredWeekday = baseWeekday.slice(18, 24).concat(baseWeekday.slice(0, 6));
-                    filteredWeekend = baseWeekend.slice(18, 24).concat(baseWeekend.slice(0, 6));
-                    filteredHoliday = baseHoliday.slice(18, 24).concat(baseHoliday.slice(0, 6));
-                    break;
-                case 'night':
-                    filteredLabels = labels.slice(0, 6); // 12AM-6AM
-                    filteredWeekday = baseWeekday.slice(0, 6);
-                    filteredWeekend = baseWeekend.slice(0, 6);
-                    filteredHoliday = baseHoliday.slice(0, 6);
-                    break;
+            let labels = [];
+            let series = [];
+
+            if (type === 'year-over-year') {
+                const prevParams = { ...baseParams, year: year - 1 };
+                const [current, previous] = await Promise.all([
+                    fetchPeakHours(baseParams),
+                    fetchPeakHours(prevParams)
+                ]);
+                labels = current.labels;
+                series = [
+                    lineStyle(`${year}`, current.data, '#274d4c', 'rgba(39, 77, 76, 0.1)'),
+                    lineStyle(`${year - 1}`, previous.data, '#94a3b8', 'rgba(148, 163, 184, 0.1)')
+                ];
+            } else {
+                // Default: weekday vs weekend (real DAYOFWEEK-filtered queries)
+                const [weekday, weekend] = await Promise.all([
+                    fetchPeakHours({ ...baseParams, day_type: 'weekday' }),
+                    fetchPeakHours({ ...baseParams, day_type: 'weekend' })
+                ]);
+                labels = weekday.labels;
+                series = [
+                    lineStyle('Weekdays (Mon-Fri)', weekday.data, '#274d4c', 'rgba(39, 77, 76, 0.1)'),
+                    lineStyle('Weekends (Sat-Sun)', weekend.data, '#f59e0b', 'rgba(245, 158, 11, 0.1)')
+                ];
             }
 
-            switch(type) {
-                case 'day-types':
-                    datasets = [
-                        {
-                            label: 'Weekday Average',
-                            data: filteredWeekday,
-                            borderColor: '#274d4c',
-                            backgroundColor: 'rgba(39, 77, 76, 0.1)',
-                            borderWidth: 3,
-                            tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Weekend Average',
-                            data: filteredWeekend,
-                            borderColor: '#f59e0b',
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                            borderWidth: 3,
-                            tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Holiday Average',
-                            data: filteredHoliday,
-                            borderColor: '#ef4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            borderWidth: 3,
-                            tension: 0.4,
-                            fill: true
-                        }
-                    ];
-                    break;
-                case 'seasonal':
-                    datasets = [
-                        {
-                            label: 'Summer Average',
-                            data: filteredWeekday.map(d => d * 1.3),
-                            borderColor: '#ef4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            borderWidth: 3,
-                            tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Winter Average',
-                            data: filteredWeekday.map(d => d * 0.7),
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 3,
-                            tension: 0.4,
-                            fill: true
-                        }
-                    ];
-                    break;
-                default:
-                    datasets = [
-                        {
-                            label: 'Current Period',
-                            data: filteredWeekday,
-                            borderColor: '#274d4c',
-                            backgroundColor: 'rgba(39, 77, 76, 0.1)',
-                            borderWidth: 3,
-                            tension: 0.4,
-                            fill: true
-                        }
-                    ];
-            }
-
-            return { labels: filteredLabels, datasets };
+            const sliced = sliceHourView(labels, series, view);
+            return { labels: sliced.labels, datasets: sliced.series };
         }
 
         function updateHourlyComparisonChart(data) {
@@ -1817,6 +1619,13 @@ if (request()->query('token')) {
         function updateHourlyPeakAnalysis(data) {
             const ctx = document.getElementById('hourlyPeakAnalysisChart')?.getContext('2d');
             if (!ctx || !data.datasets.length) return;
+
+            // Period breakdown only makes sense on the full 24-hour view
+            if (data.datasets[0].data.length !== 24) {
+                const existing = Chart.getChart(ctx);
+                if (existing) existing.destroy();
+                return;
+            }
 
             // Calculate time period totals from current data
             const currentData = data.datasets[0].data;
@@ -1864,28 +1673,49 @@ if (request()->query('token')) {
         function updateHourlyComparisonStatistics(data) {
             if (data.datasets && data.datasets.length > 0) {
                 const currentData = data.datasets[0].data;
+                if (!currentData.length) return;
+
                 const maxValue = Math.max(...currentData);
                 const minValue = Math.min(...currentData);
                 const totalIncidents = currentData.reduce((a, b) => a + b, 0);
-                const eveningShare = ((currentData.slice(18, 24).reduce((a, b) => a + b, 0) + 
-                                   currentData.slice(0, 6).reduce((a, b) => a + b, 0)) / totalIncidents * 100).toFixed(1);
 
-                // Find peak hour
-                const peakIndex = currentData.indexOf(maxValue);
-                const peakHour = data.labels[peakIndex] || '8:00 PM';
-                
-                // Find lowest hour
-                const lowIndex = currentData.indexOf(minValue);
-                const lowHour = data.labels[lowIndex] || '5:00 AM';
-
-                // Update statistics cards
+                // Update statistics cards from real data
                 const peakHourElement = document.querySelector('[data-stat="peak-hour"]');
                 const lowestHourElement = document.querySelector('[data-stat="lowest-hour"]');
                 const eveningShareElement = document.querySelector('[data-stat="evening-share"]');
+                const riskLevelElement = document.querySelector('[data-stat="hourly-risk"]');
 
-                if (peakHourElement) peakHourElement.textContent = peakHour;
-                if (lowestHourElement) lowestHourElement.textContent = lowHour;
-                if (eveningShareElement) eveningShareElement.textContent = `${eveningShare}%`;
+                if (peakHourElement) peakHourElement.textContent = data.labels[currentData.indexOf(maxValue)] || '--';
+                if (lowestHourElement) lowestHourElement.textContent = data.labels[currentData.indexOf(minValue)] || '--';
+
+                let eveningShare = null;
+                if (eveningShareElement) {
+                    if (currentData.length === 24 && totalIncidents > 0) {
+                        eveningShare = ((currentData.slice(18, 24).reduce((a, b) => a + b, 0) +
+                                       currentData.slice(0, 6).reduce((a, b) => a + b, 0)) / totalIncidents * 100).toFixed(1);
+                        eveningShareElement.textContent = `${eveningShare}%`;
+                    } else {
+                        eveningShareElement.textContent = '--';
+                    }
+                }
+
+                if (riskLevelElement) {
+                    riskLevelElement.textContent = eveningShare === null ? '--'
+                        : eveningShare >= 50 ? 'High' : eveningShare >= 30 ? 'Medium' : 'Low';
+                }
+
+                // Update the pattern insight paragraphs from real data
+                const eveningInsight = document.getElementById('hourlyEveningInsight');
+                const dayTypeInsight = document.getElementById('hourlyDayTypeInsight');
+                if (eveningInsight) {
+                    eveningInsight.textContent = eveningShare !== null
+                        ? `${eveningShare}% of incidents occur between 6PM and 6AM in the selected period. ${eveningShare >= 50 ? 'Prioritize night patrol coverage.' : 'Night activity is moderate; maintain balanced coverage.'}`
+                        : 'Switch to the 24-Hour View to compute the evening/night share.';
+                }
+                if (dayTypeInsight && data.datasets.length > 1) {
+                    const secondTotal = data.datasets[1].data.reduce((a, b) => a + (b || 0), 0);
+                    dayTypeInsight.textContent = `${data.datasets[0].label}: ${totalIncidents} incident(s) vs ${data.datasets[1].label}: ${secondTotal} incident(s) across the selected hours.`;
+                }
             }
         }
 
@@ -1903,69 +1733,45 @@ if (request()->query('token')) {
             updateHourlyComparison();
         }
 
-        // Quick filter functions for hourly comparison
+        // Quick filter functions for hourly comparison (month-level granularity)
         function applyHourlyQuickFilter(filterType) {
             const today = new Date();
             const currentYear = today.getFullYear();
             const currentMonth = today.getMonth() + 1;
-            
+
             // Remove active class from all quick filter buttons
             document.querySelectorAll('.quick-filter-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            
+
             // Add active class to clicked button
             event.target.classList.add('active');
-            
+
             switch(filterType) {
-                case 'today':
+                case 'this-month':
                     document.getElementById('hourlyTimeView').value = '24';
                     document.getElementById('hourlyMonthFilter').value = currentMonth;
                     document.getElementById('hourlyYearFilter').value = currentYear;
-                    document.getElementById('hourlyComparisonType').value = 'day-types';
                     break;
-                case 'yesterday':
-                    const yesterday = new Date(today);
-                    yesterday.setDate(yesterday.getDate() - 1);
+                case 'last-month':
+                    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
                     document.getElementById('hourlyTimeView').value = '24';
-                    document.getElementById('hourlyMonthFilter').value = yesterday.getMonth() + 1;
-                    document.getElementById('hourlyYearFilter').value = yesterday.getFullYear();
-                    document.getElementById('hourlyComparisonType').value = 'day-types';
+                    document.getElementById('hourlyMonthFilter').value = lastMonth.getMonth() + 1;
+                    document.getElementById('hourlyYearFilter').value = lastMonth.getFullYear();
                     break;
-                case 'this-week':
+                case 'this-year':
                     document.getElementById('hourlyTimeView').value = '24';
-                    document.getElementById('hourlyMonthFilter').value = currentMonth;
+                    document.getElementById('hourlyMonthFilter').value = '';
                     document.getElementById('hourlyYearFilter').value = currentYear;
-                    document.getElementById('hourlyComparisonType').value = 'day-types';
                     break;
-                case 'last-week':
-                    const lastWeek = new Date(today);
-                    lastWeek.setDate(lastWeek.getDate() - 7);
-                    document.getElementById('hourlyTimeView').value = '24';
-                    document.getElementById('hourlyMonthFilter').value = lastWeek.getMonth() + 1;
-                    document.getElementById('hourlyYearFilter').value = lastWeek.getFullYear();
-                    document.getElementById('hourlyComparisonType').value = 'day-types';
+                case 'evening-hours':
+                    document.getElementById('hourlyTimeView').value = 'evening';
                     break;
-                case 'weekdays':
-                    document.getElementById('hourlyTimeView').value = 'business';
-                    document.getElementById('hourlyMonthFilter').value = currentMonth;
-                    document.getElementById('hourlyYearFilter').value = currentYear;
-                    document.getElementById('hourlyComparisonType').value = 'day-types';
-                    break;
-                case 'weekends':
-                    document.getElementById('hourlyTimeView').value = '24';
-                    document.getElementById('hourlyMonthFilter').value = currentMonth;
-                    document.getElementById('hourlyYearFilter').value = currentYear;
-                    document.getElementById('hourlyComparisonType').value = 'day-types';
-                    break;
-                case 'holidays':
-                    document.getElementById('hourlyTimeView').value = '24';
-                    document.getElementById('hourlyMonthFilter').value = '12'; // December holidays
-                    document.getElementById('hourlyYearFilter').value = currentYear;
-                    document.getElementById('hourlyComparisonType').value = 'day-types';
+                case 'night-hours':
+                    document.getElementById('hourlyTimeView').value = 'night';
                     break;
             }
-            
+
             // Trigger comparison update
             updateHourlyComparison();
         }
@@ -2172,14 +1978,40 @@ if (request()->query('token')) {
             updateMonthlyModalStatistics();
         }
 
-        function initializeMonthComparisonChart() {
+        async function initializeMonthComparisonChart() {
             const ctx = document.getElementById('monthComparisonChart')?.getContext('2d');
             if (!ctx) return;
 
-            // Generate sample month comparison data
             const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const currentYearData = [45, 52, 48, 61, 58, 72, 68, 75, 82, 78, 65, 55];
-            const previousYearData = [38, 45, 42, 55, 52, 65, 61, 68, 75, 71, 58, 48];
+            const currentYear = new Date().getFullYear();
+            const previousYear = currentYear - 1;
+
+            // Fetch real per-month counts for both years and align them to Jan-Dec
+            const toMonthlyArray = (trend) => {
+                const values = Array(12).fill(0);
+                (trend.labels || []).forEach((label, i) => {
+                    const monthIndex = parseInt(label.split('-')[1], 10) - 1;
+                    if (monthIndex >= 0 && monthIndex < 12) values[monthIndex] = trend.data[i];
+                });
+                return values;
+            };
+
+            let currentYearData = Array(12).fill(0);
+            let previousYearData = Array(12).fill(0);
+
+            try {
+                const [currentRes, previousRes] = await Promise.all([
+                    fetch(`/dashboard/charts?year=${currentYear}`).then(r => r.json()),
+                    fetch(`/dashboard/charts?year=${previousYear}`).then(r => r.json())
+                ]);
+                currentYearData = toMonthlyArray(currentRes.monthlyTrend || {});
+                previousYearData = toMonthlyArray(previousRes.monthlyTrend || {});
+            } catch (error) {
+                console.error('Error loading year comparison data:', error);
+            }
+
+            const existingChart = Chart.getChart(ctx);
+            if (existingChart) existingChart.destroy();
 
             new Chart(ctx, {
                 type: 'bar',
@@ -2253,28 +2085,39 @@ if (request()->query('token')) {
         }
 
         function generateMonthlyInsights() {
+            // Compute insights from the real 12-month series
+            const monthLabels = {!! $monthLabels !!};
+            const monthValues = {!! $monthData !!};
+
+            const maxValue = Math.max(...monthValues);
+            const minValue = Math.min(...monthValues);
+            const peakMonth = monthLabels[monthValues.indexOf(maxValue)] || '--';
+            const lowMonth = monthLabels[monthValues.indexOf(minValue)] || '--';
+            const avgValue = monthValues.length ? Math.round(monthValues.reduce((a, b) => a + b, 0) / monthValues.length) : 0;
+            const trendText = computeTrendDirection(monthValues);
+
             const insights = [
                 {
-                    title: 'Seasonal Pattern',
-                    description: 'Crime incidents show clear seasonal patterns with peaks during summer months and lower activity in winter.',
+                    title: 'Peak Month',
+                    description: `${peakMonth} recorded the highest incident count (${maxValue}) in the last 12 months, while ${lowMonth} had the lowest (${minValue}).`,
                     icon: 'fa-calendar-alt',
                     color: 'alertara'
                 },
                 {
-                    title: 'Year-over-Year Growth',
-                    description: 'Current year shows 15% increase compared to previous year, indicating rising crime trends.',
+                    title: 'Monthly Average',
+                    description: `Incidents average ${avgValue} per month across the last 12 months of recorded data.`,
                     icon: 'fa-chart-line',
                     color: 'orange'
                 },
                 {
-                    title: 'Peak Period Alert',
-                    description: 'July-August period requires increased patrol deployment due to historically high incident rates.',
+                    title: 'Recent Trend',
+                    description: `Month-over-month direction: ${trendText} based on the two most recent months of data.`,
                     icon: 'fa-exclamation-triangle',
                     color: 'red'
                 },
                 {
                     title: 'Strategic Planning',
-                    description: 'Consider allocating additional resources during peak months and implementing preventive programs.',
+                    description: `Allocate additional resources around ${peakMonth}, historically the highest-activity month in the current data.`,
                     icon: 'fa-lightbulb',
                     color: 'green'
                 }
@@ -2635,19 +2478,7 @@ if (request()->query('token')) {
                 <div class="mb-4">
                     <div class="flex items-center gap-2 mb-2">
                         <span class="text-xs font-semibold text-gray-600">Quick Filters:</span>
-                        <button onclick="applyDailyQuickFilter('today')" class="quick-filter-btn">
-                            <i class="fas fa-calendar-day mr-1"></i>Today
-                        </button>
-                        <button onclick="applyDailyQuickFilter('yesterday')" class="quick-filter-btn">
-                            <i class="fas fa-calendar-day mr-1"></i>Yesterday
-                        </button>
-                        <button onclick="applyDailyQuickFilter('this-week')" class="quick-filter-btn active">
-                            <i class="fas fa-calendar-week mr-1"></i>This Week
-                        </button>
-                        <button onclick="applyDailyQuickFilter('last-week')" class="quick-filter-btn">
-                            <i class="fas fa-calendar-week mr-1"></i>Last Week
-                        </button>
-                        <button onclick="applyDailyQuickFilter('this-month')" class="quick-filter-btn">
+                        <button onclick="applyDailyQuickFilter('this-month')" class="quick-filter-btn active">
                             <i class="fas fa-calendar-alt mr-1"></i>This Month
                         </button>
                         <button onclick="applyDailyQuickFilter('last-month')" class="quick-filter-btn">
@@ -2658,22 +2489,15 @@ if (request()->query('token')) {
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Advanced Filters -->
                 <div class="flex flex-wrap items-center gap-4">
                     <div class="flex items-center gap-2">
                         <span class="text-xs font-semibold text-gray-600">Compare:</span>
                         <select id="dailyComparisonType" class="compact-select" onchange="updateDailyComparison()">
-                            <option value="week-over-week">Current Week vs Previous Week</option>
-                            <option value="week-vs-month">Current Week vs Last Month</option>
+                            <option value="month-over-month">Selected Period vs Previous Period</option>
+                            <option value="year-over-year">Same Period Last Year</option>
                             <option value="weekday-vs-weekend">Weekday vs Weekend</option>
-                            <option value="seasonal">Seasonal Comparison</option>
-                        </select>
-                        <select id="dailyTimeRange" class="compact-select" onchange="updateDailyComparison()">
-                            <option value="7">Last 7 Days</option>
-                            <option value="14">Last 14 Days</option>
-                            <option value="30">Last 30 Days</option>
-                            <option value="custom">Custom Range</option>
                         </select>
                         <select id="dailyYearFilter" class="compact-select" onchange="updateDailyComparison()">
                             @for($y = now()->year - 2; $y <= now()->year; $y++)
@@ -2710,7 +2534,7 @@ if (request()->query('token')) {
                                 </div>
                                 <div>
                                     <p class="text-sm font-medium text-blue-700">Peak Day</p>
-                                    <p class="text-xl font-bold text-blue-900" data-stat="peak-day">Wednesday</p>
+                                    <p class="text-xl font-bold text-blue-900" data-stat="peak-day">--</p>
                                 </div>
                             </div>
                         </div>
@@ -2721,7 +2545,7 @@ if (request()->query('token')) {
                                 </div>
                                 <div>
                                     <p class="text-sm font-medium text-green-700">Lowest Day</p>
-                                    <p class="text-xl font-bold text-green-900" data-stat="lowest-day">Sunday</p>
+                                    <p class="text-xl font-bold text-green-900" data-stat="lowest-day">--</p>
                                 </div>
                             </div>
                         </div>
@@ -2731,8 +2555,8 @@ if (request()->query('token')) {
                                     <i class="fas fa-percentage text-white text-lg"></i>
                                 </div>
                                 <div>
-                                    <p class="text-sm font-medium text-orange-700">Week Change</p>
-                                    <p class="text-xl font-bold text-orange-900" data-stat="week-change">+15.2%</p>
+                                    <p class="text-sm font-medium text-orange-700">Period Change</p>
+                                    <p class="text-xl font-bold text-orange-900" data-stat="week-change">--</p>
                                 </div>
                             </div>
                         </div>
@@ -2743,7 +2567,7 @@ if (request()->query('token')) {
                                 </div>
                                 <div>
                                     <p class="text-sm font-medium text-red-700">Trend</p>
-                                    <p class="text-xl font-bold text-red-900">📈 Rising</p>
+                                    <p class="text-xl font-bold text-red-900" data-stat="daily-trend">--</p>
                                 </div>
                             </div>
                         </div>
@@ -2782,12 +2606,12 @@ if (request()->query('token')) {
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                <h4 class="font-semibold text-blue-900 mb-2">Weekday Pattern</h4>
-                                <p class="text-sm text-gray-700">Mid-week days (Tue-Thu) show 35% higher incident rates compared to weekends. Consider increased patrol during these periods.</p>
+                                <h4 class="font-semibold text-blue-900 mb-2">Weekday vs Weekend Pattern</h4>
+                                <p class="text-sm text-gray-700" id="dailyWeekdayInsight">Loading pattern analysis...</p>
                             </div>
                             <div class="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                                <h4 class="font-semibold text-orange-900 mb-2">Weekend Behavior</h4>
-                                <p class="text-sm text-gray-700">Saturday evenings show peak activity. Focus resources on entertainment districts during 6PM-12AM.</p>
+                                <h4 class="font-semibold text-orange-900 mb-2">Peak Day</h4>
+                                <p class="text-sm text-gray-700" id="dailyWeekendInsight">Loading pattern analysis...</p>
                             </div>
                         </div>
                     </div>
@@ -2821,39 +2645,31 @@ if (request()->query('token')) {
                 <div class="mb-4">
                     <div class="flex items-center gap-2 mb-2">
                         <span class="text-xs font-semibold text-gray-600">Quick Filters:</span>
-                        <button onclick="applyHourlyQuickFilter('today')" class="quick-filter-btn">
-                            <i class="fas fa-clock mr-1"></i>Today
+                        <button onclick="applyHourlyQuickFilter('this-month')" class="quick-filter-btn active">
+                            <i class="fas fa-calendar-alt mr-1"></i>This Month
                         </button>
-                        <button onclick="applyHourlyQuickFilter('yesterday')" class="quick-filter-btn">
-                            <i class="fas fa-clock mr-1"></i>Yesterday
+                        <button onclick="applyHourlyQuickFilter('last-month')" class="quick-filter-btn">
+                            <i class="fas fa-calendar-alt mr-1"></i>Last Month
                         </button>
-                        <button onclick="applyHourlyQuickFilter('this-week')" class="quick-filter-btn active">
-                            <i class="fas fa-calendar-week mr-1"></i>This Week
+                        <button onclick="applyHourlyQuickFilter('this-year')" class="quick-filter-btn">
+                            <i class="fas fa-calendar mr-1"></i>This Year
                         </button>
-                        <button onclick="applyHourlyQuickFilter('last-week')" class="quick-filter-btn">
-                            <i class="fas fa-calendar-week mr-1"></i>Last Week
+                        <button onclick="applyHourlyQuickFilter('evening-hours')" class="quick-filter-btn">
+                            <i class="fas fa-moon mr-1"></i>Evening Hours
                         </button>
-                        <button onclick="applyHourlyQuickFilter('weekdays')" class="quick-filter-btn">
-                            <i class="fas fa-business-time mr-1"></i>Weekdays
-                        </button>
-                        <button onclick="applyHourlyQuickFilter('weekends')" class="quick-filter-btn">
-                            <i class="fas fa-home mr-1"></i>Weekends
-                        </button>
-                        <button onclick="applyHourlyQuickFilter('holidays')" class="quick-filter-btn">
-                            <i class="fas fa-gift mr-1"></i>Holidays
+                        <button onclick="applyHourlyQuickFilter('night-hours')" class="quick-filter-btn">
+                            <i class="fas fa-bed mr-1"></i>Night Hours
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Advanced Filters -->
                 <div class="flex flex-wrap items-center gap-4">
                     <div class="flex items-center gap-2">
                         <span class="text-xs font-semibold text-gray-600">Compare:</span>
                         <select id="hourlyComparisonType" class="compact-select" onchange="updateHourlyComparison()">
-                            <option value="day-types">Weekday vs Weekend vs Holiday</option>
-                            <option value="seasonal">Summer vs Winter Patterns</option>
-                            <option value="covid">Pre-COVID vs Post-COVID</option>
-                            <option value="custom">Custom Day Types</option>
+                            <option value="day-types">Weekday vs Weekend</option>
+                            <option value="year-over-year">This Year vs Last Year</option>
                         </select>
                         <select id="hourlyTimeView" class="compact-select" onchange="updateHourlyComparison()">
                             <option value="24">24-Hour View</option>
@@ -2896,7 +2712,7 @@ if (request()->query('token')) {
                                 </div>
                                 <div>
                                     <p class="text-sm font-medium text-red-700">Peak Hour</p>
-                                    <p class="text-xl font-bold text-red-900" data-stat="peak-hour">8:00 PM</p>
+                                    <p class="text-xl font-bold text-red-900" data-stat="peak-hour">--</p>
                                 </div>
                             </div>
                         </div>
@@ -2907,7 +2723,7 @@ if (request()->query('token')) {
                                 </div>
                                 <div>
                                     <p class="text-sm font-medium text-blue-700">Lowest Hour</p>
-                                    <p class="text-xl font-bold text-blue-900" data-stat="lowest-hour">5:00 AM</p>
+                                    <p class="text-xl font-bold text-blue-900" data-stat="lowest-hour">--</p>
                                 </div>
                             </div>
                         </div>
@@ -2917,8 +2733,8 @@ if (request()->query('token')) {
                                     <i class="fas fa-percentage text-white text-lg"></i>
                                 </div>
                                 <div>
-                                    <p class="text-sm font-medium text-orange-700">Evening Share</p>
-                                    <p class="text-xl font-bold text-orange-900" data-stat="evening-share">42.5%</p>
+                                    <p class="text-sm font-medium text-orange-700">Evening/Night Share</p>
+                                    <p class="text-xl font-bold text-orange-900" data-stat="evening-share">--</p>
                                 </div>
                             </div>
                         </div>
@@ -2928,8 +2744,8 @@ if (request()->query('token')) {
                                     <i class="fas fa-chart-line text-white text-lg"></i>
                                 </div>
                                 <div>
-                                    <p class="text-sm font-medium text-green-700">Risk Level</p>
-                                    <p class="text-xl font-bold text-green-900">High</p>
+                                    <p class="text-sm font-medium text-green-700">Night Risk Level</p>
+                                    <p class="text-xl font-bold text-green-900" data-stat="hourly-risk">--</p>
                                 </div>
                             </div>
                         </div>
@@ -2968,12 +2784,12 @@ if (request()->query('token')) {
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
-                                <h4 class="font-semibold text-red-900 mb-2">Evening Peak (6PM-12AM)</h4>
-                                <p class="text-sm text-gray-700">42.5% of daily incidents occur during evening hours. Double patrol coverage during this critical period.</p>
+                                <h4 class="font-semibold text-red-900 mb-2">Evening/Night Activity (6PM-6AM)</h4>
+                                <p class="text-sm text-gray-700" id="hourlyEveningInsight">Loading pattern analysis...</p>
                             </div>
                             <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                <h4 class="font-semibold text-blue-900 mb-2">Weekend vs Weekday</h4>
-                                <p class="text-sm text-gray-700">Weekend patterns shift 2 hours later. Adjust staffing schedules accordingly for weekend coverage.</p>
+                                <h4 class="font-semibold text-blue-900 mb-2">Comparison Summary</h4>
+                                <p class="text-sm text-gray-700" id="hourlyDayTypeInsight">Loading pattern analysis...</p>
                             </div>
                         </div>
                     </div>

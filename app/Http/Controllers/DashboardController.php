@@ -274,6 +274,8 @@ class DashboardController extends Controller
         $month = $request->get('month', null);
         $dayOfWeek = $request->get('day_of_week', null);
         $timeOfDay = $request->get('time_of_day', null);
+        $crimeType = $request->get('crime_type', null);
+        $dayType = $request->get('day_type', null); // weekday | weekend
 
         // Generate cache key
         $cacheKey = CacheService::generateCacheKey('chart_data', [
@@ -281,6 +283,8 @@ class DashboardController extends Controller
             'month' => $month,
             'day_of_week' => $dayOfWeek,
             'time_of_day' => $timeOfDay,
+            'crime_type' => $crimeType,
+            'day_type' => $dayType,
         ]);
 
         // Try to get from cache first
@@ -305,6 +309,12 @@ class DashboardController extends Controller
         if ($timeOfDay) {
             $this->applyTimeOfDayFilter($monthlyTrend, $timeOfDay);
         }
+        if ($crimeType) {
+            $monthlyTrend->where('crime_category_id', $crimeType);
+        }
+        if ($dayType) {
+            $this->applyDayTypeFilter($monthlyTrend, $dayType);
+        }
 
         $monthlyTrend = $monthlyTrend->groupBy(DB::raw('DATE_FORMAT(incident_date, "%Y-%m")'))
             ->orderBy('month')
@@ -320,6 +330,12 @@ class DashboardController extends Controller
         }
         if ($timeOfDay) {
             $this->applyTimeOfDayFilter($query, $timeOfDay);
+        }
+        if ($crimeType) {
+            $query->where('crime_category_id', $crimeType);
+        }
+        if ($dayType) {
+            $this->applyDayTypeFilter($query, $dayType);
         }
 
         // 3. Weekly Distribution (by day of week)
@@ -416,6 +432,18 @@ class DashboardController extends Controller
         }
         
         return $heatmapData;
+    }
+
+    /**
+     * Apply weekday/weekend filter to query (MySQL DAYOFWEEK: 1=Sun, 7=Sat)
+     */
+    private function applyDayTypeFilter(&$query, $dayType)
+    {
+        if ($dayType === 'weekday') {
+            $query->whereRaw('DAYOFWEEK(incident_date) BETWEEN 2 AND 6');
+        } elseif ($dayType === 'weekend') {
+            $query->whereRaw('DAYOFWEEK(incident_date) IN (1, 7)');
+        }
     }
 
     /**
