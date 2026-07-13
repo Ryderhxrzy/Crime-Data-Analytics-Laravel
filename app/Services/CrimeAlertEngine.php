@@ -189,6 +189,11 @@ class CrimeAlertEngine
     {
         $config = $rule->conditions_data ?? [];
         $scope = $config['scope'] ?? null;
+
+        if (! $scope) {
+            return 'No automatic condition configured';
+        }
+
         $threshold = $config['threshold'] ?? 1;
         $operator = $config['operator'] ?? '>=';
         $severityFilter = $config['severity_filter'] ?? null;

@@ -17,6 +17,13 @@ class AlertsController extends Controller
      */
     private const SOURCE_GROUP = 5;
 
+    /**
+     * Laravel's response()->json() escapes <, >, &, ' as \uXXXX by default
+     * (safe for inline <script> embedding). These are plain JSON API responses,
+     * not embedded in HTML, so turn that off - otherwise ">=" renders as ">=".
+     */
+    private const JSON_OPTIONS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+
     public function activeAlerts()
     {
         return view('alerts-active');
@@ -46,7 +53,7 @@ class AlertsController extends Controller
                 'low' => $alerts->where('severity', 'low')->count(),
             ],
             'alerts' => $alerts->map(fn ($alert) => $this->formatAlert($alert))->values(),
-        ]);
+        ], 200, [], self::JSON_OPTIONS);
     }
 
     /**
@@ -73,7 +80,7 @@ class AlertsController extends Controller
                 'false_alarms' => $alerts->where('alert_status', 'dismissed')->count(),
             ],
             'alerts' => $alerts->map(fn ($alert) => $this->formatAlert($alert))->values(),
-        ]);
+        ], 200, [], self::JSON_OPTIONS);
     }
 
     /**
@@ -87,7 +94,7 @@ class AlertsController extends Controller
         return response()->json([
             'created_count' => $created->count(),
             'alerts' => $created->map(fn ($alert) => $this->formatAlert($alert->load(['rule', 'barangay', 'category'])))->values(),
-        ]);
+        ], 200, [], self::JSON_OPTIONS);
     }
 
     public function resolve(Request $request, $code)
@@ -129,6 +136,8 @@ class AlertsController extends Controller
             'condition' => $alert->rule ? $engine->formatCondition($alert->rule) : $alert->alert_description,
             'area_name' => $barangay?->barangay_name ?? 'Quezon City (Citywide)',
             'location' => $location,
+            'latitude' => $alert->center_latitude,
+            'longitude' => $alert->center_longitude,
             'route' => $route,
             'incident_count' => $alert->incident_count,
             'time_window' => $windowHours ? 'last '.$engine->formatWindow($windowHours) : null,

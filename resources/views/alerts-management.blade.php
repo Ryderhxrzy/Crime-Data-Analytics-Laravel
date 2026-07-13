@@ -111,6 +111,7 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Rule Type</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Severity</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Condition</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Description</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
                             </tr>
@@ -128,6 +129,7 @@
                                 'medium' => 'bg-yellow-100 text-yellow-800',
                                 'low' => 'bg-blue-100 text-blue-800',
                             ];
+                            $alertEngine = app(\App\Services\CrimeAlertEngine::class);
                         @endphp
                         <tbody class="divide-y divide-gray-200">
                             @forelse ($alertRules as $rule)
@@ -138,6 +140,9 @@
                                         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {{ $severityBadges[$rule->severity] ?? 'bg-gray-100 text-gray-800' }}">
                                             {{ strtoupper($rule->severity) }}
                                         </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm">
+                                        <code class="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">{{ $alertEngine->formatCondition($rule) }}</code>
                                     </td>
                                     <td class="px-6 py-4 text-sm text-gray-600">{{ $rule->rule_condition }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -158,7 +163,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">No alert rules yet. Click "Create Rule" to add one.</td>
+                                    <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">No alert rules yet. Click "Create Rule" to add one.</td>
                                 </tr>
                             @endforelse
                         </tbody>
