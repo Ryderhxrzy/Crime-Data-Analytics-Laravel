@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Log;
 use App\Events\CrimeIncidentUpdated;
 use App\Events\CrimeIncidentDeleted;
+use App\Services\CrimeAlertEngine;
 
 class CrimeIncident extends Model
 {
@@ -93,6 +94,17 @@ class CrimeIncident extends Model
             ));
             
             Log::info('✅ CrimeIncidentUpdated event broadcasted successfully');
+
+            // Real-time crime alert evaluation: re-check all enabled alert rules
+            // whenever a new incident comes in.
+            try {
+                app(CrimeAlertEngine::class)->evaluateForIncident($incident);
+            } catch (\Throwable $e) {
+                Log::error('Crime alert rule evaluation failed', [
+                    'incident_id' => $incident->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         });
 
         static::updated(function (CrimeIncident $incident) {
