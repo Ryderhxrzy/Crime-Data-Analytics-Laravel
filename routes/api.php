@@ -133,6 +133,11 @@ Route::get('/crime-hotspots', [DashboardController::class, 'getHotspotData'])
     ->middleware('throttle:60,1')
     ->name('api.crime-hotspots');
 
+// Trend-based hotspot forecast endpoint
+Route::get('/crime-hotspot-forecast', [DashboardController::class, 'getHotspotForecast'])
+    ->middleware('throttle:30,1')
+    ->name('api.crime-hotspot-forecast');
+
 // Pattern detection data endpoint
 Route::get('/pattern-detection', [DashboardController::class, 'getPatternData'])
     ->middleware('throttle:60,1')
