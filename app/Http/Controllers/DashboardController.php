@@ -539,28 +539,6 @@ class DashboardController extends Controller
     }
 
     /**
-     * Server-side diagnostics returned with the analytics endpoints so the page's
-     * debug panel can show WHICH database actually answered the request.
-     */
-    private function debugInfo(): array
-    {
-        $connection = DB::connection();
-        $latest = CrimeIncident::max('incident_date');
-
-        return [
-            'app_env' => config('app.env'),
-            'db_name' => $connection->getDatabaseName(),
-            'db_host' => $connection->getConfig('host'),
-            'total_incidents' => CrimeIncident::count(),
-            'total_barangays' => Barangay::count(),
-            'total_categories' => CrimeCategory::count(),
-            'latest_incident_date' => $latest,
-            'reference_date_used' => $this->referenceDate()->toDateString(),
-            'reference_is_fallback_to_today' => $latest === null,
-        ];
-    }
-
-    /**
      * Crime type trends data: distribution, monthly series per category,
      * severity breakdown, and per-location category comparison.
      */
@@ -712,7 +690,6 @@ class DashboardController extends Controller
 
             return response()->json([
                 'success' => true,
-                'debug' => $this->debugInfo(),
                 'stats' => [
                     'total_types' => $distribution->count(),
                     'most_common' => $distributionOut['labels'][0] ?? 'None',
@@ -793,19 +770,7 @@ class DashboardController extends Controller
             if ($currentStart !== null) {
                 $currentQuery->where('incident_date', '>=', $currentStart);
             }
-
-            // Diagnostic probe: capture the exact SQL Eloquent is about to run and
-            // compare it against the same aggregation executed as raw SQL.
-            $probe = [
-                'filters_used' => compact('timePeriod', 'barangayId', 'crimeType', 'caseStatus'),
-                'eloquent_sql' => $currentQuery->toSql(),
-                'eloquent_bindings' => $currentQuery->getBindings(),
-                'raw_group_rows' => count(DB::select('SELECT barangay_id, COUNT(*) AS total FROM crime_department_crime_incidents GROUP BY barangay_id')),
-                'model_table' => (new CrimeIncident)->getTable(),
-            ];
-
             $currentCounts = $currentQuery->groupBy('barangay_id')->get();
-            $probe['eloquent_rows'] = $currentCounts->count();
 
             // Comparison counts used only for the trend direction
             $trendCurrent = collect();
@@ -917,7 +882,6 @@ class DashboardController extends Controller
 
             return response()->json([
                 'success' => true,
-                'debug' => array_merge($this->debugInfo(), ['probe' => $probe]),
                 'window_days' => $windowDays,
                 'summary' => [
                     'increasing_count' => count($increasing),
