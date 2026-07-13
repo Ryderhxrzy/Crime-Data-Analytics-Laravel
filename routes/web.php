@@ -56,6 +56,7 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');
     Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->name('risk-forecasting');
     Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
+    Route::post('/pattern-detection/simulate', [DashboardController::class, 'simulatePatterns'])->name('pattern-detection.simulate');
     Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
     Route::get('/crime-incident/create', [CrimeIncidentController::class, 'create'])->name('crime-incident.create');
     Route::post('/crime-incident', [CrimeIncidentController::class, 'store'])->name('crime-incident.store');
