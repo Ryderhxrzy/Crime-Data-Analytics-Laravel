@@ -575,6 +575,169 @@ class DashboardController extends Controller
     }
 
     /**
+     * Crime type trends data: distribution, monthly series per category,
+     * severity breakdown, and per-location category comparison.
+     */
+    public function getCrimeTypeTrendsData(Request $request)
+    {
+        try {
+            $timePeriod = $request->get('time_period', 'all');
+            $barangayId = $request->get('barangay', '');
+            $categoryId = $request->get('category', '');
+            $status = $request->get('status', '');
+            $clearance = $request->get('clearance', '');
+
+            $applyFilters = function ($query) use ($timePeriod, $barangayId, $categoryId, $status, $clearance) {
+                if ($timePeriod !== 'all') {
+                    $query->where('incident_date', '>=', Carbon::now()->subDays((int) $timePeriod)->toDateString());
+                }
+                if ($barangayId !== '') {
+                    $query->where('barangay_id', $barangayId);
+                }
+                if ($categoryId !== '') {
+                    $query->where('crime_category_id', $categoryId);
+                }
+                if ($status !== '') {
+                    $query->where('status', $status);
+                }
+                if ($clearance !== '') {
+                    $query->where('clearance_status', $clearance);
+                }
+            };
+
+            // 1. Distribution per category
+            $distribution = CrimeIncident::with('category')
+                ->select('crime_category_id', DB::raw('COUNT(*) as total'))
+                ->tap($applyFilters)
+                ->groupBy('crime_category_id')
+                ->orderByDesc('total')
+                ->get();
+
+            $distributionOut = [
+                'labels' => $distribution->map(fn ($d) => $d->category->category_name ?? 'Unknown')->values(),
+                'values' => $distribution->pluck('total')->values(),
+                'colors' => $distribution->map(fn ($d) => $d->category->color_code ?? '#6b7280')->values(),
+            ];
+
+            // 2. Monthly series (last 6 months) for the top 5 categories
+            $topCategoryIds = $distribution->take(5)->pluck('crime_category_id');
+            $monthLabels = [];
+            for ($i = 5; $i >= 0; $i--) {
+                $monthLabels[] = Carbon::now()->subMonths($i)->format('M Y');
+            }
+
+            $trendDatasets = [];
+            foreach ($topCategoryIds as $catId) {
+                $row = $distribution->firstWhere('crime_category_id', $catId);
+                $values = [];
+                for ($i = 5; $i >= 0; $i--) {
+                    $date = Carbon::now()->subMonths($i);
+                    $values[] = CrimeIncident::where('crime_category_id', $catId)
+                        ->whereYear('incident_date', $date->year)
+                        ->whereMonth('incident_date', $date->month)
+                        ->tap(function ($q) use ($barangayId, $status, $clearance) {
+                            if ($barangayId !== '') {
+                                $q->where('barangay_id', $barangayId);
+                            }
+                            if ($status !== '') {
+                                $q->where('status', $status);
+                            }
+                            if ($clearance !== '') {
+                                $q->where('clearance_status', $clearance);
+                            }
+                        })
+                        ->count();
+                }
+                $trendDatasets[] = [
+                    'name' => $row->category->category_name ?? 'Unknown',
+                    'color' => $row->category->color_code ?? '#6b7280',
+                    'values' => $values,
+                ];
+            }
+
+            // 3. Severity breakdown (via the category's severity level)
+            $severityCounts = CrimeIncident::join('crime_department_crime_categories as cat', 'crime_department_crime_incidents.crime_category_id', '=', 'cat.id')
+                ->select('cat.severity_level', DB::raw('COUNT(*) as total'))
+                ->tap($applyFilters)
+                ->groupBy('cat.severity_level')
+                ->pluck('total', 'severity_level');
+
+            $severityOut = [
+                'low' => (int) ($severityCounts['low'] ?? 0),
+                'medium' => (int) ($severityCounts['medium'] ?? 0),
+                'high' => (int) ($severityCounts['high'] ?? 0),
+                'critical' => (int) ($severityCounts['critical'] ?? 0),
+            ];
+
+            // 4. Trending up/down: current 30 days vs previous 30 days per category
+            $currentMonthCounts = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as total'))
+                ->where('incident_date', '>=', Carbon::now()->subDays(30)->toDateString())
+                ->groupBy('crime_category_id')->pluck('total', 'crime_category_id');
+            $previousMonthCounts = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as total'))
+                ->whereBetween('incident_date', [Carbon::now()->subDays(60)->toDateString(), Carbon::now()->subDays(30)->toDateString()])
+                ->groupBy('crime_category_id')->pluck('total', 'crime_category_id');
+
+            $changes = [];
+            foreach ($distribution as $row) {
+                $current = (int) ($currentMonthCounts[$row->crime_category_id] ?? 0);
+                $previous = (int) ($previousMonthCounts[$row->crime_category_id] ?? 0);
+                $changes[] = [
+                    'name' => $row->category->category_name ?? 'Unknown',
+                    'change' => $current - $previous,
+                ];
+            }
+            usort($changes, fn ($a, $b) => $b['change'] <=> $a['change']);
+            $trendingUp = $changes && $changes[0]['change'] > 0 ? $changes[0]['name'] : 'None';
+            $lastChange = end($changes);
+            $trendingDown = $changes && $lastChange['change'] < 0 ? $lastChange['name'] : 'None';
+
+            // 5. Per-location breakdown for the top 5 categories (top 8 barangays)
+            $topBarangays = CrimeIncident::with('barangay')
+                ->select('barangay_id', DB::raw('COUNT(*) as total'))
+                ->tap($applyFilters)
+                ->groupBy('barangay_id')
+                ->orderByDesc('total')
+                ->limit(8)
+                ->get();
+
+            $locationLabels = $topBarangays->map(fn ($b) => $b->barangay->barangay_name ?? 'Unknown')->values();
+            $locationDatasets = [];
+            foreach ($topCategoryIds as $catId) {
+                $row = $distribution->firstWhere('crime_category_id', $catId);
+                $values = [];
+                foreach ($topBarangays as $b) {
+                    $values[] = CrimeIncident::where('barangay_id', $b->barangay_id)
+                        ->where('crime_category_id', $catId)
+                        ->tap($applyFilters)
+                        ->count();
+                }
+                $locationDatasets[] = [
+                    'name' => $row->category->category_name ?? 'Unknown',
+                    'color' => $row->category->color_code ?? '#6b7280',
+                    'values' => $values,
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'stats' => [
+                    'total_types' => $distribution->count(),
+                    'most_common' => $distributionOut['labels'][0] ?? 'None',
+                    'trending_up' => $trendingUp,
+                    'trending_down' => $trendingDown,
+                ],
+                'distribution' => $distributionOut,
+                'monthly' => ['labels' => $monthLabels, 'datasets' => $trendDatasets],
+                'severity' => $severityOut,
+                'by_location' => ['labels' => $locationLabels, 'datasets' => $locationDatasets],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in getCrimeTypeTrendsData: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Location trends data: per-barangay current-vs-previous comparison,
      * monthly time series for the top areas, and quarterly seasonal breakdown.
      */

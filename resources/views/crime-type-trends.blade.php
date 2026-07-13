@@ -45,6 +45,11 @@ if (request()->query('token')) {
                     <label class="block text-sm font-medium text-alertara-800 mb-2">Barangay</label>
                     <select id="crimeTypeBarangay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="">All Barangays</option>
+                        @if(isset($barangays))
+                            @foreach($barangays as $b)
+                                <option value="{{ $b->id }}">{{ $b->barangay_name }}</option>
+                            @endforeach
+                        @endif
                     </select>
                 </div>
 
@@ -53,6 +58,11 @@ if (request()->query('token')) {
                     <label class="block text-sm font-medium text-alertara-800 mb-2">Crime Category</label>
                     <select id="crimeTypeCategory" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="">All Categories</option>
+                        @if(isset($crimeCategories))
+                            @foreach($crimeCategories as $category)
+                                <option value="{{ $category->id }}">{{ $category->category_name }}</option>
+                            @endforeach
+                        @endif
                     </select>
                 </div>
 
@@ -61,8 +71,11 @@ if (request()->query('token')) {
                     <label class="block text-sm font-medium text-alertara-800 mb-2">Case Status</label>
                     <select id="crimeTypeCaseStatus" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="">All Status</option>
-                        <option value="cleared">Cleared</option>
-                        <option value="uncleared">Uncleared</option>
+                        <option value="reported">Reported</option>
+                        <option value="under_investigation">Under Investigation</option>
+                        <option value="solved">Solved</option>
+                        <option value="closed">Closed</option>
+                        <option value="archived">Archived</option>
                     </select>
                 </div>
 
@@ -250,21 +263,53 @@ if (request()->query('token')) {
     </div>
 
     <script>
+        // Latest analytics payload from the server (drives all charts and modals)
+        let crimeTypeData = null;
+        let distributionChart, trendsChart, byLocationChart, severityChart;
+
         // Initialize page on load
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize charts
-            initializeCrimeTypeCharts();
+            loadCrimeTypeData();
+
+            // Auto-apply filters on change
+            ['crimeTypeTimePeriod', 'crimeTypeBarangay', 'crimeTypeCategory', 'crimeTypeCaseStatus', 'crimeTypeClearanceStatus'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', loadCrimeTypeData);
+            });
+
+            document.getElementById('resetCrimeTypeFilter')?.addEventListener('click', function() {
+                document.getElementById('crimeTypeTimePeriod').value = 'all';
+                document.getElementById('crimeTypeBarangay').value = '';
+                document.getElementById('crimeTypeCategory').value = '';
+                document.getElementById('crimeTypeCaseStatus').value = '';
+                document.getElementById('crimeTypeClearanceStatus').value = '';
+                loadCrimeTypeData();
+            });
         });
 
-        // Initialize Crime Type Charts
-        function initializeCrimeTypeCharts() {
-            initializeCrimeTypeDistributionChart();
-            initializeCrimeTypeTrendsChart();
-            initializeCrimeTypeByLocationChart();
-            initializeCrimeTypeSeverityChart();
-            
-            // Update statistics
-            updateCrimeTypeStatistics();
+        // Fetch real crime-type analytics from the database
+        async function loadCrimeTypeData() {
+            const params = new URLSearchParams({
+                time_period: document.getElementById('crimeTypeTimePeriod').value,
+                barangay: document.getElementById('crimeTypeBarangay').value,
+                category: document.getElementById('crimeTypeCategory').value,
+                status: document.getElementById('crimeTypeCaseStatus').value,
+                clearance: document.getElementById('crimeTypeClearanceStatus').value
+            });
+
+            try {
+                const response = await fetch(`/dashboard/crime-type-trends-data?${params}`);
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Request failed');
+
+                crimeTypeData = data;
+                updateCrimeTypeStatistics(data.stats);
+                renderDistributionChart(data.distribution);
+                renderTrendsChart(data.monthly);
+                renderByLocationChart(data.by_location);
+                renderSeverityChart(data.severity);
+            } catch (error) {
+                console.error('Error loading crime type trends:', error);
+            }
         }
 
         // Open Crime Type Analysis Modal
@@ -309,24 +354,19 @@ if (request()->query('token')) {
                             <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="p-4 bg-blue-50 border-blue-200 rounded-lg">
                                     <h4 class="font-semibold text-blue-900 mb-2">Key Insights</h4>
-                                    <ul class="text-sm text-gray-700 space-y-2">
-                                        <li>• Theft accounts for 35.2% of all crimes</li>
-                                        <li>• Top 3 crime types represent 75.4% of incidents</li>
-                                        <li>• Seasonal patterns show summer peak for theft</li>
-                                    </ul>
+                                    <ul class="text-sm text-gray-700 space-y-2" id="modalDistributionInsights"></ul>
                                 </div>
                                 <div class="p-4 bg-green-50 border-green-200 rounded-lg">
                                     <h4 class="font-semibold text-green-900 mb-2">Recommendations</h4>
-                                    <ul class="text-sm text-gray-700 space-y-2">
-                                        <li>• Increase patrols during evening hours</li>
-                                        <li>• Target theft prevention programs</li>
-                                        <li>• Focus on high-risk commercial areas</li>
-                                    </ul>
+                                    <ul class="text-sm text-gray-700 space-y-2" id="modalDistributionRecommendations"></ul>
                                 </div>
                             </div>
                         </div>
                     `;
-                    initializeModalCrimeTypeDistributionChart();
+                    if (crimeTypeData) {
+                        renderDistributionChart(crimeTypeData.distribution, 'modalCrimeTypeDistributionChart');
+                        renderDistributionInsights(crimeTypeData);
+                    }
                     break;
                     
                 case 'trends':
@@ -340,21 +380,26 @@ if (request()->query('token')) {
                             </div>
                             <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="p-4 bg-red-50 border-red-200 rounded-lg">
-                                    <h4 class="font-semibold text-red-900 mb-2">Rising Trends</h4>
-                                    <p class="text-sm text-gray-700">Theft and Fraud showing significant increases over past 6 months</p>
+                                    <h4 class="font-semibold text-red-900 mb-2">Trending Up (last 30 days)</h4>
+                                    <p class="text-sm text-gray-700" id="modalTrendRising">--</p>
                                 </div>
                                 <div class="p-4 bg-yellow-50 border-yellow-200 rounded-lg">
-                                    <h4 class="font-semibold text-yellow-900 mb-2">Stable Patterns</h4>
-                                    <p class="text-sm text-gray-700">Assault rates remain consistent with minor fluctuations</p>
+                                    <h4 class="font-semibold text-yellow-900 mb-2">Most Common</h4>
+                                    <p class="text-sm text-gray-700" id="modalTrendCommon">--</p>
                                 </div>
                                 <div class="p-4 bg-green-50 border-green-200 rounded-lg">
-                                    <h4 class="font-semibold text-green-900 mb-2">Declining Types</h4>
-                                    <p class="text-sm text-gray-700">Vandalism showing steady decrease over past year</p>
+                                    <h4 class="font-semibold text-green-900 mb-2">Trending Down (last 30 days)</h4>
+                                    <p class="text-sm text-gray-700" id="modalTrendDeclining">--</p>
                                 </div>
                             </div>
                         </div>
                     `;
-                    initializeModalCrimeTypeTrendsChart();
+                    if (crimeTypeData) {
+                        renderTrendsChart(crimeTypeData.monthly, 'modalCrimeTypeTrendsChart');
+                        document.getElementById('modalTrendRising').textContent = crimeTypeData.stats.trending_up;
+                        document.getElementById('modalTrendCommon').textContent = crimeTypeData.stats.most_common;
+                        document.getElementById('modalTrendDeclining').textContent = crimeTypeData.stats.trending_down;
+                    }
                     break;
                     
                 case 'location':
@@ -416,17 +461,20 @@ if (request()->query('token')) {
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="p-4 bg-purple-50 border-purple-200 rounded-lg">
                                         <h5 class="font-semibold text-purple-900 mb-2">High-Risk Areas</h5>
-                                        <p class="text-sm text-gray-700">Downtown, Industrial Zone, and City Center show highest crime concentrations</p>
+                                        <p class="text-sm text-gray-700" id="modalLocationHighRisk">--</p>
                                     </div>
                                     <div class="p-4 bg-orange-50 border-orange-200 rounded-lg">
                                         <h5 class="font-semibold text-orange-900 mb-2">Crime Type Patterns</h5>
-                                        <p class="text-sm text-gray-700">Theft dominates commercial areas, Assault prevalent in industrial zones</p>
+                                        <p class="text-sm text-gray-700" id="modalLocationPatterns">--</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     `;
-                    initializeModalCrimeTypeByLocationChart();
+                    if (crimeTypeData) {
+                        renderByLocationChart(crimeTypeData.by_location, 'modalCrimeTypeByLocationChart');
+                        renderLocationInsights(crimeTypeData);
+                    }
                     populateLocationCrimeTable();
                     setupLocationFilter();
                     break;
@@ -440,60 +488,129 @@ if (request()->query('token')) {
                             <div style="position: relative; height: 500px;">
                                 <canvas id="modalCrimeTypeSeverityChart"></canvas>
                             </div>
-                            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <div class="p-4 bg-green-50 border-green-200 rounded-lg text-center">
-                                    <h5 class="font-semibold text-green-900 mb-2">Low Severity</h5>
-                                    <p class="text-2xl font-bold text-green-700">120</p>
-                                    <p class="text-sm text-gray-700">48% of incidents</p>
-                                </div>
-                                <div class="p-4 bg-yellow-50 border-yellow-200 rounded-lg text-center">
-                                    <h5 class="font-semibold text-yellow-900 mb-2">Medium Severity</h5>
-                                    <p class="text-2xl font-bold text-yellow-700">85</p>
-                                    <p class="text-sm text-gray-700">34% of incidents</p>
-                                </div>
-                                <div class="p-4 bg-red-50 border-red-200 rounded-lg text-center">
-                                    <h5 class="font-semibold text-red-900 mb-2">High Severity</h5>
-                                    <p class="text-2xl font-bold text-red-700">45</p>
-                                    <p class="text-sm text-gray-700">18% of incidents</p>
-                                </div>
-                                <div class="p-4 bg-red-900 border-red-200 rounded-lg text-center">
-                                    <h5 class="font-semibold text-white mb-2">Critical</h5>
-                                    <p class="text-2xl font-bold text-white">15</p>
-                                    <p class="text-sm text-red-100">6% of incidents</p>
-                                </div>
+                            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="modalSeverityCards">
+                                <!-- Populated from real severity data -->
                             </div>
                         </div>
                     `;
-                    initializeModalCrimeTypeSeverityChart();
+                    if (crimeTypeData) {
+                        renderSeverityChart(crimeTypeData.severity, 'modalCrimeTypeSeverityChart');
+                        renderSeverityCards(crimeTypeData.severity);
+                    }
                     break;
             }
         }
 
-        // Initialize Modal Crime Type Distribution Chart
-        function initializeModalCrimeTypeDistributionChart() {
-            const ctx = document.getElementById('modalCrimeTypeDistributionChart')?.getContext('2d');
+        // Computed insight lists for the distribution modal
+        function renderDistributionInsights(data) {
+            const labels = data.distribution.labels;
+            const values = data.distribution.values;
+            const total = values.reduce((a, b) => a + b, 0) || 1;
+
+            const insightsList = document.getElementById('modalDistributionInsights');
+            const recsList = document.getElementById('modalDistributionRecommendations');
+            if (!insightsList || !recsList || !labels.length) {
+                if (insightsList) insightsList.innerHTML = '<li>• No data for the selected filters.</li>';
+                if (recsList) recsList.innerHTML = '';
+                return;
+            }
+
+            const topShare = (values[0] / total * 100).toFixed(1);
+            const top3Share = (values.slice(0, 3).reduce((a, b) => a + b, 0) / total * 100).toFixed(1);
+
+            insightsList.innerHTML = `
+                <li>• ${labels[0]} accounts for ${topShare}% of all recorded incidents</li>
+                <li>• Top 3 crime types represent ${top3Share}% of incidents</li>
+                <li>• ${labels.length} distinct crime type(s) recorded in the selected period</li>
+            `;
+            recsList.innerHTML = `
+                <li>• Prioritize prevention programs targeting ${labels[0]}</li>
+                ${labels[1] ? `<li>• Secondary focus: ${labels[1]} (${(values[1] / total * 100).toFixed(1)}% of incidents)</li>` : ''}
+                <li>• Use the Pattern Detection simulator to test interventions for these types</li>
+            `;
+        }
+
+        // Computed insight text for the location modal
+        function renderLocationInsights(data) {
+            const highRiskEl = document.getElementById('modalLocationHighRisk');
+            const patternsEl = document.getElementById('modalLocationPatterns');
+            if (!highRiskEl || !patternsEl) return;
+
+            const areas = data.by_location.labels;
+            if (!areas.length) {
+                highRiskEl.textContent = 'No location data for the selected filters.';
+                patternsEl.textContent = '--';
+                return;
+            }
+
+            highRiskEl.textContent = `${areas.slice(0, 3).join(', ')} show the highest incident concentrations in the current selection.`;
+
+            const topCategory = data.by_location.datasets[0];
+            if (topCategory) {
+                const maxIdx = topCategory.values.indexOf(Math.max(...topCategory.values));
+                patternsEl.textContent = `${topCategory.name} is the leading crime type, most concentrated in ${areas[maxIdx] ?? areas[0]}.`;
+            }
+        }
+
+        // Real severity breakdown cards for the severity modal
+        function renderSeverityCards(severity) {
+            const container = document.getElementById('modalSeverityCards');
+            if (!container) return;
+
+            const total = severity.low + severity.medium + severity.high + severity.critical;
+            const pct = (v) => total > 0 ? Math.round(v / total * 100) : 0;
+
+            container.innerHTML = `
+                <div class="p-4 bg-green-50 border-green-200 rounded-lg text-center">
+                    <h5 class="font-semibold text-green-900 mb-2">Low Severity</h5>
+                    <p class="text-2xl font-bold text-green-700">${severity.low}</p>
+                    <p class="text-sm text-gray-700">${pct(severity.low)}% of incidents</p>
+                </div>
+                <div class="p-4 bg-yellow-50 border-yellow-200 rounded-lg text-center">
+                    <h5 class="font-semibold text-yellow-900 mb-2">Medium Severity</h5>
+                    <p class="text-2xl font-bold text-yellow-700">${severity.medium}</p>
+                    <p class="text-sm text-gray-700">${pct(severity.medium)}% of incidents</p>
+                </div>
+                <div class="p-4 bg-red-50 border-red-200 rounded-lg text-center">
+                    <h5 class="font-semibold text-red-900 mb-2">High Severity</h5>
+                    <p class="text-2xl font-bold text-red-700">${severity.high}</p>
+                    <p class="text-sm text-gray-700">${pct(severity.high)}% of incidents</p>
+                </div>
+                <div class="p-4 bg-red-900 border-red-200 rounded-lg text-center">
+                    <h5 class="font-semibold text-white mb-2">Critical</h5>
+                    <p class="text-2xl font-bold text-white">${severity.critical}</p>
+                    <p class="text-sm text-red-100">${pct(severity.critical)}% of incidents</p>
+                </div>
+            `;
+        }
+
+        // Update Crime Type Statistics from real server data
+        function updateCrimeTypeStatistics(stats) {
+            document.getElementById('totalCrimeTypeCount').textContent = stats.total_types;
+            document.getElementById('mostCommonCrimeType').textContent = stats.most_common;
+            document.getElementById('trendingUpCrimeType').textContent = stats.trending_up;
+            document.getElementById('trendingDownCrimeType').textContent = stats.trending_down;
+        }
+
+        // Distribution doughnut - real per-category counts with category colors
+        function renderDistributionChart(distribution, canvasId = 'crimeTypeDistributionChart') {
+            const ctx = document.getElementById(canvasId)?.getContext('2d');
             if (!ctx) return;
 
-            const data = {
-                labels: ['Theft', 'Assault', 'Vandalism', 'Burglary', 'Fraud', 'Other'],
-                datasets: [{
-                    data: [35, 25, 15, 12, 8, 5],
-                    backgroundColor: [
-                        '#ef4444',
-                        '#f59e0b',
-                        '#10b981',
-                        '#3b82f6',
-                        '#8b5cf6',
-                        '#6b7280'
-                    ],
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            };
+            const existing = Chart.getChart(ctx);
+            if (existing) existing.destroy();
 
             new Chart(ctx, {
-                type: 'pie',
-                data: data,
+                type: 'doughnut',
+                data: {
+                    labels: distribution.labels,
+                    datasets: [{
+                        data: distribution.values,
+                        backgroundColor: distribution.colors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -503,407 +620,110 @@ if (request()->query('token')) {
                             callbacks: {
                                 label: function(context) {
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((context.parsed * 100) / total).toFixed(1);
+                                    const percentage = total > 0 ? ((context.parsed * 100) / total).toFixed(1) : 0;
                                     return `${context.label}: ${context.parsed} (${percentage}%)`;
                                 }
                             }
                         }
-                    }
-                }
-            });
-        }
-
-        // Initialize Modal Crime Type Trends Chart
-        function initializeModalCrimeTypeTrendsChart() {
-            const ctx = document.getElementById('modalCrimeTypeTrendsChart')?.getContext('2d');
-            if (!ctx) return;
-
-            const data = {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-                datasets: [{
-                    label: 'Theft',
-                    data: [65, 68, 72, 70, 75, 78, 82, 85, 88, 86, 90, 92],
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    tension: 0.4
-                }, {
-                    label: 'Assault',
-                    data: [45, 42, 48, 50, 52, 55, 58, 60, 62, 64, 66, 68],
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    tension: 0.4
-                }, {
-                    label: 'Vandalism',
-                    data: [25, 22, 20, 18, 16, 15, 14, 13, 12, 11, 10, 9],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.4
-                }, {
-                    label: 'Burglary',
-                    data: [18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40],
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.4
-                }]
-            };
-
-            new Chart(ctx, {
-                type: 'line',
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top' }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        }
-
-        // Initialize Modal Crime Type by Location Chart
-        function initializeModalCrimeTypeByLocationChart() {
-            const ctx = document.getElementById('modalCrimeTypeByLocationChart')?.getContext('2d');
-            if (!ctx) return;
-
-            // Extract data from locationCrimeData for chart
-            const locations = Object.keys(locationCrimeData);
-            const labels = locations.map(id => locationCrimeData[id].name);
-            
-            // Create single row data - sum all crime types across locations
-            const theftData = locations.map(id => locationCrimeData[id].theft);
-            const assaultData = locations.map(id => locationCrimeData[id].assault);
-            const vandalismData = locations.map(id => locationCrimeData[id].vandalism);
-            const burglaryData = locations.map(id => locationCrimeData[id].burglary);
-            const fraudData = locations.map(id => locationCrimeData[id].fraud);
-
-            const data = {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Theft',
-                        data: theftData,
-                        backgroundColor: '#ef4444',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Assault',
-                        data: assaultData,
-                        backgroundColor: '#f59e0b',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Vandalism',
-                        data: vandalismData,
-                        backgroundColor: '#10b981',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Burglary',
-                        data: burglaryData,
-                        backgroundColor: '#3b82f6',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Fraud',
-                        data: fraudData,
-                        backgroundColor: '#8b5cf6',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    }
-                ]
-            };
-
-            new Chart(ctx, {
-                type: 'bar',
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top' }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45,
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Number of Incidents'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Initialize Modal Crime Type Severity Chart
-        function initializeModalCrimeTypeSeverityChart() {
-            const ctx = document.getElementById('modalCrimeTypeSeverityChart')?.getContext('2d');
-            if (!ctx) return;
-
-            const data = {
-                labels: ['Low', 'Medium', 'High', 'Critical'],
-                datasets: [{
-                    label: 'Number of Incidents',
-                    data: [120, 85, 45, 15],
-                    backgroundColor: [
-                        '#10b981',
-                        '#f59e0b',
-                        '#ef4444',
-                        '#7c2d12'
-                    ],
-                    borderWidth: 2,
-                    borderRadius: 6
-                }]
-            };
-
-            new Chart(ctx, {
-                type: 'bar',
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        }
-
-        // Update Crime Type Statistics
-        function updateCrimeTypeStatistics() {
-            // Update statistics cards with sample data
-            document.getElementById('totalCrimeTypeCount').textContent = '12';
-            document.getElementById('mostCommonCrimeType').textContent = 'Theft';
-            document.getElementById('trendingUpCrimeType').textContent = 'Assault';
-            document.getElementById('trendingDownCrimeType').textContent = 'Vandalism';
-        }
-
-        // Initialize Crime Type Distribution Chart
-        function initializeCrimeTypeDistributionChart() {
-            const ctx = document.getElementById('crimeTypeDistributionChart')?.getContext('2d');
-            if (!ctx) return;
-
-            const data = {
-                labels: ['Theft', 'Assault', 'Vandalism', 'Burglary', 'Fraud', 'Other'],
-                datasets: [{
-                    data: [35, 25, 15, 12, 8, 5],
-                    backgroundColor: [
-                        '#ef4444',
-                        '#f59e0b',
-                        '#10b981',
-                        '#3b82f6',
-                        '#8b5cf6',
-                        '#6b7280'
-                    ],
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            };
-
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right' }
                     },
                     cutout: '50%'
                 }
             });
         }
 
-        // Initialize Crime Type Trends Chart
-        function initializeCrimeTypeTrendsChart() {
-            const ctx = document.getElementById('crimeTypeTrendsChart')?.getContext('2d');
+        // Trends line chart - real monthly counts per top category
+        function renderTrendsChart(monthly, canvasId = 'crimeTypeTrendsChart') {
+            const ctx = document.getElementById(canvasId)?.getContext('2d');
             if (!ctx) return;
 
-            const data = {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                datasets: [{
-                    label: 'Theft',
-                    data: [65, 68, 72, 70, 75, 78],
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    tension: 0.4
-                }, {
-                    label: 'Assault',
-                    data: [45, 42, 48, 50, 52, 55],
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    tension: 0.4
-                }, {
-                    label: 'Vandalism',
-                    data: [25, 22, 20, 18, 16, 15],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.4
-                }]
-            };
+            const existing = Chart.getChart(ctx);
+            if (existing) existing.destroy();
 
             new Chart(ctx, {
                 type: 'line',
-                data: data,
+                data: {
+                    labels: monthly.labels,
+                    datasets: monthly.datasets.map(d => ({
+                        label: d.name,
+                        data: d.values,
+                        borderColor: d.color,
+                        backgroundColor: 'transparent',
+                        tension: 0.4
+                    }))
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top' }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
                 }
             });
         }
 
-        // Initialize Crime Type by Location Chart
-        function initializeCrimeTypeByLocationChart() {
-            const ctx = document.getElementById('crimeTypeByLocationChart')?.getContext('2d');
+        // By-location grouped bars - real per-barangay per-category counts
+        function renderByLocationChart(byLocation, canvasId = 'crimeTypeByLocationChart') {
+            const ctx = document.getElementById(canvasId)?.getContext('2d');
             if (!ctx) return;
 
-            // Extract data from locationCrimeData for chart
-            const locations = Object.keys(locationCrimeData);
-            const labels = locations.map(id => locationCrimeData[id].name);
-            
-            // Create single row data - sum all crime types across locations
-            const theftData = locations.map(id => locationCrimeData[id].theft);
-            const assaultData = locations.map(id => locationCrimeData[id].assault);
-            const vandalismData = locations.map(id => locationCrimeData[id].vandalism);
-            const burglaryData = locations.map(id => locationCrimeData[id].burglary);
-            const fraudData = locations.map(id => locationCrimeData[id].fraud);
-
-            const data = {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Theft',
-                        data: theftData,
-                        backgroundColor: '#ef4444',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Assault',
-                        data: assaultData,
-                        backgroundColor: '#f59e0b',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Vandalism',
-                        data: vandalismData,
-                        backgroundColor: '#10b981',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Burglary',
-                        data: burglaryData,
-                        backgroundColor: '#3b82f6',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Fraud',
-                        data: fraudData,
-                        backgroundColor: '#8b5cf6',
-                        borderWidth: 2,
-                        borderRadius: 4
-                    }
-                ]
-            };
+            const existing = Chart.getChart(ctx);
+            if (existing) existing.destroy();
 
             new Chart(ctx, {
                 type: 'bar',
-                data: data,
+                data: {
+                    labels: byLocation.labels,
+                    datasets: byLocation.datasets.map(d => ({
+                        label: d.name,
+                        data: d.values,
+                        backgroundColor: d.color,
+                        borderWidth: 2,
+                        borderRadius: 4
+                    }))
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top' }
-                    },
+                    plugins: { legend: { position: 'top' } },
                     scales: {
                         x: {
                             grid: { display: false },
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45,
-                                font: { size: 10 }
-                            }
+                            ticks: { maxRotation: 45, minRotation: 45, font: { size: 10 } }
                         },
                         y: {
                             beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Number of Incidents'
-                            }
+                            ticks: { precision: 0 },
+                            title: { display: true, text: 'Number of Incidents' }
                         }
                     }
                 }
             });
         }
 
-        // Initialize Crime Type Severity Chart
-        function initializeCrimeTypeSeverityChart() {
-            const ctx = document.getElementById('crimeTypeSeverityChart')?.getContext('2d');
+        // Severity bars - real counts via category severity levels
+        function renderSeverityChart(severity, canvasId = 'crimeTypeSeverityChart') {
+            const ctx = document.getElementById(canvasId)?.getContext('2d');
             if (!ctx) return;
 
-            const data = {
-                labels: ['Low', 'Medium', 'High', 'Critical'],
-                datasets: [{
-                    label: 'Number of Incidents',
-                    data: [120, 85, 45, 15],
-                    backgroundColor: [
-                        '#10b981',
-                        '#f59e0b',
-                        '#ef4444',
-                        '#7c2d12'
-                    ],
-                    borderWidth: 2,
-                    borderRadius: 6
-                }]
-            };
+            const existing = Chart.getChart(ctx);
+            if (existing) existing.destroy();
 
             new Chart(ctx, {
                 type: 'bar',
-                data: data,
+                data: {
+                    labels: ['Low', 'Medium', 'High', 'Critical'],
+                    datasets: [{
+                        label: 'Number of Incidents',
+                        data: [severity.low, severity.medium, severity.high, severity.critical],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#7c2d12'],
+                        borderWidth: 2,
+                        borderRadius: 6
+                    }]
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
                 }
             });
         }
