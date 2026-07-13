@@ -63,7 +63,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-600 text-sm font-medium">Total Resolved</p>
-                            <p class="text-3xl font-bold text-green-600 mt-1">247</p>
+                            <p id="statTotalResolved" class="text-3xl font-bold text-green-600 mt-1">–</p>
                         </div>
                         <i class="fas fa-check-circle text-4xl text-green-200"></i>
                     </div>
@@ -72,7 +72,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-600 text-sm font-medium">This Month</p>
-                            <p class="text-3xl font-bold text-alertara-600 mt-1">64</p>
+                            <p id="statThisMonth" class="text-3xl font-bold text-alertara-600 mt-1">–</p>
                         </div>
                         <i class="fas fa-calendar text-4xl text-alertara-200"></i>
                     </div>
@@ -81,7 +81,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-600 text-sm font-medium">Avg Resolution Time</p>
-                            <p class="text-3xl font-bold text-purple-600 mt-1">4.2h</p>
+                            <p id="statAvgResolution" class="text-3xl font-bold text-purple-600 mt-1">–</p>
                         </div>
                         <i class="fas fa-hourglass-end text-4xl text-purple-200"></i>
                     </div>
@@ -90,7 +90,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-600 text-sm font-medium">False Alerts</p>
-                            <p class="text-3xl font-bold text-orange-600 mt-1">8</p>
+                            <p id="statFalseAlarms" class="text-3xl font-bold text-orange-600 mt-1">–</p>
                         </div>
                         <i class="fas fa-triangle-exclamation text-4xl text-orange-200"></i>
                     </div>
@@ -162,89 +162,9 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">ALT-2024-001</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Crime Surge</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Downtown District</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 20, 2:30 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 20, 6:15 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">3h 45m</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                                        <i class="fas fa-check-circle mr-1"></i> Resolved
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">ALT-2024-002</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Hotspot Detection</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Port Area</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 19, 11:20 AM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 19, 3:10 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">3h 50m</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                                        <i class="fas fa-check-circle mr-1"></i> Resolved
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">ALT-2024-003</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Pattern Detected</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Central Business District</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 18, 9:45 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 19, 1:30 AM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">3h 45m</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                                        <i class="fas fa-check-circle mr-1"></i> Resolved
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">ALT-2024-004</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Crime Surge</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Residential Zone</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 17, 8:20 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 17, 10:15 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">1h 55m</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                                        <i class="fas fa-check-circle mr-1"></i> Resolved
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">ALT-2024-005</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Threshold Alert</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Shopping District</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 16, 4:30 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 16, 5:00 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">30m</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
-                                        <i class="fas fa-exclamation-circle mr-1"></i> False Alarm
-                                    </span>
-                                </td>
-                            </tr>
-
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">ALT-2024-006</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Crime Surge</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">Harbor District</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 15, 10:00 AM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">Feb 15, 2:45 PM</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">4h 45m</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-alertara-100 text-alertara-800">
-                                        <i class="fas fa-circle-check mr-1"></i> Acknowledged
-                                    </span>
-                                </td>
+                        <tbody id="historyTableBody" class="divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">Loading history...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -252,8 +172,8 @@
                 <!-- Pagination -->
                 <div class="p-4 border-t border-gray-200">
                     <div class="flex items-center justify-between">
-                        <div class="text-sm text-gray-700">
-                            Showing 6 of 247 historical alerts
+                        <div id="historySummaryText" class="text-sm text-gray-700">
+                            Loading...
                         </div>
                         <div class="flex gap-2">
                             <button class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">Previous</button>
@@ -265,6 +185,84 @@
         </div>
     </main>
 
-    @stack('scripts')
+    <script>
+        const STATUS_STYLES = {
+            resolved: { badge: 'bg-green-100 text-green-800', icon: 'fa-check-circle', label: 'Resolved' },
+            dismissed: { badge: 'bg-orange-100 text-orange-800', icon: 'fa-exclamation-circle', label: 'False Alarm' },
+            acknowledged: { badge: 'bg-alertara-100 text-alertara-800', icon: 'fa-circle-check', label: 'Acknowledged' },
+        };
+
+        function formatDateTime(isoString) {
+            if (!isoString) return '—';
+            return new Date(isoString).toLocaleString('en-US', {
+                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+            });
+        }
+
+        function formatDuration(startIso, endIso) {
+            if (!startIso || !endIso) return '—';
+            const minutes = Math.max(0, Math.round((new Date(endIso) - new Date(startIso)) / 60000));
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            if (hours === 0) return `${mins}m`;
+            return `${hours}h ${mins}m`;
+        }
+
+        function renderHistoryTable(alerts) {
+            const tbody = document.getElementById('historyTableBody');
+            if (!alerts.length) {
+                tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">No historical alerts yet.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = alerts.map(alert => {
+                const status = STATUS_STYLES[alert.status] || STATUS_STYLES.resolved;
+                return `
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">ALT-${String(alert.alert_id).padStart(4, '0')}</td>
+                        <td class="px-6 py-4 text-sm text-gray-900">${alert.rule_type ?? ''}</td>
+                        <td class="px-6 py-4 text-sm text-gray-900">${alert.area_name ?? ''}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(alert.triggered_at)}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(alert.resolved_at)}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${formatDuration(alert.triggered_at, alert.resolved_at)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${status.badge}">
+                                <i class="fas ${status.icon} mr-1"></i> ${status.label}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadAlertHistory() {
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">Loading history...</td></tr>`;
+
+            try {
+                const res = await fetch('{{ route('alerts.history-data') }}', {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await res.json();
+
+                document.getElementById('statTotalResolved').textContent = data.stats.total_resolved;
+                document.getElementById('statThisMonth').textContent = data.stats.this_month;
+                document.getElementById('statAvgResolution').textContent =
+                    data.stats.avg_resolution_minutes >= 60
+                        ? `${(data.stats.avg_resolution_minutes / 60).toFixed(1)}h`
+                        : `${data.stats.avg_resolution_minutes}m`;
+                document.getElementById('statFalseAlarms').textContent = data.stats.false_alarms;
+                document.getElementById('historySummaryText').textContent =
+                    `Showing ${data.alerts.length} of ${data.alerts.length} historical alerts`;
+
+                renderHistoryTable(data.alerts);
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-sm text-red-500">Failed to load alert history.</td></tr>`;
+                console.error(e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAlertHistory);
+    </script>
 </body>
 </html>
