@@ -300,7 +300,7 @@ if (request()->query('token')) {
                 ? `${summary.fastest_growing.name} (+${summary.fastest_growing.change_percent}%)`
                 : 'None';
             document.getElementById('stableLocation').textContent = summary.most_stable
-                ? summary.most_stable.name
+                ? `${summary.most_stable.name} (${summary.most_stable.change_percent > 0 ? '+' : ''}${summary.most_stable.change_percent}%)`
                 : 'None';
         }
 

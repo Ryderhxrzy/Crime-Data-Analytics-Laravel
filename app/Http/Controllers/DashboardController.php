@@ -777,22 +777,32 @@ class DashboardController extends Controller
             $locations = [];
             foreach ($currentCounts as $row) {
                 $current = (int) $row->total;
-                // Trend compares the two comparison windows, not the display count
+                // The trend compares two equal windows; the display count above is
+                // the total for the whole selected period, so keep them separate.
                 $trendNow = (int) ($trendCurrent[$row->barangay_id] ?? 0);
-                $previous = (int) ($previousCounts[$row->barangay_id] ?? 0);
+                $trendBefore = (int) ($previousCounts[$row->barangay_id] ?? 0);
 
-                if ($previous > 0) {
-                    $changePercent = round(($trendNow - $previous) / $previous * 100);
+                if ($trendBefore > 0) {
+                    $changePercent = (int) round(($trendNow - $trendBefore) / $trendBefore * 100);
+                } elseif ($trendNow > 0) {
+                    $changePercent = 100; // new activity where there was none
                 } else {
-                    $changePercent = $trendNow > 0 ? 100 : 0;
+                    $changePercent = 0;
                 }
+
+                // A barangay with no incidents in either comparison window is not a
+                // meaningful trend - flag it so it can't win "most stable".
+                $hasTrendData = ($trendNow + $trendBefore) > 0;
 
                 $locations[] = [
                     'barangay_id' => $row->barangay_id,
                     'name' => $row->barangay->barangay_name ?? 'Unknown',
                     'current' => $current,
-                    'previous' => $previous,
+                    'trend_current' => $trendNow,
+                    'trend_previous' => $trendBefore,
+                    'previous' => $trendBefore,
                     'change_percent' => $changePercent,
+                    'has_trend_data' => $hasTrendData,
                     'trend' => $changePercent > 10 ? 'increasing' : ($changePercent < -10 ? 'decreasing' : 'stable'),
                 ];
             }
@@ -844,8 +854,16 @@ class DashboardController extends Controller
             $stable = array_values(array_filter($locations, fn ($l) => $l['trend'] === 'stable'));
 
             $fastestGrowing = collect($increasing)->sortByDesc('change_percent')->first();
-            $mostStable = collect($locations)->filter(fn ($l) => $l['current'] > 0)
-                ->sortBy(fn ($l) => abs($l['change_percent']))->first();
+
+            // "Most stable" must come from barangays that actually have activity in
+            // both comparison windows; otherwise a flat-but-empty area (or a sharply
+            // declining one) would win by default.
+            $mostStable = collect($stable)->filter(fn ($l) => $l['has_trend_data'])
+                ->sortByDesc('current')
+                ->first()
+                ?? collect($locations)->filter(fn ($l) => $l['has_trend_data'])
+                    ->sortBy(fn ($l) => abs($l['change_percent']))
+                    ->first();
 
             return response()->json([
                 'success' => true,
