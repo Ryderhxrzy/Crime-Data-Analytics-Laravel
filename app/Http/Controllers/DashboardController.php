@@ -778,7 +778,18 @@ class DashboardController extends Controller
             if ($currentStart !== null) {
                 $currentQuery->where('incident_date', '>=', $currentStart);
             }
+
+            // Diagnostic probe: capture the exact SQL Eloquent is about to run and
+            // compare it against the same aggregation executed as raw SQL.
+            $probe = [
+                'eloquent_sql' => $currentQuery->toSql(),
+                'eloquent_bindings' => $currentQuery->getBindings(),
+                'raw_group_rows' => count(DB::select('SELECT barangay_id, COUNT(*) AS total FROM crime_department_crime_incidents GROUP BY barangay_id')),
+                'model_table' => (new CrimeIncident)->getTable(),
+            ];
+
             $currentCounts = $currentQuery->groupBy('barangay_id')->get();
+            $probe['eloquent_rows'] = $currentCounts->count();
 
             // Comparison counts used only for the trend direction
             $trendCurrent = collect();
@@ -890,7 +901,7 @@ class DashboardController extends Controller
 
             return response()->json([
                 'success' => true,
-                'debug' => $this->debugInfo(),
+                'debug' => array_merge($this->debugInfo(), ['probe' => $probe]),
                 'window_days' => $windowDays,
                 'summary' => [
                     'increasing_count' => count($increasing),
