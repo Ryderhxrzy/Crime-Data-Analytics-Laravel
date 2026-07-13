@@ -524,6 +524,21 @@ class DashboardController extends Controller
     }
 
     /**
+     * Read a filter value as a string.
+     *
+     * The ConvertEmptyStringsToNull middleware turns "?barangay=" into null, so a
+     * plain `$request->get('barangay', '')` yields null (the key exists) and any
+     * `!== ''` check then wrongly applies a `WHERE col IS NULL` clause. Always
+     * normalise filter inputs through this helper.
+     */
+    private function filterValue(Request $request, string $key, string $default = ''): string
+    {
+        $value = $request->input($key);
+
+        return ($value === null || $value === '') ? $default : (string) $value;
+    }
+
+    /**
      * Server-side diagnostics returned with the analytics endpoints so the page's
      * debug panel can show WHICH database actually answered the request.
      */
@@ -552,11 +567,11 @@ class DashboardController extends Controller
     public function getCrimeTypeTrendsData(Request $request)
     {
         try {
-            $timePeriod = $request->get('time_period', 'all');
-            $barangayId = $request->get('barangay', '');
-            $categoryId = $request->get('category', '');
-            $status = $request->get('status', '');
-            $clearance = $request->get('clearance', '');
+            $timePeriod = $this->filterValue($request, 'time_period', 'all');
+            $barangayId = $this->filterValue($request, 'barangay');
+            $categoryId = $this->filterValue($request, 'category');
+            $status = $this->filterValue($request, 'status');
+            $clearance = $this->filterValue($request, 'clearance');
 
             $reference = $this->referenceDate();
 
@@ -726,10 +741,10 @@ class DashboardController extends Controller
     public function getLocationTrendsData(Request $request)
     {
         try {
-            $timePeriod = $request->get('time_period', 'all');
-            $barangayId = $request->get('barangay', '');
-            $crimeType = $request->get('crime_type', '');
-            $caseStatus = $request->get('case_status', '');
+            $timePeriod = $this->filterValue($request, 'time_period', 'all');
+            $barangayId = $this->filterValue($request, 'barangay');
+            $crimeType = $this->filterValue($request, 'crime_type');
+            $caseStatus = $this->filterValue($request, 'case_status');
 
             $applyFilters = function ($query) use ($barangayId, $crimeType, $caseStatus) {
                 if ($barangayId !== '') {
@@ -782,6 +797,7 @@ class DashboardController extends Controller
             // Diagnostic probe: capture the exact SQL Eloquent is about to run and
             // compare it against the same aggregation executed as raw SQL.
             $probe = [
+                'filters_used' => compact('timePeriod', 'barangayId', 'crimeType', 'caseStatus'),
                 'eloquent_sql' => $currentQuery->toSql(),
                 'eloquent_bindings' => $currentQuery->getBindings(),
                 'raw_group_rows' => count(DB::select('SELECT barangay_id, COUNT(*) AS total FROM crime_department_crime_incidents GROUP BY barangay_id')),
@@ -1188,10 +1204,10 @@ class DashboardController extends Controller
     public function getHotspotData(Request $request, \App\Services\HotspotAnalyticsService $analytics)
     {
         try {
-            $timePeriod = $request->query('timePeriod', 'all');
-            $crimeType = $request->query('crimeType', '');
-            $barangay = $request->query('barangay', '');
-            $caseStatus = $request->query('caseStatus', '');
+            $timePeriod = $this->filterValue($request, 'timePeriod', 'all');
+            $crimeType = $this->filterValue($request, 'crimeType');
+            $barangay = $this->filterValue($request, 'barangay');
+            $caseStatus = $this->filterValue($request, 'caseStatus');
 
             $cacheKey = CacheService::generateCacheKey('hotspot_data_v2', [
                 'timePeriod' => $timePeriod,
@@ -1219,10 +1235,10 @@ class DashboardController extends Controller
     public function getHotspotForecast(Request $request, \App\Services\HotspotAnalyticsService $analytics)
     {
         try {
-            $historicalDays = max(28, min(365, (int) $request->query('historical_days', 90)));
-            $forecastDays = max(7, min(90, (int) $request->query('forecast_days', 14)));
-            $crimeType = $request->query('crime_type', '');
-            $barangay = $request->query('barangay', '');
+            $historicalDays = max(28, min(365, (int) $this->filterValue($request, 'historical_days', '90')));
+            $forecastDays = max(7, min(90, (int) $this->filterValue($request, 'forecast_days', '14')));
+            $crimeType = $this->filterValue($request, 'crime_type');
+            $barangay = $this->filterValue($request, 'barangay');
 
             $result = $analytics->forecast($historicalDays, $forecastDays, $crimeType, $barangay);
 
@@ -1240,9 +1256,9 @@ class DashboardController extends Controller
     {
         try {
             // Get filters
-            $timePeriod = $request->query('timePeriod', 'all');
-            $crimeType = $request->query('crimeType', '');
-            $barangay = $request->query('barangay', '');
+            $timePeriod = $this->filterValue($request, 'timePeriod', 'all');
+            $crimeType = $this->filterValue($request, 'crimeType');
+            $barangay = $this->filterValue($request, 'barangay');
 
             // Build base query
             $query = CrimeIncident::with(['category', 'barangay'])
