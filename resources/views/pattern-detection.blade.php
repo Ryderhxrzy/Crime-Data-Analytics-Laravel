@@ -346,22 +346,23 @@
 @push('scripts')
 <script>
 /**
- * Pattern Detection Simulation Engine (Frontend Mockup)
- * No backend API calls - logic resides here for demonstration.
+ * Pattern Detection Simulation - calls App\Services\PatternSimulationService via
+ * POST /pattern-detection/simulate. Baseline/simulated markers and recommendations
+ * are real data; intervention effects are research-based estimates (see service).
  */
 document.addEventListener('DOMContentLoaded', function() {
-    // DOM ELements
     const runBtn = document.getElementById('runSimulation');
     const simProcessing = document.getElementById('simProcessing');
-    const mapCanvas = document.getElementById('mapCanvas');
     const analysisText = document.getElementById('analysisText');
     const metricTotal = document.getElementById('metricTotal');
     const metricHotspots = document.getElementById('metricHotspots');
     const metricRisk = document.getElementById('metricRisk');
     const activeFiltersContainer = document.getElementById('activeFilters');
     const noFiltersMsg = document.getElementById('noFilters');
-    
-    // Intervention Field ELements
+    const impactList = document.getElementById('impactList');
+    const confidenceValue = document.getElementById('confidenceValue');
+    const displacementValue = document.getElementById('displacementValue');
+
     const simMode = document.getElementById('simMode');
     const patrolSlider = document.getElementById('patrolSlider');
     const patrolLabel = document.getElementById('patrolLabel');
@@ -373,18 +374,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const accessToggle = document.getElementById('accessToggle');
     const resetBtn = document.getElementById('resetInterventions');
 
-    // State
-    let simulationData = {
-        historical: [],
-        simulated: [],
-        hotspots: []
-    };
-
-    // --- UTILS ---
-    
-    function getRandomInt(min, max) {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
-    }
+    const SIMULATE_URL = '{{ route('pattern-detection.simulate') }}';
 
     function showProcessing(show) {
         if (show) {
@@ -400,121 +390,70 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- LOGIC ---
-
-    function generateSimulation() {
-        // Collect current settings
-        const mode = simMode.value;
-        const patrol = parseInt(patrolSlider.value);
-        const cctv = cctvSelect.value;
-        const cctvCustom = customCctvValue.value;
-        const lighting = lightingToggle.checked;
-        const community = communityToggle.checked;
-        const access = accessToggle.checked;
-
-        // Base values per mode
-        let baseCount = mode === 'historical' ? 40 : (mode === 'predictive' ? 55 : 70);
-        let hotspotCount = mode === 'historical' ? 3 : (mode === 'predictive' ? 5 : 8);
-
-        // Apply Intervention "Math" (Simulated purely for UI)
-        let reduction = 0;
-        if (patrol === 2) reduction += 15;
-        if (patrol === 1) reduction += 5;
-        if (cctv === 'full') reduction += 12;
-        if (cctv === 'partial') reduction += 4;
-        if (cctv === 'custom' && cctvCustom > 0) reduction += Math.min(20, cctvCustom * 2);
-        if (lighting) reduction += 8;
-        if (community) reduction += 10;
-        if (access) reduction += 14;
-
-        // Cap reduction to realistic amount
-        reduction = Math.min(60, reduction);
-        
-        const finalCount = Math.max(5, Math.round(baseCount * (1 - (reduction / 100))));
-        const finalHotspots = Math.max(1, Math.round(hotspotCount * (1 - (reduction / 150))));
-
-        // Update Markers Store
-        simulationData.historical = [];
-        for(let i=0; i<30; i++) {
-            simulationData.historical.push({ x: getRandomInt(50, 750), y: getRandomInt(50, 550) });
-        }
-
-        simulationData.simulated = [];
-        for(let i=0; i<finalCount; i++) {
-            simulationData.simulated.push({ x: getRandomInt(50, 750), y: getRandomInt(50, 550) });
-        }
-
-        simulationData.hotspots = [];
-        for(let i=0; i<finalHotspots; i++) {
-            simulationData.hotspots.push({ 
-                x: getRandomInt(100, 700), 
-                y: getRandomInt(100, 500), 
-                r: getRandomInt(40, 100),
-                severity: getRandomInt(1, 10)
-            });
-        }
-
-        updateUI(finalCount, finalHotspots, reduction, mode);
-        renderMap();
-        updateFilterBadges();
+    function currentSettings() {
+        return {
+            mode: simMode.value,
+            time_period_days: 90,
+            patrol: parseInt(patrolSlider.value),
+            cctv: cctvSelect.value,
+            cctv_custom_units: customCctvValue.value || 0,
+            lighting: lightingToggle.checked,
+            community: communityToggle.checked,
+            checkpoints: accessToggle.checked,
+            stress_multiplier: 1.5,
+        };
     }
 
-    function updateUI(count, hotspotNum, reductionPerc, mode) {
-        metricTotal.innerText = count;
-        document.getElementById('metricTotalBar').style.width = Math.min(100, (count/80)*100) + '%';
-        
-        metricHotspots.innerText = hotspotNum;
-        document.getElementById('metricHotspotsBar').style.width = Math.min(100, (hotspotNum/10)*100) + '%';
-
-        const riskVal = Math.max(5, 45 - reductionPerc);
-        metricRisk.innerText = Math.round(riskVal) + '%';
-        document.getElementById('metricRiskBar').style.width = riskVal + '%';
-
-        // Update Report Text
-        const interventions = [];
-        if (parseInt(patrolSlider.value) > 0) interventions.push("Enhanced Patrols");
-        if (cctvSelect.value !== 'none') interventions.push("CCTV Implementation");
-        if (lightingToggle.checked) interventions.push("Improved Lighting");
-        if (communityToggle.checked) interventions.push("Community Policing");
-        if (accessToggle.checked) interventions.push("Access Controls");
-
-        let text = "";
-        if (interventions.length === 0) {
-            text = `Under a <span class="font-bold text-blue-700">${mode}</span> scenario with no interventions, patterns suggest high volatility in residential sections. Stability index is currenty at <span class="text-red-500 font-bold">low levels</span>.`;
-        } else {
-            text = `Combined application of <span class="font-bold text-blue-700">${interventions.join(', ')}</span> has suppressed predictive signatures by <span class="font-bold text-green-600 text-lg">${reductionPerc}%</span>. Major hotspots have been ${reductionPerc > 30 ? 'dismantled' : 'contained'}.`;
+    function computeBounds(markerLists) {
+        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+        markerLists.flat().forEach(m => {
+            if (m.lat < minLat) minLat = m.lat;
+            if (m.lat > maxLat) maxLat = m.lat;
+            if (m.lng < minLng) minLng = m.lng;
+            if (m.lng > maxLng) maxLng = m.lng;
+        });
+        if (!isFinite(minLat)) {
+            return { minLat: 14.6, maxLat: 14.8, minLng: 121.0, maxLng: 121.1 };
         }
-        analysisText.innerHTML = text;
-
-        document.getElementById('confidenceValue').innerText = (80 + Math.random() * 15).toFixed(1);
+        return { minLat, maxLat, minLng, maxLng };
     }
 
-    function renderMap() {
+    function project(lat, lng, bounds) {
+        const xRatio = (lng - bounds.minLng) / ((bounds.maxLng - bounds.minLng) || 1);
+        const yRatio = (bounds.maxLat - lat) / ((bounds.maxLat - bounds.minLat) || 1);
+        return { x: 50 + xRatio * 700, y: 50 + yRatio * 550 };
+    }
+
+    function renderMap(baselineMarkers, simulatedMarkers, hotspots) {
         const markerGroup = document.getElementById('markerGroup');
         const hotspotGroup = document.getElementById('hotspotGroup');
-        
         markerGroup.innerHTML = '';
         hotspotGroup.innerHTML = '';
 
-        // Render Hotspots (Bottom layer)
-        simulationData.hotspots.forEach(h => {
+        const bounds = computeBounds([baselineMarkers, simulatedMarkers, hotspots.map(h => ({ lat: h.lat, lng: h.lng }))]);
+
+        hotspots.forEach(h => {
+            const p = project(h.lat, h.lng, bounds);
             const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            circle.setAttribute("cx", h.x);
-            circle.setAttribute("cy", h.y);
-            circle.setAttribute("r", h.r);
+            circle.setAttribute("cx", p.x);
+            circle.setAttribute("cy", p.y);
+            circle.setAttribute("r", Math.min(90, 30 + h.incident_count * 8));
             circle.setAttribute("fill", "rgba(245, 158, 11, 0.08)");
             circle.setAttribute("stroke", "rgba(245, 158, 11, 0.3)");
             circle.setAttribute("stroke-width", "1.5");
             circle.setAttribute("stroke-dasharray", "4,2");
             circle.classList.add("animate-pulse");
+            const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+            title.textContent = `${h.barangay_name}: ${h.incident_count} incidents`;
+            circle.appendChild(title);
             hotspotGroup.appendChild(circle);
         });
 
-        // Render Historical (Middle)
-        simulationData.historical.forEach(m => {
+        baselineMarkers.forEach(m => {
+            const p = project(m.lat, m.lng, bounds);
             const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            circle.setAttribute("cx", m.x);
-            circle.setAttribute("cy", m.y);
+            circle.setAttribute("cx", p.x);
+            circle.setAttribute("cy", p.y);
             circle.setAttribute("r", "2.5");
             circle.setAttribute("fill", "#94a3b8");
             circle.setAttribute("opacity", "0.6");
@@ -523,27 +462,60 @@ document.addEventListener('DOMContentLoaded', function() {
             markerGroup.appendChild(circle);
         });
 
-        // Render Simulated (Top)
-        simulationData.simulated.forEach(m => {
+        simulatedMarkers.forEach(m => {
+            const p = project(m.lat, m.lng, bounds);
             const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            circle.setAttribute("cx", m.x);
-            circle.setAttribute("cy", m.y);
+            circle.setAttribute("cx", p.x);
+            circle.setAttribute("cy", p.y);
             circle.setAttribute("r", "3.5");
             circle.setAttribute("fill", "#ef4444");
             circle.setAttribute("stroke", "#fff");
             circle.setAttribute("stroke-width", "1");
             circle.classList.add("transition-all", "duration-1000");
-            
-            // Interaction
             circle.style.cursor = "pointer";
+            const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+            title.textContent = `${m.category} - ${m.barangay}`;
+            circle.appendChild(title);
             circle.addEventListener('mouseover', () => circle.setAttribute('r', '6'));
             circle.addEventListener('mouseout', () => circle.setAttribute('r', '3.5'));
-            
             markerGroup.appendChild(circle);
         });
     }
 
-    function updateFilterBadges() {
+    function renderRecommendations(recommendations) {
+        if (!recommendations || !recommendations.length) {
+            impactList.innerHTML = `<p class="text-xs text-gray-400 italic">No barangay-level recommendations for the current data.</p>`;
+            return;
+        }
+
+        impactList.innerHTML = recommendations.map(rec => {
+            const top = rec.recommended_interventions && rec.recommended_interventions[0];
+            if (!top) {
+                return `
+                    <div class="flex items-start gap-4 p-4 rounded-xl border border-transparent">
+                        <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 flex-shrink-0">
+                            <i class="fas fa-circle-info text-xs"></i>
+                        </div>
+                        <div>
+                            <span class="block text-sm font-bold text-gray-800">${rec.barangay_name}</span>
+                            <p class="text-xs text-gray-500">${rec.incident_count} incidents, mostly ${rec.dominant_category ?? 'mixed types'}. No clear-fit intervention from current data.</p>
+                        </div>
+                    </div>`;
+            }
+            return `
+                <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-gray-50/80 transition-all border border-transparent hover:border-gray-100 group">
+                    <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0 group-hover:scale-110 transition-transform">
+                        <i class="fas fa-lightbulb text-xs"></i>
+                    </div>
+                    <div>
+                        <span class="block text-sm font-bold text-gray-800">${rec.barangay_name}: Add ${top.label}</span>
+                        <p class="text-xs text-gray-500">${rec.incident_count} incidents (mostly ${rec.dominant_category ?? 'mixed'}, ${rec.night_ratio_percent}% at night). Could address ~${top.addressable_incidents} incidents (est. ${top.estimated_reduction} fewer). <span class="italic">${top.source}</span></p>
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    function updateFilterBadges(settings) {
         const createBadge = (text, icon, colorClass = 'bg-blue-50 text-blue-700 border-blue-100') => {
             return `<span class="px-3 py-1 ${colorClass} border rounded-full text-[10px] font-bold animate-fade-in flex items-center gap-2">
                 <i class="${icon} text-[8px]"></i> ${text}
@@ -552,24 +524,67 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let html = '';
         html += createBadge(simMode.selectedOptions[0].text, 'fas fa-server');
-        
-        const patrolVal = parseInt(patrolSlider.value);
-        if (patrolVal === 2) html += createBadge('High Patrols', 'fas fa-user-shield');
-        if (patrolVal === 1) html += createBadge('Medium Patrols', 'fas fa-user-shield');
-        
-        if (cctvSelect.value === 'full') html += createBadge('Full CCTV', 'fas fa-video');
-        if (cctvSelect.value === 'partial') html += createBadge('Partial CCTV', 'fas fa-video');
-        if (cctvSelect.value === 'custom' && customCctvValue.value) html += createBadge(`+${customCctvValue.value} CCTV Units`, 'fas fa-video', 'bg-purple-50 text-purple-700 border-purple-100');
-        
-        if (lightingToggle.checked) html += createBadge('Street Lighting', 'fas fa-lightbulb', 'bg-amber-50 text-amber-700 border-amber-100');
-        if (communityToggle.checked) html += createBadge('Watch Program', 'fas fa-users');
-        if (accessToggle.checked) html += createBadge('Checkpoints', 'fas fa-door-closed');
+
+        if (settings.patrol === 2) html += createBadge('High Patrols', 'fas fa-user-shield');
+        if (settings.patrol === 1) html += createBadge('Medium Patrols', 'fas fa-user-shield');
+
+        if (settings.cctv === 'full') html += createBadge('Full CCTV', 'fas fa-video');
+        if (settings.cctv === 'partial') html += createBadge('Partial CCTV', 'fas fa-video');
+        if (settings.cctv === 'custom' && settings.cctv_custom_units) html += createBadge(`+${settings.cctv_custom_units} CCTV Units`, 'fas fa-video', 'bg-purple-50 text-purple-700 border-purple-100');
+
+        if (settings.lighting) html += createBadge('Street Lighting', 'fas fa-lightbulb', 'bg-amber-50 text-amber-700 border-amber-100');
+        if (settings.community) html += createBadge('Watch Program', 'fas fa-users');
+        if (settings.checkpoints) html += createBadge('Checkpoints', 'fas fa-door-closed');
 
         activeFiltersContainer.innerHTML = html;
-        if (!html) {
-            noFiltersMsg.classList.remove('hidden');
-        } else {
-            noFiltersMsg.classList.add('hidden');
+        noFiltersMsg.classList.toggle('hidden', !!html);
+    }
+
+    function renderResult(result, settings) {
+        metricTotal.innerText = result.simulated.total_incidents;
+        const totalBarPct = Math.min(100, (result.simulated.total_incidents / Math.max(1, result.baseline.total_incidents * 2)) * 100);
+        document.getElementById('metricTotalBar').style.width = totalBarPct + '%';
+
+        metricHotspots.innerText = result.simulated.hotspots.length;
+        document.getElementById('metricHotspotsBar').style.width = Math.min(100, (result.simulated.hotspots.length / 10) * 100) + '%';
+
+        const risk = result.metrics.high_risk_coverage_percent ?? 0;
+        metricRisk.innerText = risk + '%';
+        document.getElementById('metricRiskBar').style.width = risk + '%';
+
+        analysisText.textContent = result.analysis_text;
+        confidenceValue.innerText = result.metrics.confidence_percent;
+        displacementValue.innerText = result.metrics.displacement_risk;
+
+        renderMap(result.baseline.markers, result.simulated.markers, result.simulated.hotspots);
+        renderRecommendations(result.recommendations);
+        updateFilterBadges(settings);
+    }
+
+    async function runSimulation() {
+        showProcessing(true);
+        const settings = currentSettings();
+
+        try {
+            const res = await fetch(SIMULATE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                },
+                body: JSON.stringify(settings),
+            });
+            const result = await res.json();
+            if (!res.ok) {
+                throw new Error(result.message || 'Simulation request failed');
+            }
+            renderResult(result, settings);
+        } catch (e) {
+            console.error(e);
+            analysisText.textContent = 'Failed to run simulation. Please try again.';
+        } finally {
+            showProcessing(false);
         }
     }
 
@@ -581,21 +596,10 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     cctvSelect.onchange = function() {
-        if(this.value === 'custom') {
-            customCctvEntry.classList.remove('hidden');
-        } else {
-            customCctvEntry.classList.add('hidden');
-        }
+        customCctvEntry.classList.toggle('hidden', this.value !== 'custom');
     };
 
-    runBtn.onclick = function() {
-        showProcessing(true);
-        // Simulate "Thinking" time
-        setTimeout(() => {
-            generateSimulation();
-            showProcessing(false);
-        }, 1200);
-    };
+    runBtn.onclick = runSimulation;
 
     resetBtn.onclick = function() {
         simMode.value = 'predictive';
@@ -607,11 +611,11 @@ document.addEventListener('DOMContentLoaded', function() {
         lightingToggle.checked = true;
         communityToggle.checked = false;
         accessToggle.checked = false;
-        generateSimulation();
+        runSimulation();
     };
 
-    // Initial Run
-    generateSimulation();
+    // Initial run
+    runSimulation();
 });
 </script>
 @endpush
