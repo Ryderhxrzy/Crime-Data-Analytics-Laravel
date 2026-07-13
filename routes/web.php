@@ -111,6 +111,12 @@ Route::middleware('jwt.api')->group(function () {
         Route::post('/create-rule', [AlertsController::class, 'createRule'])->name('create-rule');
         Route::post('/update-rule/{id}', [AlertsController::class, 'updateRule'])->name('update-rule');
         Route::delete('/delete-rule/{id}', [AlertsController::class, 'deleteRule'])->name('delete-rule');
+
+        // Alert data API (consumed client-side by alerts-active/alerts-history views)
+        Route::get('/api/active-data', [AlertsController::class, 'activeData'])->name('active-data');
+        Route::get('/api/history-data', [AlertsController::class, 'historyData'])->name('history-data');
+        Route::post('/api/evaluate', [AlertsController::class, 'evaluate'])->name('evaluate');
+        Route::post('/api/{id}/resolve', [AlertsController::class, 'resolve'])->name('resolve');
     });
 });
 
