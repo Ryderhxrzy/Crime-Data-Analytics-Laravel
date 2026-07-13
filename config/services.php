@@ -37,4 +37,8 @@ return [
         'redirect' => env('APP_URL') . '/auth/google/callback',
     ],
 
+    'central_auth' => [
+        'login_url' => env('CENTRAL_LOGIN_URL', 'https://login.alertaraqc.com'),
+    ],
+
 ];
