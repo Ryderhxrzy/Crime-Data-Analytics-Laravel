@@ -107,6 +107,14 @@ if (request()->query('token')) {
                 <i id="debugChevron" class="fas fa-chevron-down"></i>
             </div>
             <div id="debugBody" class="p-4 space-y-2">
+                <div class="p-2 mb-2 bg-gray-800 rounded" id="dbgServerBox">
+                    <div class="text-yellow-400 font-bold mb-1">SERVER THAT ANSWERED THIS REQUEST</div>
+                    <div><span class="text-gray-400">Page origin:</span> <span id="dbgOrigin">—</span></div>
+                    <div><span class="text-gray-400">APP_ENV:</span> <span id="dbgEnv">—</span></div>
+                    <div><span class="text-gray-400">Database:</span> <span id="dbgDb">—</span></div>
+                    <div><span class="text-gray-400">Rows in DB:</span> <span id="dbgTotals">—</span></div>
+                    <div><span class="text-gray-400">Latest incident:</span> <span id="dbgLatest">—</span></div>
+                </div>
                 <div><span class="text-gray-400">Request URL:</span> <span id="dbgUrl">—</span></div>
                 <div><span class="text-gray-400">HTTP Status:</span> <span id="dbgStatus">—</span></div>
                 <div><span class="text-gray-400">Duration:</span> <span id="dbgTime">—</span></div>
@@ -301,6 +309,26 @@ if (request()->query('token')) {
             pill.className = `ml-3 px-2 py-0.5 rounded ${colorClass}`;
         }
 
+        // Show which server/database actually answered, so an empty result can be
+        // traced to the wrong environment rather than a broken query.
+        function renderServerDebug(dbg) {
+            document.getElementById('dbgOrigin').textContent = window.location.origin;
+            if (!dbg) return;
+
+            document.getElementById('dbgEnv').textContent = dbg.app_env;
+            document.getElementById('dbgDb').textContent = `${dbg.db_name} @ ${dbg.db_host}`;
+            document.getElementById('dbgTotals').textContent =
+                `${dbg.total_incidents} incidents, ${dbg.total_barangays} barangays, ${dbg.total_categories} categories`;
+            document.getElementById('dbgLatest').textContent = dbg.latest_incident_date
+                ? dbg.latest_incident_date
+                : 'NONE - no incidents in this database!';
+
+            const box = document.getElementById('dbgServerBox');
+            box.className = dbg.total_incidents > 0
+                ? 'p-2 mb-2 bg-gray-800 rounded'
+                : 'p-2 mb-2 bg-red-900 rounded';
+        }
+
         // Fetch real location trend analytics from the database
         async function generateTrends() {
             const params = new URLSearchParams({
@@ -341,6 +369,7 @@ if (request()->query('token')) {
                 document.getElementById('dbgSeries').textContent = data.series
                     ? `${data.series.datasets.length} series x ${data.series.labels.length} months`
                     : '—';
+                renderServerDebug(data.debug);
 
                 if (!data.success) {
                     setDebugPill('API ERROR', 'bg-red-600');
@@ -348,7 +377,9 @@ if (request()->query('token')) {
                 }
 
                 if (!data.locations || data.locations.length === 0) {
-                    setDebugPill('OK but 0 rows', 'bg-orange-600');
+                    // Distinguish "empty database" from "filters matched nothing"
+                    const emptyDb = data.debug && data.debug.total_incidents === 0;
+                    setDebugPill(emptyDb ? 'DB HAS 0 INCIDENTS' : 'OK but 0 rows', emptyDb ? 'bg-red-600' : 'bg-orange-600');
                 } else {
                     setDebugPill(`OK - ${data.locations.length} locations`, 'bg-green-600');
                 }

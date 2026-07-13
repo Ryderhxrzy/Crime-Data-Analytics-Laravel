@@ -524,6 +524,28 @@ class DashboardController extends Controller
     }
 
     /**
+     * Server-side diagnostics returned with the analytics endpoints so the page's
+     * debug panel can show WHICH database actually answered the request.
+     */
+    private function debugInfo(): array
+    {
+        $connection = DB::connection();
+        $latest = CrimeIncident::max('incident_date');
+
+        return [
+            'app_env' => config('app.env'),
+            'db_name' => $connection->getDatabaseName(),
+            'db_host' => $connection->getConfig('host'),
+            'total_incidents' => CrimeIncident::count(),
+            'total_barangays' => Barangay::count(),
+            'total_categories' => CrimeCategory::count(),
+            'latest_incident_date' => $latest,
+            'reference_date_used' => $this->referenceDate()->toDateString(),
+            'reference_is_fallback_to_today' => $latest === null,
+        ];
+    }
+
+    /**
      * Crime type trends data: distribution, monthly series per category,
      * severity breakdown, and per-location category comparison.
      */
@@ -675,6 +697,7 @@ class DashboardController extends Controller
 
             return response()->json([
                 'success' => true,
+                'debug' => $this->debugInfo(),
                 'stats' => [
                     'total_types' => $distribution->count(),
                     'most_common' => $distributionOut['labels'][0] ?? 'None',
@@ -867,6 +890,7 @@ class DashboardController extends Controller
 
             return response()->json([
                 'success' => true,
+                'debug' => $this->debugInfo(),
                 'window_days' => $windowDays,
                 'summary' => [
                     'increasing_count' => count($increasing),
