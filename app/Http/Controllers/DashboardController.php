@@ -1237,6 +1237,91 @@ class DashboardController extends Controller
     }
 
     /**
+     * Save a generated AI analysis to the database. The forecast + findings
+     * become one 'analysis' row; every recommendation becomes its own
+     * 'recommendation' row, all sharing a batch_key.
+     */
+    public function saveAiAnalysis(Request $request)
+    {
+        try {
+            $meta = $request->input('meta', []);
+            $analysis = $request->input('analysis', []);
+            $forecast = $analysis['forecast'] ?? null;
+
+            if (!$forecast || !isset($forecast['direction'])) {
+                return response()->json(['success' => false, 'error' => 'No AI analysis to save. Run the analysis first.'], 422);
+            }
+
+            $authData = $this->getAuthUser();
+            $savedBy = $authData['userEmail'] ?? null;
+
+            $batchKey = (string) \Illuminate\Support\Str::uuid();
+            $shared = [
+                'batch_key'    => $batchKey,
+                'barangay_name'=> 'San Agustin',
+                'period_days'  => (int) ($meta['period_days'] ?? 0),
+                'period_start' => $meta['period_start'] ?? null,
+                'period_end'   => $meta['period_end'] ?? null,
+                'records_used' => (int) ($meta['records_used'] ?? 0),
+                'model'        => $meta['model'] ?? null,
+                'saved_by'     => $savedBy,
+            ];
+
+            $pct = $forecast['expected_change_percent'] ?? null;
+            \App\Models\SanAgustinAiReport::create($shared + [
+                'report_type' => 'analysis',
+                'title'       => 'Crime forecast: ' . strtoupper((string) $forecast['direction'])
+                    . (is_numeric($pct) ? ' (' . ($pct > 0 ? '+' : '') . $pct . '%)' : ''),
+                'summary'     => $forecast['summary'] ?? null,
+                'payload'     => [
+                    'forecast'     => $forecast,
+                    'key_findings' => $analysis['key_findings'] ?? [],
+                ],
+            ]);
+
+            $saved = 1;
+            foreach ((array) ($analysis['recommendations'] ?? []) as $rec) {
+                if (empty($rec['action'])) {
+                    continue;
+                }
+
+                \App\Models\SanAgustinAiReport::create($shared + [
+                    'report_type' => 'recommendation',
+                    'title'       => mb_substr((string) $rec['action'], 0, 255),
+                    'summary'     => trim(($rec['location'] ?? '') !== '' ? $rec['location'] . ' — ' . ($rec['rationale'] ?? '') : ($rec['rationale'] ?? '')) ?: null,
+                    'payload'     => $rec,
+                ]);
+                $saved++;
+            }
+
+            return response()->json(['success' => true, 'batch_key' => $batchKey, 'saved_rows' => $saved]);
+        } catch (\Exception $e) {
+            \Log::error('Error in saveAiAnalysis: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'error' => 'Error saving AI report: '.$e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Recent saved AI reports (analysis + recommendation rows).
+     */
+    public function listAiReports(Request $request)
+    {
+        try {
+            $reports = \App\Models\SanAgustinAiReport::query()
+                ->orderByDesc('created_at')
+                ->limit(min(50, max(1, (int) $request->input('limit', 20))))
+                ->get(['id', 'batch_key', 'report_type', 'title', 'summary', 'period_days', 'records_used', 'saved_by', 'created_at']);
+
+            return response()->json(['success' => true, 'reports' => $reports]);
+        } catch (\Exception $e) {
+            \Log::error('Error in listAiReports: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'error' => 'Error loading saved reports'], 500);
+        }
+    }
+
+    /**
      * Per-street incident stats for the San Agustin street map
      * (hover tooltips: count, dominant crime, peak hours).
      */
