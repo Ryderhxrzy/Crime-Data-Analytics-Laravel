@@ -41,4 +41,9 @@ return [
         'login_url' => env('CENTRAL_LOGIN_URL', 'https://login.alertaraqc.com'),
     ],
 
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
+    ],
+
 ];
