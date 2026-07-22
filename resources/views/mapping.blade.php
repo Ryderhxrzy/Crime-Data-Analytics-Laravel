@@ -610,6 +610,14 @@ if (request()->query('token')) {
         let barangayRingsByCode = {};
         let selectedBarangayLabel = null;
 
+        // Barangay the map opens on
+        const DEFAULT_BARANGAY = 'San Agustin';
+        // Tight padding when a single barangay is isolated. No minimum-zoom floor:
+        // 13 of the 142 barangays are large enough that forcing a closer zoom would
+        // crop them, and fitBounds already gives the closest view that still shows
+        // the whole barangay.
+        const BARANGAY_FIT_PADDING = [12, 12];
+
         const STYLE_BRGY_IDLE     = { color: '#5b8f8c', weight: 1,   opacity: 0.85, fillColor: '#e8f5f3', fillOpacity: 0.25, dashArray: null };
         const STYLE_BRGY_HOVER    = { color: '#274d4c', weight: 1.5, opacity: 1,    fillColor: '#9ed4cb', fillOpacity: 0.55, dashArray: null };
         const STYLE_BRGY_SELECTED = { color: '#274d4c', weight: 1.5, opacity: 1,    fillColor: '#bde5dd', fillOpacity: 0.35, dashArray: null };
@@ -792,6 +800,16 @@ if (request()->query('token')) {
 
             loadCrimeCategories();
             await loadBarangays();
+
+            // Land on the default barangay. Driven off the option labels so it works
+            // whether the list came from /api/qc-barangays or the fallback.
+            const barangaySelect = document.getElementById('barangay');
+            const defaultOption = [...barangaySelect.options].find(
+                o => o.value && o.textContent.trim().toLowerCase() === DEFAULT_BARANGAY.toLowerCase()
+            );
+            if (defaultOption) barangaySelect.value = defaultOption.value;
+            else console.warn(`Default barangay "${DEFAULT_BARANGAY}" not found in the filter.`);
+
             setupAutoFilter();
             setupZoomScaling();
             applyBarangaySelection();
@@ -855,12 +873,17 @@ if (request()->query('token')) {
                         className: 'brgy-label-selected'
                     }).openTooltip();
 
-                    map.fitBounds(b, { padding: [30, 30], animate: true });
+                    zoomToBarangayBounds(b);
                 }
             } else if (qcBounds && qcBounds.isValid()) {
                 // All Barangays -> frame the whole city again
                 map.fitBounds(qcBounds, { padding: [20, 20], animate: true });
             }
+        }
+
+        // Frame a single barangay as closely as possible while keeping all of it visible
+        function zoomToBarangayBounds(bounds) {
+            map.fitBounds(bounds, { padding: BARANGAY_FIT_PADDING, animate: true });
         }
 
         // Apply boundary constraints
@@ -872,37 +895,13 @@ if (request()->query('token')) {
 
             console.log('Applying boundary constraints...');
             
-            // Set max bounds to QC boundary with some padding
-            const paddedBounds = qcBounds.pad(0.02);
-            map.setMaxBounds(paddedBounds);
+            // Roomy padding so a barangay on the city edge can still be centred.
+            // setMaxBounds already stops the user drifting away from Quezon City.
+            map.setMaxBounds(qcBounds.pad(0.25));
 
-            // Force a bounds check
-            setTimeout(() => {
-                if (!qcBounds.contains(map.getCenter())) {
-                    console.log('Center outside bounds, adjusting...');
-                    map.panInsideBounds(qcBounds, { animate: true });
-                }
-            }, 500);
-
-            // Event listeners for boundary constraints
-            map.on('drag', function() {
-                if (!qcBounds.contains(map.getCenter())) {
-                    map.panInsideBounds(qcBounds, { 
-                        animate: true,
-                        duration: 0.25
-                    });
-                }
-            });
-
-            map.on('zoomend', function() {
-                const currentBounds = map.getBounds();
-                if (!qcBounds.contains(currentBounds) && map.getZoom() > 15) {
-                    map.fitBounds(qcBounds, {
-                        padding: [20, 20],
-                        maxZoom: map.getZoom()
-                    });
-                }
-            });
+            // Deliberately no zoomend "snap back to QC" handler here. Zooming into a
+            // barangay near the city edge makes the viewport overhang the boundary,
+            // which such a handler reads as "out of bounds" and undoes the zoom.
         }
 
         // Fit map to QC boundary
@@ -2369,11 +2368,14 @@ if (request()->query('token')) {
             // Leaflet needs to re-measure after the container resizes
             setTimeout(() => {
                 map.invalidateSize();
-                const target = document.getElementById('barangay').value
-                    ? (barangayLayersByCode[document.getElementById('barangay').value] || {}).getBounds?.()
-                    : qcBounds;
-                if (target && target.isValid && target.isValid()) {
-                    map.fitBounds(target, { padding: [30, 30] });
+
+                const code = document.getElementById('barangay').value;
+                const layer = code ? barangayLayersByCode[code] : null;
+
+                if (layer) {
+                    zoomToBarangayBounds(layer.getBounds());
+                } else if (qcBounds && qcBounds.isValid()) {
+                    map.fitBounds(qcBounds, { padding: [20, 20] });
                 }
             }, 200);
         }
