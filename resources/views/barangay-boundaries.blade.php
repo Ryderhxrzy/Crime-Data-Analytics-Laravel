@@ -348,18 +348,17 @@ if (request()->query('token')) {
         const DEFAULT_BARANGAY = @json($defaultBarangay);
 
         // ---- Boundary styles ----
-        const STYLE_IDLE     = { color: '#5b8f8c', weight: 1,   opacity: 0.85, fillColor: '#e8f5f3', fillOpacity: 0.25 };
-        const STYLE_HOVER    = { color: '#274d4c', weight: 3,   opacity: 1,    fillColor: '#9ed4cb', fillOpacity: 0.55 };
-        // "Lining" border for the isolated barangay: solid dark outline + dashed accent halo
-        const STYLE_SELECTED = { color: '#274d4c', weight: 4,   opacity: 1,    fillColor: '#bde5dd', fillOpacity: 0.35 };
-        const STYLE_HALO     = { color: '#f59e0b', weight: 2,   opacity: 0.95, dashArray: '6 5', fill: false };
+        // Thin borders throughout — hover and selection read through fill + colour,
+        // not line weight.
+        const STYLE_IDLE     = { color: '#5b8f8c', weight: 1,   opacity: 0.85, fillColor: '#e8f5f3', fillOpacity: 0.25, dashArray: null };
+        const STYLE_HOVER    = { color: '#274d4c', weight: 1.5, opacity: 1,    fillColor: '#9ed4cb', fillOpacity: 0.55, dashArray: null };
+        const STYLE_SELECTED = { color: '#274d4c', weight: 1.5, opacity: 1,    fillColor: '#bde5dd', fillOpacity: 0.35, dashArray: null };
 
         // State
         let map = null;
         let heatmapLayer = null, markerLayer = null;
         let qcOutlineLayer = null;      // whole-QC outline (context)
         let barangayLayer = null;       // all barangay polygons
-        let selectedHaloLayer = null;   // dashed accent on the isolated barangay
         let selectedLabel = null;       // name label on the isolated barangay
         let barangayLayersByName = {};  // geojson name -> leaflet layer
         let barangayRingsByName = {};   // geojson name -> polygon rings (for point-in-polygon)
@@ -470,7 +469,7 @@ if (request()->query('token')) {
                 const res = await fetch(`${QC_OUTLINE_URL}?t=${t}`);
                 const qc = await res.json();
                 qcOutlineLayer = L.geoJSON(qc, {
-                    style: { color: '#274d4c', weight: 3, opacity: 0.9, fill: false },
+                    style: { color: '#274d4c', weight: 2, opacity: 0.9, fill: false },
                     interactive: false
                 }).addTo(map);
                 qcBounds = qcOutlineLayer.getBounds();
@@ -581,15 +580,21 @@ if (request()->query('token')) {
         const currentBarangayId = () => document.getElementById('barangay').value;
         const currentBarangayName = () => barangayNameById[currentBarangayId()] || '';
 
-        // Show all barangays (hoverable) or isolate exactly one with a lining border
+        // Show all barangays (hoverable) or isolate exactly one
         function applyBarangaySelection() {
             const selected = currentBarangayName();
 
-            if (selectedHaloLayer) { map.removeLayer(selectedHaloLayer); selectedHaloLayer = null; }
-            if (selectedLabel)     { map.removeLayer(selectedLabel);     selectedLabel = null; }
+            if (selectedLabel) { map.removeLayer(selectedLabel); selectedLabel = null; }
 
             document.getElementById('activeBarangayLabel').textContent =
                 selected ? `${selected}, Quezon City` : 'All Barangays, Quezon City';
+
+            // The city outline is context for the full view only — it would just cut
+            // across the map once a single barangay is isolated.
+            if (qcOutlineLayer) {
+                if (selected) map.removeLayer(qcOutlineLayer);
+                else if (!map.hasLayer(qcOutlineLayer)) qcOutlineLayer.addTo(map);
+            }
 
             // Toggle through the GeoJSON group so its membership stays consistent
             Object.entries(barangayLayersByName).forEach(([name, layer]) => {
@@ -609,12 +614,6 @@ if (request()->query('token')) {
                 const key = Object.keys(barangayLayersByName).find(n => norm(n) === norm(selected));
                 const layer = key ? barangayLayersByName[key] : null;
                 if (layer) {
-                    // Dashed accent halo = the "lining" border
-                    selectedHaloLayer = L.geoJSON(layer.toGeoJSON(), {
-                        style: Object.assign({}, STYLE_HALO),
-                        interactive: false
-                    }).addTo(map);
-
                     const b = layer.getBounds();
                     selectedLabel = L.marker(b.getCenter(), {
                         interactive: false,
