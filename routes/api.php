@@ -65,26 +65,21 @@ Route::get('/qc-barangays', function() {
     return response()->json($barangays);
 })->middleware('throttle:60,1');
 
-// Crimes data endpoint for crime page
+// Crimes data endpoint for crime page — served from the San Agustin table.
+// That table has no persons_involved relation, so those fields come back empty.
 Route::get('/crimes', function() {
-    $crimes = \App\Models\CrimeIncident::with(['category', 'barangay', 'personsInvolved', 'evidence'])
+    // category_name/barangay_name are plain text there; the page still expects
+    // nested category/barangay objects, so rebuild them by name.
+    $categoryByName = \App\Models\CrimeCategory::select('id', 'category_name', 'color_code', 'icon')
+        ->get()
+        ->keyBy(fn ($c) => mb_strtolower(trim($c->category_name)));
+
+    $crimes = \App\Models\SanAgustinIncident::with('evidence')
         ->orderBy('created_at', 'desc')
         ->get();
 
-    // Add persons and evidence data to each crime
-    $crimesWithRelations = $crimes->map(function ($crime) {
-        // Format persons involved with encrypted fields marked
-        $personsData = $crime->personsInvolved->map(function ($person) {
-            return [
-                'id' => $person->person_id,
-                'person_type' => $person->person_type,
-                'first_name' => '[ENCRYPTED]',
-                'middle_name' => '[ENCRYPTED]',
-                'last_name' => '[ENCRYPTED]',
-                'contact_number' => '[ENCRYPTED]',
-                'other_info' => '[ENCRYPTED]',
-            ];
-        })->toArray();
+    $crimesWithRelations = $crimes->map(function ($crime) use ($categoryByName) {
+        $category = $categoryByName->get(mb_strtolower(trim($crime->category_name)));
 
         // Format evidence with encrypted fields marked
         $evidenceData = $crime->evidence->map(function ($evidence) {
@@ -96,18 +91,16 @@ Route::get('/crimes', function() {
             ];
         })->toArray();
 
-        // Get unique person types
-        $personTypes = $crime->personsInvolved?->pluck('person_type')->unique()->values()->toArray() ?? [];
-        // Get unique evidence types
-        $evidenceTypes = $crime->evidence?->pluck('evidence_type')->unique()->values()->toArray() ?? [];
+        $evidenceTypes = $crime->evidence->pluck('evidence_type')->unique()->values()->toArray();
 
         return [
             'id' => $crime->id,
             'incident_code' => $crime->incident_code,
             'incident_title' => $crime->incident_title,
             'incident_description' => $crime->incident_description,
-            'incident_date' => $crime->incident_date,
+            'incident_date' => optional($crime->incident_date)->format('Y-m-d'),
             'incident_time' => $crime->incident_time,
+            'record_type' => $crime->record_type,
             'status' => $crime->status,
             'clearance_status' => $crime->clearance_status,
             'latitude' => $crime->latitude,
@@ -118,11 +111,20 @@ Route::get('/crimes', function() {
             'modus_operandi' => $crime->modus_operandi,
             'weather_condition' => $crime->weather_condition,
             'assigned_officer' => $crime->assigned_officer,
-            'category' => $crime->category,
-            'barangay' => $crime->barangay,
-            'persons_involved_count' => $crime->personsInvolved->count(),
-            'persons_involved_types' => $personTypes,
-            'persons_involved' => $personsData,
+            'category' => [
+                'id' => $category->id ?? null,
+                'category_name' => $crime->category_name ?: 'Unknown',
+                'color_code' => $category->color_code ?? '#274d4c',
+                'icon' => $category->icon ?? 'fa-exclamation-circle',
+            ],
+            'barangay' => [
+                'id' => null,
+                'barangay_name' => $crime->barangay_name,
+            ],
+            // No persons_involved table for San Agustin records yet
+            'persons_involved_count' => 0,
+            'persons_involved_types' => [],
+            'persons_involved' => [],
             'evidence_count' => $crime->evidence->count(),
             'evidence_types' => $evidenceTypes,
             'evidence' => $evidenceData,
@@ -130,7 +132,15 @@ Route::get('/crimes', function() {
     });
 
     $categories = \App\Models\CrimeCategory::select('id', 'category_name', 'color_code', 'icon')->get();
-    $barangays = \App\Models\Barangay::select('id', 'barangay_name')->get();
+
+    // Only the barangays actually present in the data, so the page's barangay
+    // filter cannot offer options that would always return nothing.
+    $barangays = $crimes->pluck('barangay_name')
+        ->filter()
+        ->unique()
+        ->sort()
+        ->values()
+        ->map(fn ($name, $i) => ['id' => $i + 1, 'barangay_name' => $name]);
 
     return response()->json([
         'incidents' => $crimesWithRelations,
