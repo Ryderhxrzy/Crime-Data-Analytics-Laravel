@@ -1,342 +1,227 @@
 @extends('layouts.app')
 
-@section('title', 'Pattern Detection Simulation')
+@section('title', 'Pattern Detection')
 
 @section('content')
-<div class="p-4 lg:p-6 pt-0 lg:pt-0 pb-12" id="simulationApp">
-    <!-- Page Header & Mode Selection -->
-    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+<div class="p-4 lg:p-6 pt-0 lg:pt-0 pb-12" id="patternApp">
+
+    <!-- Page Header -->
+    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             <div>
-                <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Pattern Detection Simulation</h1>
-                <p class="text-gray-600 mt-1 text-sm lg:text-base">Run "What-If" scenarios to predict crime reduction through strategic interventions.</p>
+                <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Pattern Detection</h1>
+                <p class="text-gray-600 mt-1 text-sm lg:text-base">
+                    Trends, hotspots, timing, repeat activity and anomalies extracted from recorded incidents.
+                </p>
             </div>
-            
-            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                <div class="flex flex-col">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase mb-1">Simulation Mode</span>
-                    <select id="simMode" class="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold text-blue-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all cursor-pointer">
-                        <option value="historical">Historical Signature</option>
-                        <option value="predictive" selected>AI Predictive Model</option>
-                        <option value="randomized">Randomized Stress Test</option>
+
+            <!-- Simulation toggle -->
+            <div class="flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                <div>
+                    <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Simulation Mode</div>
+                    <div id="simStateLabel" class="text-sm font-bold text-gray-700">OFF &mdash; real data only</div>
+                </div>
+                <button type="button" id="simToggle" role="switch" aria-checked="false"
+                        class="relative inline-flex h-7 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-alertara-500 focus:ring-offset-2"
+                        style="width: 3.25rem;">
+                    <span id="simKnob" class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 translate-x-0"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simulation banner (hidden when OFF) -->
+    <div id="simBanner" class="hidden mb-6 rounded-xl border-2 border-amber-400 bg-amber-50 p-4">
+        <div class="flex items-start gap-3">
+            <i class="fas fa-flask text-amber-600 mt-0.5"></i>
+            <div class="flex-1">
+                <div class="font-bold text-amber-900 text-sm">Simulation is ON &mdash; results are not operational data</div>
+                <p class="text-amber-800 text-xs mt-1">
+                    Generated records are mixed into the analysis below and marked
+                    <span class="inline-block px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold">SIMULATED</span>.
+                    Synthetic records resample the shape of existing data &mdash; they are not a forecast and must not be used for deployment or reporting.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-4">
+        <div class="mb-4 pb-4 border-b border-gray-200">
+            <h3 class="text-sm font-bold text-gray-900"><i class="fas fa-sliders-h mr-2 text-alertara-700"></i>Analysis Settings</h3>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-alertara-800 mb-2">Analysis Period</label>
+                <select id="daysSelect" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 bg-white">
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="180" selected>Last 6 months</option>
+                    <option value="365">Last 12 months</option>
+                    <option value="730">Last 24 months</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button id="runBtn" class="w-full px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 transition-colors flex items-center justify-center gap-2 font-semibold">
+                    <i class="fas fa-play"></i> Run Analysis
+                </button>
+            </div>
+        </div>
+
+        <!-- Scenario controls, only meaningful while simulating -->
+        <div id="scenarioPanel" class="hidden mt-4 pt-4 border-t border-gray-200">
+            <h4 class="text-xs font-bold text-amber-800 uppercase tracking-wide mb-3">
+                <i class="fas fa-flask mr-1"></i>Scenario Configuration
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Simulated volume</label>
+                    <select id="volumeMultiplier" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                        <option value="0.25">+25% of real volume</option>
+                        <option value="0.5" selected>+50% of real volume</option>
+                        <option value="1">+100% of real volume</option>
+                        <option value="2">+200% of real volume</option>
                     </select>
                 </div>
-                <div class="h-10 w-[1px] bg-gray-200 hidden sm:block"></div>
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-2">
-                        <span class="relative flex h-2 w-2">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                        </span>
-                        <span class="text-xs font-medium text-gray-600" id="simStatus">Engine Ready</span>
-                    </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Surge in crime type</label>
+                    <select id="surgeCategory" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                        <option value="">None</option>
+                        @foreach($crimeCategories as $category)
+                            <option value="{{ $category->category_name }}">{{ $category->category_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Time-based spike</label>
+                    <select id="timeSpike" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                        <option value="">None</option>
+                        <option value="0,5">Early morning (00:00-05:59)</option>
+                        <option value="6,11">Morning (06:00-11:59)</option>
+                        <option value="12,17">Afternoon (12:00-17:59)</option>
+                        <option value="18,23">Evening/Night (18:00-23:59)</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <label class="flex items-center gap-2 text-sm text-gray-700 pb-2 cursor-pointer">
+                        <input type="checkbox" id="locationSurge" class="rounded border-gray-300 text-alertara-700 focus:ring-alertara-500">
+                        <span>Concentrate on top hotspot</span>
+                    </label>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="flex flex-col lg:flex-row gap-6">
-        <!-- Sidebar: Intervention Controls -->
-        <aside class="w-full lg:w-80 flex-shrink-0 space-y-6">
-            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden lg:sticky lg:top-20 transition-all hover:shadow-md">
-                <div class="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
-                    <h2 class="font-bold text-gray-900 flex items-center gap-2 text-sm">
-                        <i class="fas fa-tools text-blue-600"></i> What-If Interventions
-                    </h2>
-                    <button id="resetInterventions" class="text-[10px] bg-white border border-gray-200 px-2 py-1 rounded hover:bg-gray-50 transition-colors text-gray-500 font-bold uppercase tracking-tighter">Reset</button>
-                </div>
-                
-                <div class="p-5 space-y-6">
-                    <!-- Police Patrol Level -->
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center">
-                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Police Patrol Level</label>
-                            <span id="patrolLabel" class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">Medium</span>
-                        </div>
-                        <div class="relative pt-1">
-                            <input type="range" id="patrolSlider" min="0" max="2" value="1" step="1" class="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600">
-                            <div class="flex justify-between text-[10px] text-gray-400 mt-2 px-1">
-                                <span>Low</span>
-                                <span>Medium</span>
-                                <span>High</span>
-                            </div>
-                        </div>
-                    </div>
+    <!-- Loading -->
+    <div id="loadingState" class="hidden bg-white rounded-xl border border-gray-200 p-12 text-center">
+        <i class="fas fa-spinner fa-spin text-3xl text-alertara-700 mb-3"></i>
+        <div class="text-sm font-semibold text-gray-900">Analyzing incident patterns&hellip;</div>
+    </div>
 
-                    <!-- CCTV Coverage -->
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center">
-                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">CCTV Infrastructure</label>
-                        </div>
-                        <select id="cctvSelect" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
-                            <option value="none">No Coverage</option>
-                            <option value="partial">Partial (Strategic Points)</option>
-                            <option value="full" selected>Full (High Density)</option>
-                            <option value="custom">-- Add Custom Value --</option>
-                        </select>
-                        <!-- Custom CCTV Input (Hidden by default) -->
-                        <div id="customCctvEntry" class="hidden animate-fade-in">
-                            <div class="relative">
-                                <input type="number" id="customCctvValue" placeholder="E.g. 5 New CCTV Units" class="w-full pl-3 pr-10 py-2 border border-blue-200 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                                <span class="absolute right-3 top-2.5 text-xs text-gray-400">Units</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Environment Toggles -->
-                    <div class="space-y-3">
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-3">Environmental Safety</label>
-                        
-                        <!-- Street Lighting -->
-                        <label class="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-xl cursor-pointer hover:bg-white hover:border-blue-200 transition-all group">
-                            <span class="flex flex-col">
-                                <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700">Street Lighting</span>
-                                <span class="text-[10px] text-gray-400">Reduce concealment spots</span>
-                            </span>
-                            <div class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="lightingToggle" class="sr-only peer" checked>
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </div>
-                        </label>
-
-                        <!-- Community Watch -->
-                        <label class="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-xl cursor-pointer hover:bg-white hover:border-blue-200 transition-all group">
-                            <span class="flex flex-col">
-                                <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700">Community Watch</span>
-                                <span class="text-[10px] text-gray-400">Resident vigilance programs</span>
-                            </span>
-                            <div class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="communityToggle" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </div>
-                        </label>
-
-                        <!-- Restricted Access -->
-                        <label class="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-xl cursor-pointer hover:bg-white hover:border-blue-200 transition-all group">
-                            <span class="flex flex-col">
-                                <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700">Checkpoints</span>
-                                <span class="text-[10px] text-gray-400">Entry/Exit monitoring</span>
-                            </span>
-                            <div class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="accessToggle" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </div>
-                        </label>
-                    </div>
-
-                    <button id="runSimulation" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 mt-4 overflow-hidden relative group">
-                        <span class="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-10 transition-opacity"></span>
-                        <i class="fas fa-play text-xs" id="runIcon"></i> 
-                        <span id="runText">Run Simulation</span>
-                    </button>
-                </div>
+    <!-- Error -->
+    <div id="errorState" class="hidden bg-red-50 border border-red-200 rounded-xl p-6">
+        <div class="flex items-start gap-3">
+            <i class="fas fa-triangle-exclamation text-red-600 mt-0.5"></i>
+            <div>
+                <div class="font-bold text-red-900 text-sm">Analysis failed</div>
+                <p id="errorMessage" class="text-red-800 text-xs mt-1"></p>
             </div>
-            
-            <!-- Quick Insights Card -->
-            <div class="bg-gradient-to-br from-gray-900 to-gray-800 p-6 rounded-2xl border border-gray-700 shadow-xl text-white">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Real-time Metrics</h3>
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs text-gray-300">Total Simulated Crimes</span>
-                        <span id="metricTotal" class="text-xl font-bold text-blue-400 animate-pulse">48</span>
-                    </div>
-                    <div class="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
-                        <div id="metricTotalBar" class="bg-blue-400 h-full w-[48%] transition-all duration-700 overflow-hidden"></div>
-                    </div>
-                    
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs text-gray-300">Hotspots Detected</span>
-                        <span id="metricHotspots" class="text-xl font-bold text-amber-400">4</span>
-                    </div>
-                    <div class="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
-                        <div id="metricHotspotsBar" class="bg-amber-400 h-full w-[25%] transition-all duration-700 overflow-hidden"></div>
-                    </div>
-                    
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs text-gray-300">High-Risk Coverage</span>
-                        <span id="metricRisk" class="text-xl font-bold text-red-500">22%</span>
-                    </div>
-                    <div class="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
-                        <div id="metricRiskBar" class="bg-red-500 h-full w-[22%] transition-all duration-700 overflow-hidden"></div>
-                    </div>
-                </div>
-            </div>
-        </aside>
+        </div>
+    </div>
 
-        <!-- Main Display: Map & Outputs -->
-        <div class="flex-grow space-y-6">
-            <!-- Applied Filters Badge Section -->
-            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm min-h-[60px] flex flex-wrap items-center gap-2">
-                <span class="text-[10px] font-bold text-gray-400 uppercase mr-2 tracking-widest">Active Filters:</span>
-                <div id="activeFilters" class="flex flex-wrap gap-2">
-                    <!-- Badges populated by JS -->
-                    <span class="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-[10px] font-bold flex items-center gap-2">
-                        <i class="fas fa-robot text-[8px]"></i> Predictive Mode
-                    </span>
-                    <span class="px-3 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-full text-[10px] font-bold flex items-center gap-2">
-                        <i class="fas fa-lightbulb text-[8px]"></i> Street Lighting ON
-                    </span>
+    <!-- Results -->
+    <div id="results" class="hidden space-y-6">
+
+        <!-- Data provenance -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="bg-gradient-to-br from-alertara-700 to-alertara-600 text-white p-4 rounded-lg">
+                <div class="text-xs opacity-90 mb-1">Real Records</div>
+                <div id="statReal" class="text-2xl font-bold">0</div>
+            </div>
+            <div id="simStatCard" class="bg-gradient-to-br from-amber-600 to-amber-500 text-white p-4 rounded-lg opacity-40">
+                <div class="text-xs opacity-90 mb-1">Simulated Records</div>
+                <div id="statSimulated" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-gradient-to-br from-blue-600 to-blue-500 text-white p-4 rounded-lg">
+                <div class="text-xs opacity-90 mb-1">Analyzed Total</div>
+                <div id="statTotal" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-gradient-to-br from-gray-700 to-gray-600 text-white p-4 rounded-lg">
+                <div class="text-xs opacity-90 mb-1">Period</div>
+                <div id="statPeriod" class="text-lg font-bold">&mdash;</div>
+            </div>
+        </div>
+
+        <!-- Low-confidence warning -->
+        <div id="confidenceWarning" class="hidden rounded-xl border border-orange-300 bg-orange-50 p-4">
+            <div class="flex items-start gap-3">
+                <i class="fas fa-circle-info text-orange-600 mt-0.5"></i>
+                <p id="confidenceNote" class="text-orange-900 text-xs"></p>
+            </div>
+        </div>
+
+        <!-- Summary insights -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-lightbulb mr-2 text-alertara-600"></i>Summary Insights</h2>
+            <div id="insightsList" class="space-y-3"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Trends -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold text-gray-900"><i class="fas fa-chart-line mr-2 text-alertara-600"></i>Crime Trends</h2>
+                    <span id="trendBadge" class="px-3 py-1 rounded-full text-xs font-bold">&mdash;</span>
                 </div>
-                <div id="noFilters" class="hidden text-xs text-gray-400 italic font-medium">No active intervention filters applied.</div>
+                <p id="trendExplanation" class="text-xs text-gray-600 mb-4"></p>
+
+                <div class="flex gap-2 mb-3">
+                    <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="daily">Daily</button>
+                    <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="weekly">Weekly</button>
+                    <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="monthly">Monthly</button>
+                </div>
+                <div id="trendChart" class="overflow-x-auto"></div>
             </div>
 
-            <!-- Visualization Section -->
-            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[650px] relative">
-                <!-- Map Controls Overlay -->
-                <div class="absolute top-4 left-4 z-10 flex flex-col gap-2">
-                    <button class="w-10 h-10 bg-white border border-gray-200 rounded-xl shadow-lg flex items-center justify-center text-gray-600 hover:text-blue-600 transition-all hover:scale-105">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                    <button class="w-10 h-10 bg-white border border-gray-200 rounded-xl shadow-lg flex items-center justify-center text-gray-600 hover:text-blue-600 transition-all hover:scale-105">
-                        <i class="fas fa-minus"></i>
-                    </button>
-                </div>
-                
-                <div class="absolute top-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
-                    <div class="bg-white/95 backdrop-blur-sm p-4 rounded-2xl border border-gray-200 shadow-xl space-y-3 min-w-[180px]">
-                        <h4 class="text-[10px] font-bold text-gray-400 uppercase border-b border-gray-100 pb-2">Visualization Legend</h4>
-                        <div class="space-y-2">
-                            <div class="flex items-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
-                                <span class="text-[10px] font-bold text-gray-600">Historical Crimes</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-red-500 border-2 border-white shadow-sm ring-4 ring-red-100"></div>
-                                <span class="text-[10px] font-bold text-gray-600">Simulated Crimes</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <div class="w-10 h-4 bg-orange-100/50 border border-dashed border-orange-300 rounded-sm"></div>
-                                <span class="text-[10px] font-bold text-gray-600">Identified Hotspot</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <!-- Crime type distribution -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-chart-pie mr-2 text-alertara-600"></i>Crime Type Distribution</h2>
+                <div id="typeDistribution" class="space-y-2 max-h-96 overflow-y-auto"></div>
+            </div>
+        </div>
 
-                <!-- Simulation Progress Overlay -->
-                <div id="simProcessing" class="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 hidden items-center justify-center flex-col gap-6 animate-fade-in">
-                    <div class="relative w-24 h-24">
-                        <div class="absolute inset-0 border-4 border-gray-100 rounded-full"></div>
-                        <div class="absolute inset-0 border-4 border-t-blue-600 rounded-full animate-spin"></div>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <i class="fas fa-brain text-blue-600 text-2xl animate-pulse"></i>
-                        </div>
-                    </div>
-                    <div class="text-center">
-                        <h3 class="text-lg font-bold text-gray-900 mb-1">Recalculating Patterns</h3>
-                        <p class="text-xs text-gray-500" id="processingText">Applying interventions through Predictive Engine...</p>
-                    </div>
-                </div>
-
-                <!-- Map Container Placeholder -->
-                <div id="mapCanvas" class="flex-grow bg-[#f0f2f5] overflow-hidden relative group transition-opacity duration-500">
-                    <!-- SVG-Based Fake Map Grid -->
-                    <svg class="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                        <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
-                            <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(0,0,0,0.03)" stroke-width="1"/>
-                        </pattern>
-                        <rect width="100%" height="100%" fill="url(#grid)" />
-                        
-                        <!-- Simple Road Layout -->
-                        <g opacity="0.4" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round">
-                            <path d="M 0,200 Q 400,200 800,400" />
-                            <path d="M 400,0 L 400,800" />
-                            <path d="M 0,550 L 1000,550" />
-                        </g>
-
-                        <!-- Hotspot Circles (Dynamic) -->
-                        <g id="hotspotGroup" class="transition-all duration-[1500ms]">
-                            <!-- SVG render updated by JS -->
-                        </g>
-
-                        <!-- Marker Particles (Dynamic) -->
-                        <g id="markerGroup" class="transition-all duration-[1000ms]">
-                            <!-- Individual markers for Historical & simulated -->
-                        </g>
-                    </svg>
-                    
-                    <!-- Floating Coordinates -->
-                    <div class="absolute bottom-6 left-6 text-[9px] font-mono text-gray-400 bg-white/60 px-3 py-1 rounded-full border border-gray-200 backdrop-blur-sm">
-                        VIEWPORT CACHE: 14.6542° N, 121.0336° E
-                    </div>
-                </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Time patterns -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-clock mr-2 text-alertara-600"></i>Time-Based Patterns</h2>
+                <div id="timeSummary" class="grid grid-cols-2 gap-3 mb-5"></div>
+                <div class="text-xs font-bold text-gray-500 uppercase mb-2">By hour of day</div>
+                <div id="hourChart" class="mb-5"></div>
+                <div class="text-xs font-bold text-gray-500 uppercase mb-2">By day of week</div>
+                <div id="dowChart"></div>
             </div>
 
-            <!-- Simulation Intelligence Report -->
-            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div class="p-5 border-b border-gray-200 bg-gray-50/50 flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
-                        <i class="fas fa-file-contract"></i>
-                    </div>
-                    <div>
-                        <h2 class="font-bold text-gray-900 leading-tight">Simulation Intelligence Report</h2>
-                        <span class="text-[10px] text-gray-400 font-bold uppercase">Dynamic Analysis Output</span>
-                    </div>
-                </div>
-                <div class="p-8">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
-                        <div class="space-y-6">
-                            <div>
-                                <h4 class="text-[11px] font-extrabold text-blue-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                                    Intervention Effect Analysis
-                                </h4>
-                                <div id="analysisText" class="p-6 bg-blue-50/50 border border-blue-100 rounded-2xl leading-relaxed text-sm text-gray-700 italic border-l-4">
-                                    Current simulation predicts that by enabling <span class="font-bold text-blue-700">Full CCTV Coverage</span> and <span class="font-bold text-blue-700">Street Lighting</span>, property-related crimes are likely to decrease by <span class="font-bold text-green-600 text-lg">18-22%</span> in the central residential block.
-                                </div>
-                            </div>
-                            
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
-                                    <span class="block text-[10px] text-gray-400 font-bold uppercase mb-2">Sim Confidence</span>
-                                    <div class="flex items-baseline gap-1">
-                                        <span id="confidenceValue" class="text-2xl font-bold text-gray-900">88.5</span>
-                                        <span class="text-xs text-gray-400">%</span>
-                                    </div>
-                                    <div class="mt-3 w-full bg-gray-200 h-1 rounded-full overflow-hidden">
-                                        <div class="bg-blue-600 h-full w-[88%]"></div>
-                                    </div>
-                                </div>
-                                <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
-                                    <span class="block text-[10px] text-gray-400 font-bold uppercase mb-2">Crime Displacement</span>
-                                    <div class="flex items-baseline gap-1 text-amber-600">
-                                        <span id="displacementValue" class="text-2xl font-bold">Low</span>
-                                    </div>
-                                    <div class="mt-3 w-full bg-gray-200 h-1 rounded-full overflow-hidden">
-                                        <div class="bg-amber-500 h-full w-[30%]"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            <!-- Hotspots -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-location-crosshairs mr-2 text-alertara-600"></i>Ranked Hotspots</h2>
+                <div id="hotspotList" class="space-y-2 max-h-[28rem] overflow-y-auto"></div>
+            </div>
+        </div>
 
-                        <div class="space-y-6">
-                            <h4 class="text-[11px] font-extrabold text-amber-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-                                Top Predicted Impacts
-                            </h4>
-                            <div id="impactList" class="space-y-4">
-                                <!-- Populated by JS -->
-                                <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-gray-50/80 transition-all border border-transparent hover:border-gray-100 group">
-                                    <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0 group-hover:scale-110 transition-transform">
-                                        <i class="fas fa-arrow-down text-xs"></i>
-                                    </div>
-                                    <div>
-                                        <span class="block text-sm font-bold text-gray-800">Theft Suppression</span>
-                                        <p class="text-xs text-gray-500">Predicted reduction in Bagong Pag-asa central market area due to checkpoints.</p>
-                                    </div>
-                                </div>
-                                <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-gray-50/80 transition-all border border-transparent hover:border-gray-100 group">
-                                    <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0 group-hover:scale-110 transition-transform">
-                                        <i class="fas fa-exclamation-circle text-xs"></i>
-                                    </div>
-                                    <div>
-                                        <span class="block text-sm font-bold text-gray-800">Night-time Vulnerability</span>
-                                        <p class="text-xs text-gray-500">Despite lighting, unauthorized access persists in northern perimeter parks.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Repeat clusters -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-2"><i class="fas fa-layer-group mr-2 text-alertara-600"></i>Repeat / Cluster Incidents</h2>
+                <p id="clusterRule" class="text-xs text-gray-500 mb-4"></p>
+                <div id="clusterList" class="space-y-3 max-h-96 overflow-y-auto"></div>
+            </div>
+
+            <!-- Anomalies -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-2"><i class="fas fa-wave-square mr-2 text-alertara-600"></i>Anomaly Detection</h2>
+                <p id="anomalyRule" class="text-xs text-gray-500 mb-4"></p>
+                <div id="anomalyList" class="space-y-2 max-h-96 overflow-y-auto"></div>
             </div>
         </div>
     </div>
@@ -345,301 +230,319 @@
 
 @push('scripts')
 <script>
-/**
- * Pattern Detection Simulation - calls App\Services\PatternSimulationService via
- * POST /pattern-detection/simulate. Baseline/simulated markers and recommendations
- * are real data; intervention effects are research-based estimates (see service).
- */
-document.addEventListener('DOMContentLoaded', function() {
-    const runBtn = document.getElementById('runSimulation');
-    const simProcessing = document.getElementById('simProcessing');
-    const analysisText = document.getElementById('analysisText');
-    const metricTotal = document.getElementById('metricTotal');
-    const metricHotspots = document.getElementById('metricHotspots');
-    const metricRisk = document.getElementById('metricRisk');
-    const activeFiltersContainer = document.getElementById('activeFilters');
-    const noFiltersMsg = document.getElementById('noFilters');
-    const impactList = document.getElementById('impactList');
-    const confidenceValue = document.getElementById('confidenceValue');
-    const displacementValue = document.getElementById('displacementValue');
+(function () {
+    'use strict';
 
-    const simMode = document.getElementById('simMode');
-    const patrolSlider = document.getElementById('patrolSlider');
-    const patrolLabel = document.getElementById('patrolLabel');
-    const cctvSelect = document.getElementById('cctvSelect');
-    const customCctvEntry = document.getElementById('customCctvEntry');
-    const customCctvValue = document.getElementById('customCctvValue');
-    const lightingToggle = document.getElementById('lightingToggle');
-    const communityToggle = document.getElementById('communityToggle');
-    const accessToggle = document.getElementById('accessToggle');
-    const resetBtn = document.getElementById('resetInterventions');
+    const ANALYZE_URL = @json(route('pattern-detection.analyze'));
 
-    const SIMULATE_URL = '{{ route('pattern-detection.simulate') }}';
+    let simulationOn = false;
+    let latest = null;
+    let trendGrain = 'daily';
 
-    function showProcessing(show) {
-        if (show) {
-            simProcessing.classList.remove('hidden');
-            simProcessing.classList.add('flex');
-            runBtn.disabled = true;
-            runBtn.classList.add('opacity-70');
-        } else {
-            simProcessing.classList.remove('flex');
-            simProcessing.classList.add('hidden');
-            runBtn.disabled = false;
-            runBtn.classList.remove('opacity-70');
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const SIM_TAG = '<span class="inline-block px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold ml-2">SIMULATED</span>';
+
+    // ---------- simulation toggle ----------
+    function setSimulation(on) {
+        simulationOn = on;
+        const toggle = $('simToggle'), knob = $('simKnob');
+
+        toggle.setAttribute('aria-checked', String(on));
+        toggle.classList.toggle('bg-amber-500', on);
+        toggle.classList.toggle('bg-gray-300', !on);
+        knob.classList.toggle('translate-x-6', on);
+        knob.classList.toggle('translate-x-0', !on);
+
+        $('simStateLabel').textContent = on ? 'ON — real + simulated' : 'OFF — real data only';
+        $('simStateLabel').className = on ? 'text-sm font-bold text-amber-700' : 'text-sm font-bold text-gray-700';
+
+        $('simBanner').classList.toggle('hidden', !on);
+        $('scenarioPanel').classList.toggle('hidden', !on);
+        $('simStatCard').classList.toggle('opacity-40', !on);
+    }
+
+    // ---------- run ----------
+    async function run() {
+        $('loadingState').classList.remove('hidden');
+        $('results').classList.add('hidden');
+        $('errorState').classList.add('hidden');
+
+        const params = new URLSearchParams({ days: $('daysSelect').value });
+
+        if (simulationOn) {
+            params.set('simulation', '1');
+            params.set('volume_multiplier', $('volumeMultiplier').value);
+
+            if ($('surgeCategory').value) {
+                params.set('surge_category', $('surgeCategory').value);
+                params.set('surge_category_multiplier', '3');
+            }
+            if ($('timeSpike').value) {
+                const [start, end] = $('timeSpike').value.split(',');
+                params.set('spike_start_hour', start);
+                params.set('spike_end_hour', end);
+                params.set('spike_multiplier', '3');
+            }
+            if ($('locationSurge').checked) {
+                params.set('location_surge', '1');
+                params.set('location_surge_multiplier', '3');
+            }
+        }
+
+        try {
+            const res = await fetch(ANALYZE_URL + '?' + params, { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.message || data.error);
+
+            latest = data;
+            render(data);
+
+            $('loadingState').classList.add('hidden');
+            $('results').classList.remove('hidden');
+        } catch (e) {
+            console.error('Pattern detection failed:', e);
+            $('loadingState').classList.add('hidden');
+            $('errorMessage').textContent = e.message;
+            $('errorState').classList.remove('hidden');
         }
     }
 
-    function currentSettings() {
-        return {
-            mode: simMode.value,
-            time_period_days: 90,
-            patrol: parseInt(patrolSlider.value),
-            cctv: cctvSelect.value,
-            cctv_custom_units: customCctvValue.value || 0,
-            lighting: lightingToggle.checked,
-            community: communityToggle.checked,
-            checkpoints: accessToggle.checked,
-            stress_multiplier: 1.5,
-        };
+    // ---------- render ----------
+    function render(d) {
+        const m = d.meta;
+
+        $('statReal').textContent = m.real_count.toLocaleString();
+        $('statSimulated').textContent = m.simulated_count.toLocaleString();
+        $('statTotal').textContent = m.total_count.toLocaleString();
+        $('statPeriod').textContent = m.period_days + 'd';
+
+        $('confidenceWarning').classList.toggle('hidden', !m.low_confidence);
+        if (m.low_confidence) $('confidenceNote').textContent = m.confidence_note;
+
+        renderInsights(d.insights);
+        renderTrend(d.trends);
+        renderTypes(d.type_distribution, m.total_count);
+        renderTime(d.time_patterns);
+        renderHotspots(d.hotspots);
+        renderClusters(d.repeat_clusters);
+        renderAnomalies(d.anomalies);
     }
 
-    function computeBounds(markerLists) {
-        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-        markerLists.flat().forEach(m => {
-            if (m.lat < minLat) minLat = m.lat;
-            if (m.lat > maxLat) maxLat = m.lat;
-            if (m.lng < minLng) minLng = m.lng;
-            if (m.lng > maxLng) maxLng = m.lng;
-        });
-        if (!isFinite(minLat)) {
-            return { minLat: 14.6, maxLat: 14.8, minLng: 121.0, maxLng: 121.1 };
-        }
-        return { minLat, maxLat, minLng, maxLng };
-    }
-
-    function project(lat, lng, bounds) {
-        const xRatio = (lng - bounds.minLng) / ((bounds.maxLng - bounds.minLng) || 1);
-        const yRatio = (bounds.maxLat - lat) / ((bounds.maxLat - bounds.minLat) || 1);
-        return { x: 50 + xRatio * 700, y: 50 + yRatio * 550 };
-    }
-
-    function renderMap(baselineMarkers, simulatedMarkers, hotspots) {
-        const markerGroup = document.getElementById('markerGroup');
-        const hotspotGroup = document.getElementById('hotspotGroup');
-        markerGroup.innerHTML = '';
-        hotspotGroup.innerHTML = '';
-
-        const bounds = computeBounds([baselineMarkers, simulatedMarkers, hotspots.map(h => ({ lat: h.lat, lng: h.lng }))]);
-
-        hotspots.forEach(h => {
-            const p = project(h.lat, h.lng, bounds);
-            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            circle.setAttribute("cx", p.x);
-            circle.setAttribute("cy", p.y);
-            circle.setAttribute("r", Math.min(90, 30 + h.incident_count * 8));
-            circle.setAttribute("fill", "rgba(245, 158, 11, 0.08)");
-            circle.setAttribute("stroke", "rgba(245, 158, 11, 0.3)");
-            circle.setAttribute("stroke-width", "1.5");
-            circle.setAttribute("stroke-dasharray", "4,2");
-            circle.classList.add("animate-pulse");
-            const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-            title.textContent = `${h.barangay_name}: ${h.incident_count} incidents`;
-            circle.appendChild(title);
-            hotspotGroup.appendChild(circle);
-        });
-
-        baselineMarkers.forEach(m => {
-            const p = project(m.lat, m.lng, bounds);
-            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            circle.setAttribute("cx", p.x);
-            circle.setAttribute("cy", p.y);
-            circle.setAttribute("r", "2.5");
-            circle.setAttribute("fill", "#94a3b8");
-            circle.setAttribute("opacity", "0.6");
-            circle.setAttribute("stroke", "#fff");
-            circle.setAttribute("stroke-width", "0.5");
-            markerGroup.appendChild(circle);
-        });
-
-        simulatedMarkers.forEach(m => {
-            const p = project(m.lat, m.lng, bounds);
-            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            circle.setAttribute("cx", p.x);
-            circle.setAttribute("cy", p.y);
-            circle.setAttribute("r", "3.5");
-            circle.setAttribute("fill", "#ef4444");
-            circle.setAttribute("stroke", "#fff");
-            circle.setAttribute("stroke-width", "1");
-            circle.classList.add("transition-all", "duration-1000");
-            circle.style.cursor = "pointer";
-            const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-            title.textContent = `${m.category} - ${m.barangay}`;
-            circle.appendChild(title);
-            circle.addEventListener('mouseover', () => circle.setAttribute('r', '6'));
-            circle.addEventListener('mouseout', () => circle.setAttribute('r', '3.5'));
-            markerGroup.appendChild(circle);
-        });
-    }
-
-    function renderRecommendations(recommendations) {
-        if (!recommendations || !recommendations.length) {
-            impactList.innerHTML = `<p class="text-xs text-gray-400 italic">No barangay-level recommendations for the current data.</p>`;
+    function renderInsights(list) {
+        if (!list || !list.length) {
+            $('insightsList').innerHTML = '<p class="text-sm text-gray-500">No insights available.</p>';
             return;
         }
 
-        impactList.innerHTML = recommendations.map(rec => {
-            const top = rec.recommended_interventions && rec.recommended_interventions[0];
-            if (!top) {
-                return `
-                    <div class="flex items-start gap-4 p-4 rounded-xl border border-transparent">
-                        <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 flex-shrink-0">
-                            <i class="fas fa-circle-info text-xs"></i>
-                        </div>
-                        <div>
-                            <span class="block text-sm font-bold text-gray-800">${rec.barangay_name}</span>
-                            <p class="text-xs text-gray-500">${rec.incident_count} incidents, mostly ${rec.dominant_category ?? 'mixed types'}. No clear-fit intervention from current data.</p>
-                        </div>
-                    </div>`;
-            }
-            return `
-                <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-gray-50/80 transition-all border border-transparent hover:border-gray-100 group">
-                    <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <i class="fas fa-lightbulb text-xs"></i>
-                    </div>
-                    <div>
-                        <span class="block text-sm font-bold text-gray-800">${rec.barangay_name}: Add ${top.label}</span>
-                        <p class="text-xs text-gray-500">${rec.incident_count} incidents (mostly ${rec.dominant_category ?? 'mixed'}, ${rec.night_ratio_percent}% at night). Could address ~${top.addressable_incidents} incidents (est. ${top.estimated_reduction} fewer). <span class="italic">${top.source}</span></p>
-                    </div>
-                </div>`;
+        $('insightsList').innerHTML = list.map(i => {
+            const lowConf = i.confidence === 'low';
+            return '<div class="flex items-start gap-3 p-3 rounded-lg border ' +
+                (i.simulated ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-gray-50') + '">' +
+                '<i class="fas ' + (i.simulated ? 'fa-flask text-amber-600' : 'fa-circle-check text-alertara-600') + ' mt-0.5"></i>' +
+                '<div class="flex-1 min-w-0">' +
+                    '<div class="text-sm font-semibold text-gray-900">' + esc(i.text) +
+                        (i.simulated ? SIM_TAG : '') +
+                        (lowConf ? '<span class="inline-block px-1.5 py-0.5 bg-orange-200 text-orange-900 rounded text-[10px] font-bold ml-2">LOW CONFIDENCE</span>' : '') +
+                    '</div>' +
+                    '<div class="text-xs text-gray-500 mt-1">Based on: ' + esc(i.based_on) + '</div>' +
+                '</div></div>';
         }).join('');
     }
 
-    function updateFilterBadges(settings) {
-        const createBadge = (text, icon, colorClass = 'bg-blue-50 text-blue-700 border-blue-100') => {
-            return `<span class="px-3 py-1 ${colorClass} border rounded-full text-[10px] font-bold animate-fade-in flex items-center gap-2">
-                <i class="${icon} text-[8px]"></i> ${text}
-            </span>`;
+    function renderTrend(t) {
+        const dir = t.direction;
+        const badge = $('trendBadge');
+        const styles = {
+            increasing: 'bg-red-100 text-red-800',
+            decreasing: 'bg-green-100 text-green-800',
+            stable: 'bg-gray-100 text-gray-700'
         };
+        badge.className = 'px-3 py-1 rounded-full text-xs font-bold ' + (styles[dir.label] || 'bg-gray-100 text-gray-700');
+        badge.textContent = dir.label.toUpperCase();
+        $('trendExplanation').textContent = dir.explanation;
 
-        let html = '';
-        html += createBadge(simMode.selectedOptions[0].text, 'fas fa-server');
+        document.querySelectorAll('.trend-tab').forEach(tab => {
+            const active = tab.dataset.grain === trendGrain;
+            tab.className = 'trend-tab px-3 py-1 text-xs font-semibold rounded-lg border ' +
+                (active ? 'bg-alertara-700 text-white border-alertara-700' : 'bg-white text-gray-600 border-gray-300');
+        });
 
-        if (settings.patrol === 2) html += createBadge('High Patrols', 'fas fa-user-shield');
-        if (settings.patrol === 1) html += createBadge('Medium Patrols', 'fas fa-user-shield');
-
-        if (settings.cctv === 'full') html += createBadge('Full CCTV', 'fas fa-video');
-        if (settings.cctv === 'partial') html += createBadge('Partial CCTV', 'fas fa-video');
-        if (settings.cctv === 'custom' && settings.cctv_custom_units) html += createBadge(`+${settings.cctv_custom_units} CCTV Units`, 'fas fa-video', 'bg-purple-50 text-purple-700 border-purple-100');
-
-        if (settings.lighting) html += createBadge('Street Lighting', 'fas fa-lightbulb', 'bg-amber-50 text-amber-700 border-amber-100');
-        if (settings.community) html += createBadge('Watch Program', 'fas fa-users');
-        if (settings.checkpoints) html += createBadge('Checkpoints', 'fas fa-door-closed');
-
-        activeFiltersContainer.innerHTML = html;
-        noFiltersMsg.classList.toggle('hidden', !!html);
+        drawBars('trendChart', t[trendGrain] || [], '#274d4c');
     }
 
-    function renderResult(result, settings) {
-        metricTotal.innerText = result.simulated.total_incidents;
-        const totalBarPct = Math.min(100, (result.simulated.total_incidents / Math.max(1, result.baseline.total_incidents * 2)) * 100);
-        document.getElementById('metricTotalBar').style.width = totalBarPct + '%';
-
-        metricHotspots.innerText = result.simulated.hotspots.length;
-        document.getElementById('metricHotspotsBar').style.width = Math.min(100, (result.simulated.hotspots.length / 10) * 100) + '%';
-
-        const risk = result.metrics.high_risk_coverage_percent ?? 0;
-        metricRisk.innerText = risk + '%';
-        document.getElementById('metricRiskBar').style.width = risk + '%';
-
-        analysisText.textContent = result.analysis_text;
-        confidenceValue.innerText = result.metrics.confidence_percent;
-        displacementValue.innerText = result.metrics.displacement_risk;
-
-        renderMap(result.baseline.markers, result.simulated.markers, result.simulated.hotspots);
-        renderRecommendations(result.recommendations);
-        updateFilterBadges(settings);
-    }
-
-    async function runSimulation() {
-        showProcessing(true);
-        const settings = currentSettings();
-
-        try {
-            const res = await fetch(SIMULATE_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                },
-                body: JSON.stringify(settings),
-            });
-            const result = await res.json();
-            if (!res.ok) {
-                throw new Error(result.message || 'Simulation request failed');
-            }
-            renderResult(result, settings);
-        } catch (e) {
-            console.error(e);
-            analysisText.textContent = 'Failed to run simulation. Please try again.';
-        } finally {
-            showProcessing(false);
+    /** Inline bar chart — no chart library needed */
+    function drawBars(targetId, series, color) {
+        const el = $(targetId);
+        if (!series.length) {
+            el.innerHTML = '<p class="text-sm text-gray-500 py-8 text-center">No data in this period.</p>';
+            return;
         }
+
+        const max = Math.max.apply(null, series.map(s => s.count).concat([1]));
+        const barWidth = series.length > 60 ? 4 : series.length > 30 ? 8 : 18;
+
+        el.innerHTML =
+            '<div class="flex items-end gap-[2px]" style="height:160px; min-width:' + (series.length * (barWidth + 2)) + 'px">' +
+            series.map(s =>
+                '<div class="flex-1 flex flex-col justify-end items-center group relative" style="min-width:' + barWidth + 'px">' +
+                    '<div class="w-full rounded-t transition-all hover:opacity-80" style="height:' +
+                        ((s.count / max) * 100) + '%; background:' + color + '; min-height:' + (s.count > 0 ? '2px' : '0') + '"></div>' +
+                    '<div class="absolute bottom-full mb-1 hidden group-hover:block bg-gray-900 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">' +
+                        esc(s.label) + ': ' + s.count +
+                    '</div>' +
+                '</div>').join('') +
+            '</div>' +
+            '<div class="flex justify-between text-[10px] text-gray-400 mt-1">' +
+                '<span>' + esc(series[0].label) + '</span>' +
+                '<span>' + esc(series[series.length - 1].label) + '</span>' +
+            '</div>';
     }
 
-    // --- EVENTS ---
+    function renderTypes(types, total) {
+        if (!types.length) {
+            $('typeDistribution').innerHTML = '<p class="text-sm text-gray-500">No records.</p>';
+            return;
+        }
 
-    patrolSlider.oninput = function() {
-        const labels = ['Low', 'Medium', 'High'];
-        patrolLabel.innerText = labels[this.value];
-    };
+        $('typeDistribution').innerHTML = types.map(t =>
+            '<div>' +
+                '<div class="flex justify-between items-center text-xs mb-1">' +
+                    '<span class="font-semibold text-gray-800">' + esc(t.category) +
+                        (t.simulated_count > 0 ? ' <span class="text-amber-700 font-normal">(' + t.simulated_count + ' sim)</span>' : '') +
+                    '</span>' +
+                    '<span class="text-gray-500">' + t.count + ' · ' + t.percent + '%</span>' +
+                '</div>' +
+                '<div class="h-2 bg-gray-100 rounded-full overflow-hidden flex">' +
+                    '<div style="width:' + ((t.real_count / Math.max(1, total)) * 100) + '%" class="bg-alertara-600 h-full"></div>' +
+                    '<div style="width:' + ((t.simulated_count / Math.max(1, total)) * 100) + '%" class="bg-amber-400 h-full"></div>' +
+                '</div>' +
+            '</div>').join('');
+    }
 
-    cctvSelect.onchange = function() {
-        customCctvEntry.classList.toggle('hidden', this.value !== 'custom');
-    };
+    function renderTime(tp) {
+        const wk = tp.weekday_vs_weekend;
 
-    runBtn.onclick = runSimulation;
+        $('timeSummary').innerHTML =
+            '<div class="bg-gray-50 border border-gray-200 rounded-lg p-3">' +
+                '<div class="text-[10px] font-bold text-gray-400 uppercase">Peak Hour</div>' +
+                '<div class="text-lg font-bold text-gray-900">' + (tp.peak_hour_label || '—') + '</div>' +
+                '<div class="text-[11px] text-gray-500">' + tp.peak_hour_count + ' incidents</div>' +
+            '</div>' +
+            '<div class="bg-gray-50 border border-gray-200 rounded-lg p-3">' +
+                '<div class="text-[10px] font-bold text-gray-400 uppercase">Peak Day</div>' +
+                '<div class="text-lg font-bold text-gray-900">' + esc(tp.peak_day || '—') + '</div>' +
+                '<div class="text-[11px] text-gray-500">' + tp.peak_day_count + ' incidents</div>' +
+            '</div>' +
+            '<div class="bg-gray-50 border border-gray-200 rounded-lg p-3 col-span-2">' +
+                '<div class="text-[10px] font-bold text-gray-400 uppercase">Weekday vs Weekend</div>' +
+                '<div class="text-sm font-bold text-gray-900 capitalize">' + esc(wk.busier) + 's are busier</div>' +
+                '<div class="text-[11px] text-gray-500">' + wk.weekday_daily_avg + '/weekday vs ' +
+                    wk.weekend_daily_avg + '/weekend day (' + (wk.difference_percent > 0 ? '+' : '') + wk.difference_percent + '%)</div>' +
+            '</div>' +
+            (tp.missing_time_count > 0 ?
+                '<div class="col-span-2 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-2">' +
+                '<i class="fas fa-circle-info mr-1"></i>' + tp.missing_time_count +
+                ' record(s) have no recorded time and are excluded from hourly figures.</div>' : '');
 
-    resetBtn.onclick = function() {
-        simMode.value = 'predictive';
-        patrolSlider.value = 1;
-        patrolLabel.innerText = 'Medium';
-        cctvSelect.value = 'full';
-        customCctvEntry.classList.add('hidden');
-        customCctvValue.value = '';
-        lightingToggle.checked = true;
-        communityToggle.checked = false;
-        accessToggle.checked = false;
-        runSimulation();
-    };
+        drawBars('hourChart', tp.by_hour.map(h => ({ label: h.label, count: h.count })), '#3b82f6');
+        drawBars('dowChart', tp.by_day_of_week.map(d => ({ label: d.day.slice(0, 3), count: d.count })), '#8b5cf6');
+    }
 
-    // Initial run
-    runSimulation();
-});
+    function renderHotspots(hotspots) {
+        if (!hotspots.length) {
+            $('hotspotList').innerHTML = '<p class="text-sm text-gray-500">No location clusters found — incidents are too scattered, or there are too few records.</p>';
+            return;
+        }
+
+        $('hotspotList').innerHTML = hotspots.map(h =>
+            '<div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50">' +
+                '<div class="flex-shrink-0 w-7 h-7 rounded-full bg-alertara-700 text-white text-xs font-bold flex items-center justify-center">' + h.rank + '</div>' +
+                '<div class="flex-1 min-w-0">' +
+                    '<div class="text-sm font-semibold text-gray-900">' + esc(h.dominant_category) +
+                        (h.simulated_count > 0 ? ' <span class="text-amber-700 text-xs font-normal">(' + h.simulated_count + ' sim)</span>' : '') +
+                    '</div>' +
+                    '<div class="text-xs text-gray-500 mt-0.5">' + h.count + ' incidents · ' + h.share_percent + '% of all · ~' + h.radius_meters + 'm radius</div>' +
+                    '<div class="text-[11px] text-gray-400 font-mono mt-0.5">' + h.latitude + ', ' + h.longitude + '</div>' +
+                '</div>' +
+            '</div>').join('');
+    }
+
+    function renderClusters(clusters) {
+        $('clusterRule').textContent = clusters.length
+            ? 'Incidents within ' + clusters[0].radius_meters + 'm of each other and inside a ' + clusters[0].window_hours + '-hour window.'
+            : 'Incidents within 250m of each other and inside a 72-hour window.';
+
+        if (!clusters.length) {
+            $('clusterList').innerHTML = '<p class="text-sm text-gray-500">No repeat clusters detected in this period.</p>';
+            return;
+        }
+
+        $('clusterList').innerHTML = clusters.map(c =>
+            '<div class="p-3 rounded-lg border border-gray-200">' +
+                '<div class="flex justify-between items-start mb-2">' +
+                    '<div class="text-sm font-bold text-gray-900">' + c.incident_count + ' incidents in ' +
+                        (c.span_days === 0 ? 'the same day' : c.span_days + ' day(s)') + '</div>' +
+                    (c.simulated_count > 0 ? '<span class="px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold">' + c.simulated_count + ' SIM</span>' : '') +
+                '</div>' +
+                '<div class="text-xs text-gray-500 mb-2">' + esc(c.first_date) + ' → ' + esc(c.last_date) + ' · ' + esc(c.categories.join(', ')) + '</div>' +
+                '<div class="space-y-1">' +
+                    c.incidents.slice(0, 5).map(i =>
+                        '<div class="text-[11px] text-gray-600 flex items-center gap-2">' +
+                            '<span class="w-1.5 h-1.5 rounded-full ' + (i.is_simulated ? 'bg-amber-500' : 'bg-alertara-600') + '"></span>' +
+                            '<span class="font-mono">' + esc(i.incident_code) + '</span>' +
+                            '<span class="truncate">' + esc(i.title) + '</span>' +
+                        '</div>').join('') +
+                    (c.incidents.length > 5 ? '<div class="text-[11px] text-gray-400">+' + (c.incidents.length - 5) + ' more</div>' : '') +
+                '</div>' +
+            '</div>').join('');
+    }
+
+    function renderAnomalies(a) {
+        $('anomalyRule').textContent = a.note
+            ? a.note
+            : 'Days beyond 2 standard deviations from the period mean of ' + a.mean + ' incidents/day (threshold ' + a.threshold + ').';
+
+        if (!a.detected.length) {
+            $('anomalyList').innerHTML = '<p class="text-sm text-gray-500">No statistical outliers detected in this period.</p>';
+            return;
+        }
+
+        $('anomalyList').innerHTML = a.detected.map(x =>
+            '<div class="p-3 rounded-lg border ' + (x.severity === 'high' ? 'border-red-300 bg-red-50' : 'border-orange-200 bg-orange-50') + '">' +
+                '<div class="flex justify-between items-center mb-1">' +
+                    '<span class="text-sm font-bold ' + (x.severity === 'high' ? 'text-red-900' : 'text-orange-900') + '">' +
+                        '<i class="fas ' + (x.type === 'spike' ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down') + ' mr-1"></i>' + esc(x.date) +
+                    '</span>' +
+                    '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' +
+                        (x.severity === 'high' ? 'bg-red-200 text-red-900' : 'bg-orange-200 text-orange-900') + '">' +
+                        x.severity.toUpperCase() + ' · z=' + x.z_score +
+                    '</span>' +
+                '</div>' +
+                '<div class="text-xs text-gray-700">' + esc(x.explanation) + '</div>' +
+            '</div>').join('');
+    }
+
+    // ---------- wiring ----------
+    $('simToggle').addEventListener('click', function () { setSimulation(!simulationOn); run(); });
+    $('runBtn').addEventListener('click', run);
+    $('daysSelect').addEventListener('change', run);
+    ['volumeMultiplier', 'surgeCategory', 'timeSpike', 'locationSurge'].forEach(function (id) {
+        $(id).addEventListener('change', function () { if (simulationOn) run(); });
+    });
+    document.querySelectorAll('.trend-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            trendGrain = tab.dataset.grain;
+            if (latest) renderTrend(latest.trends);
+        });
+    });
+
+    // Simulation starts OFF, as required
+    setSimulation(false);
+    run();
+})();
 </script>
-@endpush
-
-@push('styles')
-<style>
-    @keyframes fade-in {
-        from { opacity: 0; transform: translateY(5px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fade-in {
-        animation: fade-in 0.3s ease-out forwards;
-    }
-    
-    /* Specialized slider for simulation */
-    input[type='range']::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        width: 16px;
-        height: 16px;
-        background: #2563eb;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        cursor: pointer;
-    }
-</style>
 @endpush
