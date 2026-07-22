@@ -550,11 +550,21 @@ if (request()->query('token')) {
         // /api/barangays, which also carries barangays outside Quezon City.
         async function populateBarangayDropdown() {
             const select = document.getElementById('barangay');
+
+            let rows = [];
             try {
                 const res = await fetch('/api/qc-barangays');
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const rows = await res.json();
+                rows = await res.json();
+            } catch (e) {
+                // The boundary file already carries the same official PSGC codes and
+                // names, so fall back to it rather than leaving the filter unusable.
+                console.warn('/api/qc-barangays unavailable, using the boundary file instead:', e.message);
+                rows = Object.keys(barangayNameByCode)
+                    .map(code => ({ code, name: barangayNameByCode[code] }));
+            }
 
+            try {
                 rows.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
                 const noPolygon = [];
@@ -577,8 +587,9 @@ if (request()->query('token')) {
                 if (noPolygon.length) {
                     console.warn(`No boundary polygon for ${noPolygon.length} barangay(s):`, noPolygon);
                 }
+                console.log(`Barangay filter: ${select.options.length - 1} barangays loaded.`);
             } catch (e) {
-                console.error('Error loading QC barangay list:', e);
+                console.error('Error building barangay dropdown:', e);
             }
         }
 
@@ -597,7 +608,10 @@ if (request()->query('token')) {
                 const unmapped = Object.values(barangayNameByCode)
                     .filter(n => !dbIdByName[norm(n)] && !dbIdByName[baseName(n)]);
                 if (unmapped.length) {
-                    console.warn('QC barangays with no DB row (boundary still works, crime filter falls back to geometry):', unmapped);
+                    console.warn(
+                        `${unmapped.length} QC barangay(s) have no row in /api/barangays — ` +
+                        `boundary still draws, crime filter falls back to geometry: ${unmapped.join(', ')}`
+                    );
                 }
             } catch (e) {
                 console.error('Error loading DB barangay ids:', e);
