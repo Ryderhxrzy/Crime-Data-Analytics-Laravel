@@ -966,11 +966,14 @@ if (request()->query('token')) {
                     return null;
                 }
 
-                const maxCount = Math.max(1, ...Object.values(stats).map(s => s.count));
-                const colorFor = c => !c ? '#94a3b8'
-                    : c <= maxCount / 3 ? '#f59e0b'
-                    : c <= (2 * maxCount) / 3 ? '#ea580c'
-                    : '#b91c1c';
+                // Every street gets its OWN colour (stable hash of its name →
+                // golden-angle hue), so adjacent streets always read apart.
+                // Crime numbers stay in the hover tooltip.
+                const colorForStreet = name => {
+                    let h = 0;
+                    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+                    return 'hsl(' + Math.round((h * 137.508) % 360) + ', 68%, 42%)';
+                };
 
                 saStreetLayer = L.layerGroup();
 
@@ -983,12 +986,12 @@ if (request()->query('token')) {
 
                     const latlngs = f.geometry.coordinates.map(c => [c[1], c[0]]);
                     const g = groups[name] = groups[name] ||
-                        { casing: [], inner: [], color: colorFor((stats[name] || {}).count) };
+                        { casing: [], inner: [], color: colorForStreet(name) };
 
-                    // Dark casing underneath = the street outline; the coloured
-                    // core on top encodes how much crime the street carries.
-                    g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 6, opacity: 0.65, pane: 'streetPane' }).addTo(saStreetLayer));
-                    g.inner.push(L.polyline(latlngs, { color: g.color, weight: 3, opacity: 0.95, pane: 'streetPane' }).addTo(saStreetLayer));
+                    // Thin, translucent lines: the faint casing keeps the outline
+                    // readable, and the base map's street names show through.
+                    g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 5, opacity: 0.3, pane: 'streetPane' }).addTo(saStreetLayer));
+                    g.inner.push(L.polyline(latlngs, { color: g.color, weight: 2.5, opacity: 0.6, pane: 'streetPane' }).addTo(saStreetLayer));
                 });
 
                 Object.entries(groups).forEach(([name, g]) => {
@@ -1001,20 +1004,26 @@ if (request()->query('token')) {
                                   ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(escStreet).join(', ') + '</div>' : '')
                             : '<div>No recorded incidents</div>');
 
+                    // No bringToFront() here on purpose: raising the SVG path
+                    // while the cursor sits on it re-appends the element, the
+                    // pending mouseout never fires, and the tooltip gets stuck.
                     const highlight = on => {
                         g.casing.forEach(l => l.setStyle(on
-                            ? { weight: 10, color: '#111827', opacity: 0.95 }
-                            : { weight: 6, color: '#1e293b', opacity: 0.65 }));
+                            ? { weight: 8, color: '#111827', opacity: 0.85 }
+                            : { weight: 5, color: '#1e293b', opacity: 0.3 }));
                         g.inner.forEach(l => l.setStyle(on
-                            ? { weight: 5, color: '#8b5cf6' }
-                            : { weight: 3, color: g.color }));
-                        if (on) g.inner.forEach(l => l.bringToFront());
+                            ? { weight: 4.5, color: g.color, opacity: 1 }
+                            : { weight: 2.5, color: g.color, opacity: 0.6 }));
                     };
 
-                    g.casing.concat(g.inner).forEach(l => {
-                        l.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
-                        l.on('mouseover', () => highlight(true));
-                        l.on('mouseout', () => highlight(false));
+                    // ONE tooltip per street on the group, not one per segment,
+                    // so segment-to-segment moves cannot strand an open tooltip.
+                    const streetGroup = L.featureGroup(g.casing.concat(g.inner));
+                    streetGroup.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
+                    streetGroup.on('mouseover', () => highlight(true));
+                    streetGroup.on('mouseout', () => {
+                        highlight(false);
+                        streetGroup.closeTooltip();   // belt and braces — never leave it open
                     });
                 });
 
