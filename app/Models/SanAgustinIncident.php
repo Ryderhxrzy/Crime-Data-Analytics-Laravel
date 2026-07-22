@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Incident record scoped to Barangay San Agustin, Quezon City.
@@ -48,6 +49,11 @@ class SanAgustinIncident extends Model
         'victim_count'   => 'integer',
         'suspect_count'  => 'integer',
     ];
+
+    public function evidence(): HasMany
+    {
+        return $this->hasMany(SanAgustinEvidence::class, 'incident_id');
+    }
 
     public function scopeCrimes($query)
     {

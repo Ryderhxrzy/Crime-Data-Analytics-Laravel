@@ -1106,9 +1106,22 @@ if (request()->query('token')) {
         let dbIdByPsgcCode = {};        // PSGC code -> DB barangay id
         let nameByPsgcCode = {};        // PSGC code -> official name
 
-        const normBrgy = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        // "New Era" vs "New Era (Constitution Hills)"
-        const baseBrgy = s => normBrgy(s).replace(/\s*\(.*?\)\s*/g, ' ').trim();
+        // PSGC spells some barangays differently from the crime database, so fold the
+        // differences away before matching:
+        //   accents      "Doña Imelda"          vs "Dona Imelda"
+        //   punctuation  "N.S. Amoranto"        vs "NS Amoranto"
+        //   suffix       "Pasong Putik Proper"  vs "Pasong Putik"
+        //   alt name     "New Era (Constitution Hills)" vs "New Era"
+        const normBrgy = s => (s || '')
+            .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip diacritics
+            .trim().toLowerCase().replace(/\s+/g, ' ');
+
+        const baseBrgy = s => normBrgy(s)
+            .replace(/\s*\(.*?\)\s*/g, ' ')      // drop "(alternate name)"
+            .replace(/[.,]/g, '')                // drop punctuation
+            .replace(/\s+/g, ' ')
+            .replace(/\s+proper$/, '')           // drop a trailing "Proper"
+            .trim();
 
         // Load barangays for Barangay filter
         async function loadBarangays() {
