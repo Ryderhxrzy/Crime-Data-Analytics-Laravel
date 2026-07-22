@@ -30,6 +30,18 @@ class LandingController extends Controller
     }
 
     /**
+     * Display the single-barangay mapping page (authenticated users only)
+     * Shows only the boundary and incidents of one barangay instead of all of QC
+     */
+    public function barangayMapping()
+    {
+        return view('barangay-mapping', [
+            'barangayName' => 'San Agustin',
+            'barangayGeojson' => asset('sanagustin.geojson'),
+        ]);
+    }
+
+    /**
      * Get crime location data as JSON for the heatmap
      * Can be used by: Web landing page, authenticated mapping page
      * Supports filtering by crime type, status, barangay, and date range
