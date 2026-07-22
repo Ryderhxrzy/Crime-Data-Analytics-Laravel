@@ -1163,6 +1163,59 @@ class DashboardController extends Controller
     }
 
     /**
+     * Pattern detection over real incident data.
+     *
+     * Simulation is opt-in: without ?simulation=1 the analysis touches real
+     * records only and nothing synthetic can enter the response.
+     */
+    public function detectPatterns(Request $request, \App\Services\PatternDetectionService $detector)
+    {
+        try {
+            $simulationOn = filter_var($request->input('simulation', false), FILTER_VALIDATE_BOOLEAN);
+
+            $scenarios = [];
+            if ($simulationOn) {
+                $scenarios = [
+                    'volume_multiplier' => min(3.0, max(0.0, (float) $request->input('volume_multiplier', 0.5))),
+                ];
+
+                if ($request->filled('surge_category')) {
+                    $scenarios['category_surge'] = [
+                        'category'   => $request->input('surge_category'),
+                        'multiplier' => min(10.0, max(1.0, (float) $request->input('surge_category_multiplier', 2))),
+                    ];
+                }
+
+                if ($request->filled('spike_start_hour') && $request->filled('spike_end_hour')) {
+                    $scenarios['time_spike'] = [
+                        'start_hour' => (int) $request->input('spike_start_hour'),
+                        'end_hour'   => (int) $request->input('spike_end_hour'),
+                        'multiplier' => min(10.0, max(1.0, (float) $request->input('spike_multiplier', 2))),
+                    ];
+                }
+
+                if ($request->boolean('location_surge')) {
+                    $scenarios['location_surge'] = [
+                        'multiplier' => min(10.0, max(1.0, (float) $request->input('location_surge_multiplier', 2))),
+                    ];
+                }
+            }
+
+            $result = $detector->analyzeWithInsights([
+                'days'       => min(730, max(7, (int) $request->input('days', 180))),
+                'simulation' => $simulationOn,
+                'scenarios'  => $scenarios,
+            ]);
+
+            return response()->json($result, 200, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in detectPatterns: '.$e->getMessage());
+
+            return response()->json(['error' => 'Error running pattern detection', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get hotspot data with analytics for Crime Hotspot Analysis page (with Redis caching)
      */
     public function getHotspotData(Request $request, \App\Services\HotspotAnalyticsService $analytics)
