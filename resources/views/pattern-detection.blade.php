@@ -57,9 +57,9 @@
                 <select id="daysSelect" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 bg-white">
                     <option value="30">Last 30 days</option>
                     <option value="90">Last 90 days</option>
-                    <option value="180" selected>Last 6 months</option>
+                    <option value="180">Last 6 months</option>
                     <option value="365">Last 12 months</option>
-                    <option value="730">Last 24 months</option>
+                    <option value="730" selected>Last 24 months</option>
                 </select>
             </div>
             <div class="flex items-end">
@@ -180,8 +180,9 @@
                     <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="daily">Daily</button>
                     <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="weekly">Weekly</button>
                     <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="monthly">Monthly</button>
+                    <div id="trendLegend" class="ml-auto flex items-center"></div>
                 </div>
-                <div id="trendChart" class="overflow-x-auto"></div>
+                <div style="height: 260px;"><canvas id="trendChart"></canvas></div>
             </div>
 
             <!-- Crime type distribution -->
@@ -194,12 +195,15 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Time patterns -->
             <div class="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-clock mr-2 text-alertara-600"></i>Time-Based Patterns</h2>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold text-gray-900"><i class="fas fa-clock mr-2 text-alertara-600"></i>Time-Based Patterns</h2>
+                    <div id="timeLegend" class="flex items-center"></div>
+                </div>
                 <div id="timeSummary" class="grid grid-cols-2 gap-3 mb-5"></div>
                 <div class="text-xs font-bold text-gray-500 uppercase mb-2">By hour of day</div>
-                <div id="hourChart" class="mb-5"></div>
+                <div style="height: 190px;" class="mb-5"><canvas id="hourChart"></canvas></div>
                 <div class="text-xs font-bold text-gray-500 uppercase mb-2">By day of week</div>
-                <div id="dowChart"></div>
+                <div style="height: 190px;"><canvas id="dowChart"></canvas></div>
             </div>
 
             <!-- Hotspots -->
@@ -371,35 +375,141 @@
                 (active ? 'bg-alertara-700 text-white border-alertara-700' : 'bg-white text-gray-600 border-gray-300');
         });
 
-        drawBars('trendChart', t[trendGrain] || [], '#274d4c');
+        const series = t[trendGrain] || [];
+        // Daily over a long window is far too dense for bars — a line reads it
+        drawChart('trendChart', series, trendGrain === 'daily' ? 'line' : 'bar');
+        renderChartLegend('trendLegend', series.some(s => (s.simulated || 0) > 0));
     }
 
-    /** Inline bar chart — no chart library needed */
-    function drawBars(targetId, series, color) {
-        const el = $(targetId);
-        if (!series.length) {
-            el.innerHTML = '<p class="text-sm text-gray-500 py-8 text-center">No data in this period.</p>';
+    // ---------- charts (Chart.js, loaded globally by the layout) ----------
+
+    // Palette validated with the data-viz colour checks (lightness band, chroma
+    // floor, CVD separation, normal-vision floor, contrast vs surface).
+    // The brand teal #274d4c fails as a data colour — too dark and near-gray.
+    const SERIES_REAL = '#2a78d6';   // categorical slot 1
+    const SERIES_SIM  = '#eb6834';   // categorical slot 2
+    const GRID  = 'rgba(0,0,0,0.06)';
+    const TICK  = '#52514e';
+
+    const charts = {};
+
+    function destroyChart(id) {
+        if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+    }
+
+    const baseOptions = (stacked) => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: 'rgba(17,17,17,0.92)',
+                padding: 10,
+                titleFont: { size: 12 },
+                bodyFont: { size: 12 },
+                displayColors: true,
+                callbacks: {
+                    footer: items => {
+                        const total = items.reduce((s, i) => s + i.parsed.y, 0);
+                        return items.length > 1 ? 'Total: ' + total : '';
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                stacked: stacked,
+                grid: { display: false },
+                ticks: { color: TICK, font: { size: 10 }, maxRotation: 0, autoSkipPadding: 16 }
+            },
+            y: {
+                stacked: stacked,
+                beginAtZero: true,
+                grid: { color: GRID, drawBorder: false },
+                ticks: { color: TICK, font: { size: 10 }, precision: 0 },
+                title: { display: true, text: 'Incidents', color: TICK, font: { size: 10 } }
+            }
+        }
+    });
+
+    /** Two datasets so real and simulated stay visually separate, never merged */
+    function datasetsFor(series, type) {
+        const hasSim = series.some(s => (s.simulated || 0) > 0);
+
+        const real = {
+            label: hasSim ? 'Real' : 'Incidents',
+            data: series.map(s => (s.real !== undefined ? s.real : s.count)),
+            backgroundColor: type === 'line' ? 'rgba(42,120,214,0.12)' : SERIES_REAL,
+            borderColor: SERIES_REAL,
+            borderWidth: 2,
+            borderRadius: type === 'bar' ? 4 : 0,
+            fill: type === 'line',
+            tension: 0.3,
+            pointRadius: series.length > 60 ? 0 : 3,
+            pointHoverRadius: 5
+        };
+
+        if (!hasSim) return [real];
+
+        return [real, {
+            label: 'Simulated',
+            data: series.map(s => s.simulated || 0),
+            backgroundColor: type === 'line' ? 'rgba(235,104,52,0.12)' : SERIES_SIM,
+            borderColor: SERIES_SIM,
+            borderWidth: 2,
+            borderRadius: type === 'bar' ? 4 : 0,
+            fill: type === 'line',
+            tension: 0.3,
+            pointRadius: series.length > 60 ? 0 : 3,
+            pointHoverRadius: 5
+        }];
+    }
+
+    function drawChart(canvasId, series, type) {
+        destroyChart(canvasId);
+        const canvas = $(canvasId);
+        if (!canvas) return;
+
+        const empty = !series.length || series.every(s => s.count === 0);
+        const wrap = canvas.parentElement;
+        let note = wrap.querySelector('.chart-empty');
+
+        if (empty) {
+            canvas.style.display = 'none';
+            if (!note) {
+                note = document.createElement('p');
+                note.className = 'chart-empty text-sm text-gray-500 text-center pt-16';
+                wrap.appendChild(note);
+            }
+            note.textContent = 'No data in this period.';
             return;
         }
 
-        const max = Math.max.apply(null, series.map(s => s.count).concat([1]));
-        const barWidth = series.length > 60 ? 4 : series.length > 30 ? 8 : 18;
+        canvas.style.display = '';
+        if (note) note.remove();
 
+        charts[canvasId] = new Chart(canvas.getContext('2d'), {
+            type: type,
+            data: { labels: series.map(s => s.label), datasets: datasetsFor(series, type) },
+            options: baseOptions(true)
+        });
+    }
+
+    /** Legend rendered in HTML so identity is never colour-alone */
+    function renderChartLegend(targetId, hasSim) {
+        const el = $(targetId);
+        if (!el) return;
         el.innerHTML =
-            '<div class="flex items-end gap-[2px]" style="height:160px; min-width:' + (series.length * (barWidth + 2)) + 'px">' +
-            series.map(s =>
-                '<div class="flex-1 flex flex-col justify-end items-center group relative" style="min-width:' + barWidth + 'px">' +
-                    '<div class="w-full rounded-t transition-all hover:opacity-80" style="height:' +
-                        ((s.count / max) * 100) + '%; background:' + color + '; min-height:' + (s.count > 0 ? '2px' : '0') + '"></div>' +
-                    '<div class="absolute bottom-full mb-1 hidden group-hover:block bg-gray-900 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">' +
-                        esc(s.label) + ': ' + s.count +
-                    '</div>' +
-                '</div>').join('') +
-            '</div>' +
-            '<div class="flex justify-between text-[10px] text-gray-400 mt-1">' +
-                '<span>' + esc(series[0].label) + '</span>' +
-                '<span>' + esc(series[series.length - 1].label) + '</span>' +
-            '</div>';
+            '<span class="inline-flex items-center gap-1.5 mr-4">' +
+                '<span style="width:10px;height:10px;border-radius:2px;background:' + SERIES_REAL + '" class="inline-block"></span>' +
+                '<span class="text-[11px] text-gray-600">' + (hasSim ? 'Real' : 'Incidents') + '</span>' +
+            '</span>' +
+            (hasSim ?
+            '<span class="inline-flex items-center gap-1.5">' +
+                '<span style="width:10px;height:10px;border-radius:2px;background:' + SERIES_SIM + '" class="inline-block"></span>' +
+                '<span class="text-[11px] text-gray-600">Simulated</span>' +
+            '</span>' : '');
     }
 
     function renderTypes(types, total) {
@@ -448,8 +558,11 @@
                 '<i class="fas fa-circle-info mr-1"></i>' + tp.missing_time_count +
                 ' record(s) have no recorded time and are excluded from hourly figures.</div>' : '');
 
-        drawBars('hourChart', tp.by_hour.map(h => ({ label: h.label, count: h.count })), '#3b82f6');
-        drawBars('dowChart', tp.by_day_of_week.map(d => ({ label: d.day.slice(0, 3), count: d.count })), '#8b5cf6');
+        drawChart('hourChart', tp.by_hour, 'bar');
+        drawChart('dowChart', tp.by_day_of_week.map(d => ({
+            label: d.day.slice(0, 3), count: d.count, real: d.real, simulated: d.simulated
+        })), 'bar');
+        renderChartLegend('timeLegend', tp.by_hour.some(h => (h.simulated || 0) > 0));
     }
 
     function renderHotspots(hotspots) {
@@ -527,22 +640,32 @@
     }
 
     // ---------- wiring ----------
-    $('simToggle').addEventListener('click', function () { setSimulation(!simulationOn); run(); });
-    $('runBtn').addEventListener('click', run);
-    $('daysSelect').addEventListener('change', run);
-    ['volumeMultiplier', 'surgeCategory', 'timeSpike', 'locationSurge'].forEach(function (id) {
-        $(id).addEventListener('change', function () { if (simulationOn) run(); });
-    });
-    document.querySelectorAll('.trend-tab').forEach(function (tab) {
-        tab.addEventListener('click', function () {
-            trendGrain = tab.dataset.grain;
-            if (latest) renderTrend(latest.trends);
+    function init() {
+        $('simToggle').addEventListener('click', function () { setSimulation(!simulationOn); run(); });
+        $('runBtn').addEventListener('click', run);
+        $('daysSelect').addEventListener('change', run);
+        ['volumeMultiplier', 'surgeCategory', 'timeSpike', 'locationSurge'].forEach(function (id) {
+            $(id).addEventListener('change', function () { if (simulationOn) run(); });
         });
-    });
+        document.querySelectorAll('.trend-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                trendGrain = tab.dataset.grain;
+                if (latest) renderTrend(latest.trends);
+            });
+        });
 
-    // Simulation starts OFF, as required
-    setSimulation(false);
-    run();
+        // Simulation starts OFF, as required
+        setSimulation(false);
+        run();
+    }
+
+    // Chart.js is loaded with defer by the layout, so it is only guaranteed to
+    // exist once the document has finished parsing.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
 </script>
 @endpush

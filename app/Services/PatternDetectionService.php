@@ -132,30 +132,34 @@ class PatternDetectionService
 
     private function crimeTrends(Collection $all, int $days): array
     {
-        $daily = $this->countByBucket($all, fn ($i) => $i['date']);
-        ksort($daily);
+        $daily   = $this->splitByBucket($all, fn ($i) => $i['date']);
+        $weekly  = $this->splitByBucket($all, fn ($i) => Carbon::parse($i['date'])->startOfWeek()->toDateString());
+        $monthly = $this->splitByBucket($all, fn ($i) => Carbon::parse($i['date'])->format('Y-m'));
 
-        $weekly = $this->countByBucket($all, fn ($i) => Carbon::parse($i['date'])->startOfWeek()->toDateString());
-        ksort($weekly);
-
-        $monthly = $this->countByBucket($all, fn ($i) => Carbon::parse($i['date'])->format('Y-m'));
-        ksort($monthly);
-
-        // Fill missing days with zero so the trend line does not lie by omission
-        $series = [];
+        // Every day/week/month in the window gets a slot, so a gap in the data
+        // reads as a zero rather than silently collapsing the axis.
+        $dayLabels = $weekLabels = $monthLabels = [];
         $cursor = now()->subDays($days)->startOfDay();
         $end = now()->startOfDay();
         while ($cursor->lte($end)) {
-            $key = $cursor->toDateString();
-            $series[$key] = $daily[$key] ?? 0;
+            $dayLabels[] = $cursor->toDateString();
+            // copy() matters: startOfWeek() mutates in place and would rewind the cursor
+            $weekLabels[$cursor->copy()->startOfWeek()->toDateString()] = true;
+            $monthLabels[$cursor->format('Y-m')] = true;
             $cursor->addDay();
         }
+        $weekLabels = array_keys($weekLabels);
+        $monthLabels = array_keys($monthLabels);
+        sort($weekLabels);
+        sort($monthLabels);
+
+        $dailySeries = $this->toSeries($daily, $dayLabels);
 
         return [
-            'daily'     => $this->toSeries($series),
-            'weekly'    => $this->toSeries($weekly),
-            'monthly'   => $this->toSeries($monthly),
-            'direction' => $this->trendDirection(array_values($series)),
+            'daily'     => $dailySeries,
+            'weekly'    => $this->toSeries($weekly, $weekLabels),
+            'monthly'   => $this->toSeries($monthly, $monthLabels),
+            'direction' => $this->trendDirection(array_column($dailySeries, 'count')),
         ];
     }
 
@@ -276,14 +280,20 @@ class PatternDetectionService
         $withTime = $all->filter(fn ($i) => $i['hour'] !== null);
 
         $byHour = array_fill(0, 24, 0);
+        $byHourReal = array_fill(0, 24, 0);
+        $byHourSim = array_fill(0, 24, 0);
         foreach ($withTime as $i) {
             $byHour[$i['hour']]++;
+            $i['is_simulated'] ? $byHourSim[$i['hour']]++ : $byHourReal[$i['hour']]++;
         }
 
         $dowNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         $byDow = array_fill(0, 7, 0);
+        $byDowReal = array_fill(0, 7, 0);
+        $byDowSim = array_fill(0, 7, 0);
         foreach ($all as $i) {
             $byDow[$i['dow']]++;
+            $i['is_simulated'] ? $byDowSim[$i['dow']]++ : $byDowReal[$i['dow']]++;
         }
 
         $peakHour = $withTime->isEmpty() ? null : array_keys($byHour, max($byHour))[0];
@@ -305,15 +315,20 @@ class PatternDetectionService
 
         return [
             'by_hour' => collect($byHour)->map(fn ($c, $h) => [
-                'hour'  => $h,
-                'label' => sprintf('%02d:00', $h),
-                'count' => $c,
+                'hour'      => $h,
+                'label'     => sprintf('%02d:00', $h),
+                'count'     => $c,
+                'real'      => $byHourReal[$h],
+                'simulated' => $byHourSim[$h],
             ])->values()->all(),
 
             'by_day_of_week' => collect($byDow)->map(fn ($c, $d) => [
-                'day'   => $dowNames[$d],
-                'index' => $d,
-                'count' => $c,
+                'day'       => $dowNames[$d],
+                'label'     => $dowNames[$d],
+                'index'     => $d,
+                'count'     => $c,
+                'real'      => $byDowReal[$d],
+                'simulated' => $byDowSim[$d],
             ])->values()->all(),
 
             'peak_hour'       => $peakHour,
@@ -661,12 +676,39 @@ class PatternDetectionService
         return $out;
     }
 
-    private function toSeries(array $counts): array
+    /** Per-bucket totals split into real and simulated, so charts can stack them */
+    private function splitByBucket(Collection $items, callable $keyFn): array
     {
         $out = [];
-        foreach ($counts as $label => $count) {
-            $out[] = ['label' => (string) $label, 'count' => $count];
+        foreach ($items as $i) {
+            $key = $keyFn($i);
+            $out[$key] ??= ['count' => 0, 'real' => 0, 'simulated' => 0];
+            $out[$key]['count']++;
+            $i['is_simulated'] ? $out[$key]['simulated']++ : $out[$key]['real']++;
         }
+        return $out;
+    }
+
+    /**
+     * @param array $buckets  label => ['count','real','simulated']
+     * @param array $skeleton Optional ordered labels; missing ones become zero so
+     *                        a chart never implies a gap was a quiet day
+     */
+    private function toSeries(array $buckets, ?array $skeleton = null): array
+    {
+        $labels = $skeleton ?? array_keys($buckets);
+        $out = [];
+
+        foreach ($labels as $label) {
+            $b = $buckets[$label] ?? ['count' => 0, 'real' => 0, 'simulated' => 0];
+            $out[] = [
+                'label'     => (string) $label,
+                'count'     => $b['count'],
+                'real'      => $b['real'],
+                'simulated' => $b['simulated'],
+            ];
+        }
+
         return $out;
     }
 }
