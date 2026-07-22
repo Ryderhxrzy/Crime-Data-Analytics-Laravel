@@ -613,6 +613,7 @@ if (request()->query('token')) {
         let barangayLayersByCode = {};
         let barangayRingsByCode = {};
         let selectedBarangayLabel = null;
+        let barangayRenderer = null;    // renderer bound to the low-z barangay pane
 
         // Barangay the map opens on
         const DEFAULT_BARANGAY = 'San Agustin';
@@ -622,10 +623,11 @@ if (request()->query('token')) {
         // the whole barangay.
         const BARANGAY_FIT_PADDING = [12, 12];
 
-        // Thin borders throughout — the active barangay reads through fill, not weight
-        const STYLE_BRGY_IDLE   = { color: '#5b8f8c', weight: 1,   opacity: 0.8, fillColor: '#e8f5f3', fillOpacity: 0.18, dashArray: null };
-        const STYLE_BRGY_HOVER  = { color: '#274d4c', weight: 1.5, opacity: 1,   fillColor: '#bde5dd', fillOpacity: 0.45, dashArray: null };
-        const STYLE_BRGY_ACTIVE = { color: '#274d4c', weight: 2,   opacity: 1,   fillColor: '#7fc9bd', fillOpacity: 0.6,  dashArray: null };
+        // Thin borders, light fills. The active barangay is marked by its border and a
+        // faint tint — a heavy fill would wash out the incident circles sitting on it.
+        const STYLE_BRGY_IDLE   = { color: '#5b8f8c', weight: 1,   opacity: 0.8, fillColor: '#e8f5f3', fillOpacity: 0.15, dashArray: null };
+        const STYLE_BRGY_HOVER  = { color: '#274d4c', weight: 1.5, opacity: 1,   fillColor: '#bde5dd', fillOpacity: 0.30, dashArray: null };
+        const STYLE_BRGY_ACTIVE = { color: '#274d4c', weight: 2.5, opacity: 1,   fillColor: '#9ed4cb', fillOpacity: 0.22, dashArray: null };
         let currentData = [];
         let selectedIncidentId = null;
         let pointerMarker = null;
@@ -711,6 +713,14 @@ if (request()->query('token')) {
                 minZoom: 10
             }).addTo(map);
 
+            // Boundaries get their own pane BELOW the default overlayPane (z-index 400).
+            // Polygons and circle markers otherwise share one pane, so highlighting a
+            // barangay would draw its fill over the incident circles and swallow their
+            // clicks. Separate panes keep the circles visible and clickable always.
+            map.createPane('barangayPane');
+            map.getPane('barangayPane').style.zIndex = 350;
+            barangayRenderer = L.svg({ pane: 'barangayPane' });
+
             // Ensure map size is calculated, then load boundary
             setTimeout(() => {
                 map.invalidateSize();
@@ -733,7 +743,9 @@ if (request()->query('token')) {
                 if (boundaryLayer) map.removeLayer(boundaryLayer);
                 boundaryLayer = L.geoJSON(data, {
                     style: { color: '#274d4c', weight: 2, opacity: 0.9, fill: false },
-                    interactive: false
+                    interactive: false,
+                    pane: 'barangayPane',
+                    renderer: barangayRenderer
                 }).addTo(map);
 
                 qcBounds = boundaryLayer.getBounds();
@@ -750,6 +762,8 @@ if (request()->query('token')) {
 
                 barangayBoundaryLayer = L.geoJSON(data, {
                     style: () => Object.assign({}, STYLE_BRGY_IDLE),
+                    pane: 'barangayPane',
+                    renderer: barangayRenderer,
                     onEachFeature: (feature, layer) => {
                         const p = feature.properties || {};
                         const code = String(p.code || '');
@@ -791,9 +805,9 @@ if (request()->query('token')) {
                     }
                 }).addTo(map);
 
-                // Barangay polygons must sit under the incident markers
-                barangayBoundaryLayer.bringToBack();
-                if (boundaryLayer) boundaryLayer.bringToBack();
+                // Keep the city outline drawn over the barangay fills. Sitting under the
+                // incident markers is handled by 'barangayPane', not by ordering.
+                if (boundaryLayer) boundaryLayer.bringToFront();
 
                 if (!qcBounds || !qcBounds.isValid()) qcBounds = barangayBoundaryLayer.getBounds();
             } catch (error) {
@@ -867,12 +881,8 @@ if (request()->query('token')) {
                 layer.setStyle(styleForBarangay(code));
             });
 
-            // Push the whole set behind the incident markers FIRST, then lift the
-            // active barangay above its neighbours — the group call would otherwise
-            // undo the bringToFront.
-            barangayBoundaryLayer.bringToBack();
-            if (boundaryLayer && map.hasLayer(boundaryLayer)) boundaryLayer.bringToBack();
-
+            // Ordering only shuffles layers within 'barangayPane'; the incident circles
+            // live in the higher overlayPane and stay above all of this.
             const activeLayer = selectedCode ? barangayLayersByCode[selectedCode] : null;
             if (activeLayer) activeLayer.bringToFront();
 
