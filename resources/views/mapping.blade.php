@@ -800,9 +800,11 @@ if (request()->query('token')) {
                             if (document.getElementById('barangay').value) return;
                             this.setStyle(styleForBarangay(code));
                         });
-                        // Click to make this barangay the active one
+                        // Click-to-select only works in the All-Barangays view.
+                        // Once a barangay is isolated, clicking a neighbour does
+                        // nothing — switching is done through the filter dropdown.
                         layer.on('click', function () {
-                            if (document.getElementById('barangay').value === code) return;
+                            if (document.getElementById('barangay').value) return;
                             document.getElementById('barangay').value = code;
                             applyBarangaySelection();
                             loadCrimeData();
@@ -955,8 +957,10 @@ if (request()->query('token')) {
             saStreetsLoading = (async () => {
                 let geo, stats = {};
                 try {
+                    // Cache-buster: the geojson gets re-clipped during development,
+                    // and a stale cached copy would redraw streets past the boundary
                     const [gRes, sRes] = await Promise.all([
-                        fetch(SA_STREETS_URL, { headers: { 'Accept': 'application/json' } }),
+                        fetch(SA_STREETS_URL + '?t=' + Date.now(), { headers: { 'Accept': 'application/json' } }),
                         fetch(SA_STREET_STATS_URL, { headers: { 'Accept': 'application/json' } })
                     ]);
                     geo = await gRes.json();
