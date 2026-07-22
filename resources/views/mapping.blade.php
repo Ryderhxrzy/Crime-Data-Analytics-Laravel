@@ -24,6 +24,61 @@ if (request()->query('token')) {
 
     <!-- Laravel App - Real-time features disabled -->
     @vite(['resources/js/app.js'])
+
+    <style>
+        /* Barangay hover label */
+        .brgy-tooltip {
+            background: #274d4c;
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        }
+        .brgy-tooltip::before { border-top-color: #274d4c; }
+
+        /* Name label on the isolated barangay */
+        .brgy-label-selected {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            color: #123332;
+            font-size: 13px;
+            font-weight: 800;
+            text-shadow: 0 0 4px #fff, 0 0 8px #fff, 0 1px 2px #fff;
+            white-space: nowrap;
+        }
+        .brgy-label-selected::before { display: none; }
+
+        /* Filters float over the map while it is enlarged */
+        #mapContainer.map-fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 99998;
+            border-radius: 0;
+        }
+        #mapContainer.map-fullscreen #map { height: 100vh !important; }
+
+        #mapContainer.map-fullscreen #filtersSection {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 68px;
+            z-index: 99999;
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            margin: 0;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        #mapContainer.map-fullscreen #exitFullscreenBtn { display: flex; }
+        #exitFullscreenBtn { display: none; }
+    </style>
 </head>
 <body class="bg-gray-100">
     <!-- Header Component -->
@@ -61,12 +116,16 @@ if (request()->query('token')) {
                     </button>
                 </div>
 
-                <!-- Filters Section -->
-                <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
-                    <div class="mb-4 pb-4 border-b border-gray-200">
+                <!-- Filters Section (moves into the map while enlarged) -->
+                <div id="filtersSection" class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
+                    <div class="mb-4 pb-4 border-b border-gray-200 flex items-center justify-between gap-3">
                         <h3 class="text-sm font-bold text-gray-900">
                             <i class="fas fa-filter mr-2 text-alertara-700"></i>Map Filters
                         </h3>
+                        <button id="exitFullscreenBtn" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors items-center gap-2 text-xs" title="Exit fullscreen">
+                            <i class="fas fa-compress"></i>
+                            <span>Exit Fullscreen</span>
+                        </button>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                         <!-- Visualization Mode -->
@@ -539,10 +598,21 @@ if (request()->query('token')) {
         let markerClusterGroup = null;
         let markerLayer = null;
         let currentVisualizationMode = 'markers';
-        let boundaryLayer = null;
+        let boundaryLayer = null;       // whole-QC outline
         let filterTimeout = null;
         let qcBounds = null;
         let map = null;
+
+        // Barangay boundary layers, keyed by PSGC code so they line up with the
+        // barangay filter (which is driven by /api/qc-barangays).
+        let barangayBoundaryLayer = null;
+        let barangayLayersByCode = {};
+        let barangayRingsByCode = {};
+        let selectedBarangayLabel = null;
+
+        const STYLE_BRGY_IDLE     = { color: '#5b8f8c', weight: 1,   opacity: 0.85, fillColor: '#e8f5f3', fillOpacity: 0.25, dashArray: null };
+        const STYLE_BRGY_HOVER    = { color: '#274d4c', weight: 1.5, opacity: 1,    fillColor: '#9ed4cb', fillOpacity: 0.55, dashArray: null };
+        const STYLE_BRGY_SELECTED = { color: '#274d4c', weight: 1.5, opacity: 1,    fillColor: '#bde5dd', fillOpacity: 0.35, dashArray: null };
         let currentData = [];
         let selectedIncidentId = null;
         let pointerMarker = null;
@@ -636,117 +706,161 @@ if (request()->query('token')) {
         }
 
         // Load QC boundary from GeoJSON
-        function loadQCBoundary() {
-            console.log('Loading QC boundary...');
-            
-            // Add cache busting parameter
+        async function loadQCBoundary() {
+            console.log('Loading QC boundary and barangay boundaries...');
             const timestamp = new Date().getTime();
-            fetch(`/qc_map.geojson?t=${timestamp}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('QC boundary loaded successfully');
-                    
-                    if (boundaryLayer) {
-                        map.removeLayer(boundaryLayer);
-                    }
 
-                    boundaryLayer = L.geoJSON(data, {
-                        style: {
-                            color: '#274d4c',
-                            weight: 3,
-                            opacity: 1,
-                            fillColor: '#e8f5f3',
-                            fillOpacity: 0.08,
-                            lineCap: 'round',
-                            lineJoin: 'round'
-                        },
-                        onEachFeature: function(feature, layer) {
-                            // Hover effect
-                            layer.on('mouseover', function() {
-                                this.setStyle({
-                                    weight: 4,
-                                    fillOpacity: 0.15,
-                                    fillColor: '#d0ebe7'
-                                });
-                            });
+            // 1. Whole-QC outline. fullmapqc.geojson is the PSGC city outline, so it
+            //    lines up exactly with the PSGC barangay polygons loaded below.
+            try {
+                const response = await fetch(`/fullmapqc.geojson?t=${timestamp}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
 
-                            layer.on('mouseout', function() {
-                                this.setStyle({
-                                    weight: 3,
-                                    fillOpacity: 0.08,
-                                    fillColor: '#e8f5f3'
-                                });
-                            });
-                        }
+                if (boundaryLayer) map.removeLayer(boundaryLayer);
+                boundaryLayer = L.geoJSON(data, {
+                    style: { color: '#274d4c', weight: 2, opacity: 0.9, fill: false },
+                    interactive: false
+                }).addTo(map);
+
+                qcBounds = boundaryLayer.getBounds();
+            } catch (error) {
+                console.error('Error loading QC outline:', error);
+                qcBounds = L.latLngBounds(L.latLng(14.50, 120.90), L.latLng(14.80, 121.20));
+            }
+
+            // 2. The 142 Quezon City barangays
+            try {
+                const response = await fetch(`/qc_barangays.geojson?t=${timestamp}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                barangayBoundaryLayer = L.geoJSON(data, {
+                    style: () => Object.assign({}, STYLE_BRGY_IDLE),
+                    onEachFeature: (feature, layer) => {
+                        const p = feature.properties || {};
+                        const code = String(p.code || '');
+                        const name = (p.name || '').trim();
+                        if (!code || !name) return;
+
+                        barangayLayersByCode[code] = layer;
+                        barangayRingsByCode[code] = ringsOfGeometry(feature.geometry);
+
+                        // Hover -> identify
+                        layer.bindTooltip(name, {
+                            sticky: true,
+                            direction: 'top',
+                            className: 'brgy-tooltip'
+                        });
+
+                        layer.on('mouseover', function () {
+                            if (document.getElementById('barangay').value) return;
+                            this.setStyle(STYLE_BRGY_HOVER);
+                            this.bringToFront();
+                        });
+                        layer.on('mouseout', function () {
+                            if (document.getElementById('barangay').value) return;
+                            this.setStyle(STYLE_BRGY_IDLE);
+                        });
+                        // Click -> isolate
+                        layer.on('click', function () {
+                            if (document.getElementById('barangay').value) return;
+                            document.getElementById('barangay').value = code;
+                            applyBarangaySelection();
+                            loadCrimeData();
+                        });
+                    }
+                }).addTo(map);
+
+                // Barangay polygons must sit under the incident markers
+                barangayBoundaryLayer.bringToBack();
+                if (boundaryLayer) boundaryLayer.bringToBack();
+
+                if (!qcBounds || !qcBounds.isValid()) qcBounds = barangayBoundaryLayer.getBounds();
+            } catch (error) {
+                console.error('Error loading barangay boundaries:', error);
+            }
+
+            map.invalidateSize();
+            if (qcBounds && qcBounds.isValid()) {
+                map.fitBounds(qcBounds, { padding: [20, 20], animate: true });
+            } else {
+                map.setView([14.6349, 121.0446], 12);
+            }
+
+            applyBoundaryConstraints();
+
+            loadCrimeCategories();
+            await loadBarangays();
+            setupAutoFilter();
+            setupZoomScaling();
+            applyBarangaySelection();
+            loadCrimeData();
+            loadTotalStats();
+        }
+
+        function ringsOfGeometry(geometry) {
+            if (!geometry) return [];
+            if (geometry.type === 'Polygon') return [geometry.coordinates];
+            if (geometry.type === 'MultiPolygon') return geometry.coordinates;
+            return [];
+        }
+
+        // Show every barangay (hoverable) or isolate the filtered one.
+        // With no barangay selected the map zooms back out to the whole city.
+        function applyBarangaySelection() {
+            const selectedCode = document.getElementById('barangay').value;
+
+            if (selectedBarangayLabel) {
+                map.removeLayer(selectedBarangayLabel);
+                selectedBarangayLabel = null;
+            }
+
+            if (!barangayBoundaryLayer) return;
+
+            // The city outline is context for the full view only
+            if (boundaryLayer) {
+                if (selectedCode) map.removeLayer(boundaryLayer);
+                else if (!map.hasLayer(boundaryLayer)) boundaryLayer.addTo(map).bringToBack();
+            }
+
+            Object.entries(barangayLayersByCode).forEach(([code, layer]) => {
+                const isTarget = selectedCode && code === selectedCode;
+
+                if (!selectedCode || isTarget) {
+                    if (!barangayBoundaryLayer.hasLayer(layer)) barangayBoundaryLayer.addLayer(layer);
+                    layer.setStyle(Object.assign({}, isTarget ? STYLE_BRGY_SELECTED : STYLE_BRGY_IDLE));
+                } else {
+                    if (barangayBoundaryLayer.hasLayer(layer)) barangayBoundaryLayer.removeLayer(layer);
+                }
+            });
+
+            barangayBoundaryLayer.bringToBack();
+            if (boundaryLayer && map.hasLayer(boundaryLayer)) boundaryLayer.bringToBack();
+
+            if (selectedCode) {
+                const layer = barangayLayersByCode[selectedCode];
+                if (layer) {
+                    const b = layer.getBounds();
+                    selectedBarangayLabel = L.marker(b.getCenter(), {
+                        interactive: false,
+                        icon: L.divIcon({ className: '', html: '' })
                     }).addTo(map);
+                    const select = document.getElementById('barangay');
+                    const label = nameByPsgcCode[selectedCode] ||
+                        (select.selectedOptions[0] || {}).textContent || '';
+                    selectedBarangayLabel.bindTooltip(label, {
+                        permanent: true,
+                        direction: 'center',
+                        className: 'brgy-label-selected'
+                    }).openTooltip();
 
-                    // Get the bounds of QC boundary
-                    qcBounds = boundaryLayer.getBounds();
-                    console.log('QC bounds:', qcBounds);
-
-                    // Invalidate size to ensure map calculates correct dimensions
-                    map.invalidateSize();
-
-                    // Fit bounds BEFORE setting max bounds
-                    if (qcBounds.isValid()) {
-                        console.log('Fitting map to QC bounds...');
-                        map.fitBounds(qcBounds, {
-                            padding: [20, 20],
-                            animate: true
-                        });
-                    }
-
-                    // Apply boundary constraints AFTER fitting
-                    applyBoundaryConstraints();
-
-                    // After boundary is loaded, load other data
-                    loadCrimeCategories();
-                    loadBarangays();
-                    setupAutoFilter();
-                    setupZoomScaling();
-                    loadCrimeData();
-                    loadTotalStats();
-                })
-                .catch(error => {
-                    console.error('Error loading QC boundary:', error);
-                    
-                    // Fallback: Use default QC bounds
-                    qcBounds = L.latLngBounds(
-                        L.latLng(14.50, 120.90), // SW corner
-                        L.latLng(14.80, 121.20)  // NE corner
-                    );
-                    
-                    console.log('Using default QC bounds:', qcBounds);
-                    
-                    // Invalidate size and fit to default bounds
-                    map.invalidateSize();
-
-                    if (qcBounds.isValid()) {
-                        console.log('Fitting map to default bounds...');
-                        map.fitBounds(qcBounds, {
-                            padding: [20, 20],
-                            animate: true
-                        });
-                    } else {
-                        console.log('Setting default view...');
-                        map.setView([14.6349, 121.0446], 12);
-                    }
-
-                    applyBoundaryConstraints();
-
-                    // Load other data
-                    loadCrimeCategories();
-                    loadBarangays();
-                    setupAutoFilter();
-                    setupZoomScaling();
-                    loadCrimeData();
-                    loadTotalStats();
-                });
+                    map.fitBounds(b, { padding: [30, 30], animate: true });
+                }
+            } else if (qcBounds && qcBounds.isValid()) {
+                // All Barangays -> frame the whole city again
+                map.fitBounds(qcBounds, { padding: [20, 20], animate: true });
+            }
         }
 
         // Apply boundary constraints
@@ -2196,6 +2310,9 @@ if (request()->query('token')) {
 
             filterElements.forEach(elementId => {
                 document.getElementById(elementId).addEventListener('change', function() {
+                    // Redraw the boundary immediately; only the data fetch is debounced
+                    if (elementId === 'barangay') applyBarangaySelection();
+
                     if (filterTimeout) {
                         clearTimeout(filterTimeout);
                     }
@@ -2215,7 +2332,56 @@ if (request()->query('token')) {
             document.getElementById('clearanceStatus').value = '';
             document.getElementById('barangay').value = '';
             document.getElementById('incidentSearch').value = '';
+            applyBarangaySelection();   // zooms back out to the whole city
             loadCrimeData();
+        });
+
+        // ---- Enlarge the map, carrying the filters with it ----
+        let mapIsFullscreen = false;
+        let filtersHomeParent = null;
+        let filtersHomeAnchor = null;   // node the filters sat before, so they go back in place
+
+        function setMapFullscreen(on) {
+            const container = document.getElementById('mapContainer');
+            const filters = document.getElementById('filtersSection');
+            const icon = document.querySelector('#mapFullscreenBtn i');
+            const label = document.querySelector('#mapFullscreenBtn span');
+
+            if (on === mapIsFullscreen) return;
+            mapIsFullscreen = on;
+
+            if (on) {
+                filtersHomeParent = filters.parentNode;
+                filtersHomeAnchor = filters.nextSibling;
+                container.classList.add('map-fullscreen');
+                container.appendChild(filters);          // filters float over the map
+                if (icon) icon.className = 'fas fa-compress';
+                if (label) label.textContent = 'Exit Fullscreen';
+                document.body.style.overflow = 'hidden';
+            } else {
+                container.classList.remove('map-fullscreen');
+                if (filtersHomeParent) filtersHomeParent.insertBefore(filters, filtersHomeAnchor);
+                if (icon) icon.className = 'fas fa-expand';
+                if (label) label.textContent = 'Fullscreen';
+                document.body.style.overflow = '';
+            }
+
+            // Leaflet needs to re-measure after the container resizes
+            setTimeout(() => {
+                map.invalidateSize();
+                const target = document.getElementById('barangay').value
+                    ? (barangayLayersByCode[document.getElementById('barangay').value] || {}).getBounds?.()
+                    : qcBounds;
+                if (target && target.isValid && target.isValid()) {
+                    map.fitBounds(target, { padding: [30, 30] });
+                }
+            }, 200);
+        }
+
+        document.getElementById('mapFullscreenBtn').addEventListener('click', () => setMapFullscreen(!mapIsFullscreen));
+        document.getElementById('exitFullscreenBtn').addEventListener('click', () => setMapFullscreen(false));
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && mapIsFullscreen) setMapFullscreen(false);
         });
 
         // Search incident functionality (with debounce to prevent lag on every keystroke)

@@ -30,34 +30,6 @@ class LandingController extends Controller
     }
 
     /**
-     * Display the single-barangay mapping page (authenticated users only)
-     * Shows only the boundary and incidents of one barangay instead of all of QC
-     */
-    public function barangayMapping()
-    {
-        return view('barangay-mapping', [
-            'barangayName' => 'San Agustin',
-            'barangayGeojson' => '/sanagustin.geojson',
-        ]);
-    }
-
-    /**
-     * Display the QC barangay boundary map (authenticated users only)
-     * Shows every QC barangay with hover-to-identify, and isolates one when filtered
-     */
-    public function barangayBoundaries()
-    {
-        // Root-relative paths, not asset(): asset() builds an absolute URL from
-        // APP_URL (http://localhost), which points at the wrong origin whenever the
-        // app is served on another port such as `php artisan serve`.
-        return view('barangay-boundaries', [
-            'qcOutlineGeojson' => '/fullmapqc.geojson',
-            'barangaysGeojson' => '/qc_barangays.geojson',
-            'defaultBarangay' => 'San Agustin',
-        ]);
-    }
-
-    /**
      * Get crime location data as JSON for the heatmap
      * Can be used by: Web landing page, authenticated mapping page
      * Supports filtering by crime type, status, barangay, and date range

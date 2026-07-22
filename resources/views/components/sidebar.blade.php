@@ -87,23 +87,6 @@
                         </a>
                     </div>
 
-                    <!-- Barangay Mapping -->
-                    <div class="tree-node mt-0.5">
-                        <a href="{{ authUrl('barangay-mapping') }}"
-                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('barangay-mapping') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
-                            <i class="fas fa-map-pin w-4 h-4 mr-3 flex-shrink-0"></i>
-                            <span>Barangay Mapping</span>
-                        </a>
-                    </div>
-
-                    <!-- Barangay Boundaries -->
-                    <div class="tree-node mt-0.5">
-                        <a href="{{ authUrl('barangay-boundaries') }}"
-                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('barangay-boundaries') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
-                            <i class="fas fa-draw-polygon w-4 h-4 mr-3 flex-shrink-0"></i>
-                            <span>Barangay Boundaries</span>
-                        </a>
-                    </div>
                 </div>
 
                 <!-- Analytics Section -->
