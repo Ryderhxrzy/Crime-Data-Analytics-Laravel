@@ -121,8 +121,11 @@
             </h2>
             <div class="flex items-center gap-2">
                 <span id="aiMetaBadge" class="hidden text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 text-violet-800"></span>
-                <button id="aiSaveBtn" class="hidden px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-xs font-semibold items-center gap-1.5">
-                    <i class="fas fa-download mr-1"></i>Save Report
+                <button id="aiSaveBtn" class="hidden px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-xs font-semibold">
+                    <i class="fas fa-floppy-disk mr-1"></i>Save
+                </button>
+                <button id="aiDownloadBtn" class="hidden px-3 py-1.5 bg-white text-violet-700 border border-violet-300 rounded-lg hover:bg-violet-50 transition-colors text-xs font-semibold">
+                    <i class="fas fa-download mr-1"></i>Download
                 </button>
             </div>
         </div>
@@ -176,6 +179,12 @@
                 <div id="aiRecommendations" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
             </div>
 
+        </div>
+
+        <!-- Saved AI reports -->
+        <div id="savedReportsWrap" class="hidden mt-6 pt-4 border-t border-gray-200">
+            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-box-archive mr-1"></i>Saved AI Reports</h3>
+            <div id="savedReportsList" class="space-y-2 max-h-72 overflow-y-auto"></div>
         </div>
     </div>
 
@@ -325,6 +334,9 @@
 
     const ANALYZE_URL = @json(route('pattern-detection.analyze'));
     const AI_ANALYZE_URL = @json(route('pattern-detection.ai-analyze'));
+    const AI_SAVE_URL = @json(route('pattern-detection.ai-save'));
+    const AI_REPORTS_URL = @json(route('pattern-detection.ai-reports'));
+    const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 
     let simulationOn = false;
     let latest = null;
@@ -428,6 +440,8 @@
             $('aiLoading').classList.add('hidden');
             $('aiResults').classList.remove('hidden');
             $('aiSaveBtn').classList.remove('hidden');
+            $('aiDownloadBtn').classList.remove('hidden');
+            resetSaveButton();
         } catch (e) {
             console.error('AI analysis failed:', e);
             $('aiLoading').classList.add('hidden');
@@ -501,7 +515,73 @@
         }).join('') || '<p class="text-sm text-gray-500">No recommendations returned.</p>';
     }
 
-    // ---------- save AI report ----------
+    // ---------- save AI report to database ----------
+    function resetSaveButton() {
+        const btn = $('aiSaveBtn');
+        btn.disabled = false;
+        btn.className = 'px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-xs font-semibold';
+        btn.innerHTML = '<i class="fas fa-floppy-disk mr-1"></i>Save';
+    }
+
+    async function saveAiToDb() {
+        if (!latestAi) return;
+        const btn = $('aiSaveBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving…';
+
+        try {
+            const res = await fetch(AI_SAVE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': CSRF
+                },
+                body: JSON.stringify({ meta: latestAi.meta, analysis: latestAi.analysis })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
+
+            btn.className = 'px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold cursor-default';
+            btn.innerHTML = '<i class="fas fa-circle-check mr-1"></i>Saved (' + data.saved_rows + ' rows)';
+            loadSavedReports();
+        } catch (e) {
+            console.error('Save failed:', e);
+            btn.disabled = false;
+            btn.className = 'px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-semibold';
+            btn.innerHTML = '<i class="fas fa-triangle-exclamation mr-1"></i>Save failed — retry';
+        }
+    }
+
+    async function loadSavedReports() {
+        try {
+            const res = await fetch(AI_REPORTS_URL, { headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+            if (!data.success || !data.reports || !data.reports.length) return;
+
+            $('savedReportsWrap').classList.remove('hidden');
+            $('savedReportsList').innerHTML = data.reports.map(r => {
+                const isRec = r.report_type === 'recommendation';
+                const when = new Date(r.created_at).toLocaleString();
+                return '<div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">' +
+                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ' +
+                        (isRec ? 'bg-blue-100 text-blue-800' : 'bg-violet-100 text-violet-800') + '">' +
+                        (isRec ? 'RECOMMENDATION' : 'ANALYSIS') + '</span>' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<div class="text-sm font-semibold text-gray-900 truncate">' + esc(r.title) + '</div>' +
+                        (r.summary ? '<div class="text-xs text-gray-600 mt-0.5 line-clamp-2">' + esc(r.summary) + '</div>' : '') +
+                        '<div class="text-[10px] text-gray-400 mt-1">' + esc(when) +
+                            (r.saved_by ? ' · ' + esc(r.saved_by) : '') +
+                            ' · ' + r.records_used + ' records / ' + r.period_days + 'd</div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch (e) {
+            console.error('Loading saved reports failed:', e);
+        }
+    }
+
+    // ---------- download AI report as file ----------
     function saveAiReport() {
         if (!latestAi) return;
         const a = latestAi.analysis, f = a.forecast || {}, m = latestAi.meta;
@@ -970,8 +1050,10 @@
         // AI analysis fires only on an explicit Run Analysis click (not on page
         // load or control changes) to keep Gemini API usage low.
         $('runBtn').addEventListener('click', function () { run(); runAi(); });
-        $('aiSaveBtn').addEventListener('click', saveAiReport);
+        $('aiSaveBtn').addEventListener('click', saveAiToDb);
+        $('aiDownloadBtn').addEventListener('click', saveAiReport);
         initStreetMap();
+        loadSavedReports();
         $('daysSelect').addEventListener('change', run);
         ['volumeMultiplier', 'surgeCategory', 'timeSpike', 'locationSurge'].forEach(function (id) {
             $(id).addEventListener('change', function () { if (simulationOn) run(); });
