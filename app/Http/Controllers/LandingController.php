@@ -42,6 +42,19 @@ class LandingController extends Controller
     }
 
     /**
+     * Display the QC barangay boundary map (authenticated users only)
+     * Shows every QC barangay with hover-to-identify, and isolates one when filtered
+     */
+    public function barangayBoundaries()
+    {
+        return view('barangay-boundaries', [
+            'qcOutlineGeojson' => asset('fullmapqc.geojson'),
+            'barangaysGeojson' => asset('qc_barangays.geojson'),
+            'defaultBarangay' => 'San Agustin',
+        ]);
+    }
+
+    /**
      * Get crime location data as JSON for the heatmap
      * Can be used by: Web landing page, authenticated mapping page
      * Supports filtering by crime type, status, barangay, and date range
