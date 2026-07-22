@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use App\Models\CrimeCategory;
 use App\Models\CrimeIncident;
 use App\Models\CrimeTip;
+use App\Models\SanAgustinIncident;
 
 class LandingController extends Controller
 {
@@ -37,58 +39,69 @@ class LandingController extends Controller
      */
     public function getCrimeData(Request $request)
     {
-        // Determine date range filter
-        $dateRange = $request->query('range', 'all'); // default all records
+        // Served from the San Agustin incident table. That table keeps category_name
+        // and barangay_name as plain text, so colours/icons are looked up by name.
+        $categories = CrimeCategory::select('id', 'category_name', 'color_code', 'icon')
+            ->get()
+            ->keyBy(fn ($c) => mb_strtolower(trim($c->category_name)));
 
-        // TODO: Re-enable caching after testing real-time functionality
-        // For now, fetching fresh data from database for every request to test Reverb real-time updates
-        $query = CrimeIncident::with('category', 'barangay')
-            ->select('id', 'latitude', 'longitude', 'incident_date', 'incident_title', 'status', 'clearance_status', 'crime_category_id', 'barangay_id')
+        $query = SanAgustinIncident::query()
             ->whereNotNull('latitude')
             ->whereNotNull('longitude');
 
         // Apply date filter
+        $dateRange = $request->query('range', 'all');
         if ($dateRange !== 'all') {
-            $days = intval($dateRange);
-            $query->where('incident_date', '>=', now()->subDays($days));
+            $query->where('incident_date', '>=', now()->subDays(intval($dateRange)));
         }
 
-        // Apply crime type filter
-        if ($request->has('crime_type') && !empty($request->query('crime_type'))) {
-            $query->where('crime_category_id', $request->query('crime_type'));
+        // The map sends a category id; this table stores the name
+        if ($request->filled('crime_type')) {
+            $name = CrimeCategory::where('id', $request->query('crime_type'))->value('category_name');
+            $query->where('category_name', $name ?? '__no_such_category__');
         }
 
         // Apply case status (workflow) filter
-        if ($request->has('status') && !empty($request->query('status'))) {
+        if ($request->filled('status')) {
             $query->where('status', $request->query('status'));
         }
 
         // Apply clearance status filter
-        if ($request->has('clearance_status') && !empty($request->query('clearance_status'))) {
+        if ($request->filled('clearance_status')) {
             $query->where('clearance_status', $request->query('clearance_status'));
         }
 
-        // Apply barangay filter
-        if ($request->has('barangay') && !empty($request->query('barangay'))) {
-            $query->where('barangay_id', $request->query('barangay'));
+        // crime | incident
+        if ($request->filled('record_type')) {
+            $query->where('record_type', $request->query('record_type'));
+        }
+
+        // Barangay is matched by name. Every row is San Agustin, so choosing another
+        // barangay correctly returns nothing instead of the wrong barangay's data.
+        if ($request->filled('barangay')) {
+            $query->whereRaw('LOWER(TRIM(barangay_name)) = ?', [
+                mb_strtolower(trim($request->query('barangay'))),
+            ]);
         }
 
         $crimeData = $query->get()
-            ->map(function($incident) {
+            ->map(function ($incident) use ($categories) {
+                $category = $categories->get(mb_strtolower(trim($incident->category_name)));
+
                 return [
                     'id' => $incident->id,
                     'latitude' => (float) $incident->latitude,
                     'longitude' => (float) $incident->longitude,
-                    'incident_date' => $incident->incident_date->format('Y-m-d'),
+                    'incident_date' => optional($incident->incident_date)->format('Y-m-d'),
                     'incident_title' => $incident->incident_title,
                     'status' => $incident->status,
                     'clearance_status' => $incident->clearance_status,
-                    'crime_category_id' => $incident->crime_category_id,
-                    'barangay_id' => $incident->barangay_id,
-                    'location' => $incident->barangay ? $incident->barangay->barangay_name : 'Unknown Barangay',
-                    'category_name' => $incident->category ? $incident->category->category_name : 'Unknown',
-                    'color_code' => $incident->category ? $incident->category->color_code : '#274d4c',
-                    'icon' => $incident->category ? $incident->category->icon : 'fa-exclamation-circle'
+                    'record_type' => $incident->record_type,
+                    'crime_category_id' => $category->id ?? null,
+                    'location' => $incident->barangay_name,
+                    'category_name' => $incident->category_name ?: 'Unknown',
+                    'color_code' => $category->color_code ?? '#274d4c',
+                    'icon' => $category->icon ?? 'fa-exclamation-circle',
                 ];
             })
             ->values()  // Re-index array keys after mapping
@@ -103,24 +116,30 @@ class LandingController extends Controller
     public function getIncidentDetails($id)
     {
         try {
-            $incident = CrimeIncident::with('category', 'barangay')
-                ->findOrFail($id);
+            $incident = SanAgustinIncident::with('evidence')->findOrFail($id);
+
+            $category = CrimeCategory::whereRaw('LOWER(TRIM(category_name)) = ?', [
+                mb_strtolower(trim($incident->category_name)),
+            ])->first();
 
             return response()->json([
                 'id' => $incident->id,
-                'category_name' => $incident->category ? $incident->category->category_name : 'Unknown',
-                'color_code' => $incident->category ? $incident->category->color_code : '#274d4c',
-                'icon' => $incident->category ? $incident->category->icon : 'fa-exclamation-circle',
+                'category_name' => $incident->category_name ?: 'Unknown',
+                'color_code' => $category->color_code ?? '#274d4c',
+                'icon' => $category->icon ?? 'fa-exclamation-circle',
+                'record_type' => $incident->record_type,
                 'incident_title' => $incident->incident_title,
-                'incident_date' => $incident->incident_date ? $incident->incident_date->format('Y-m-d') : 'Not specified',
+                'incident_date' => optional($incident->incident_date)->format('Y-m-d') ?? 'Not specified',
                 'incident_time' => $incident->incident_time ?? 'Not specified',
-                'location' => $incident->barangay ? $incident->barangay->barangay_name : 'Not specified',
+                'location' => $incident->barangay_name ?? 'Not specified',
                 'address' => $incident->address_details ?? 'Not specified',
-                'barangay_name' => $incident->barangay ? $incident->barangay->barangay_name : 'Unknown',
+                'barangay_name' => $incident->barangay_name ?? 'Unknown',
                 'status' => $incident->status,
                 'clearance_status' => $incident->clearance_status,
                 'case_number' => $incident->incident_code ?? 'N/A',
                 'incident_details' => $incident->incident_description ?? 'No additional details',
+                'evidence_count' => $incident->evidence->count(),
+                'evidence_types' => $incident->evidence->pluck('evidence_type')->unique()->values(),
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Incident not found'], 404);
