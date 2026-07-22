@@ -533,10 +533,12 @@ if (request()->query('token')) {
             await populateBarangayDropdown();
             await loadDbBarangayIds();
 
-            // Default selection: San Agustin
-            const defaultCode = Object.keys(barangayNameByCode)
-                .find(c => norm(barangayNameByCode[c]) === norm(DEFAULT_BARANGAY));
-            if (defaultCode) document.getElementById('barangay').value = defaultCode;
+            // Default selection: San Agustin. Driven off the dropdown options so it
+            // still lands even if the boundary file failed to load.
+            const select = document.getElementById('barangay');
+            const defaultOpt = [...select.options]
+                .find(o => o.value && norm(o.textContent) === norm(DEFAULT_BARANGAY));
+            if (defaultOpt) select.value = defaultOpt.value;
 
             setupAutoFilter();
             applyBarangaySelection();
@@ -555,21 +557,26 @@ if (request()->query('token')) {
 
                 rows.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
+                const noPolygon = [];
+
                 rows.forEach(row => {
                     const code = String(row.code || '');
                     const name = (row.name || '').trim();
                     if (!code || !name) return;
 
-                    if (!barangayLayersByCode[code]) {
-                        console.warn(`No boundary polygon for ${name} (${code})`);
-                        return;
-                    }
+                    // Always list the barangay. A missing polygon only costs the
+                    // outline — it must never empty the whole dropdown.
+                    if (!barangayLayersByCode[code]) noPolygon.push(`${name} (${code})`);
 
                     const opt = document.createElement('option');
                     opt.value = code;
                     opt.textContent = name;
                     select.appendChild(opt);
                 });
+
+                if (noPolygon.length) {
+                    console.warn(`No boundary polygon for ${noPolygon.length} barangay(s):`, noPolygon);
+                }
             } catch (e) {
                 console.error('Error loading QC barangay list:', e);
             }
@@ -598,7 +605,12 @@ if (request()->query('token')) {
         }
 
         const currentBarangayCode = () => document.getElementById('barangay').value;
-        const currentBarangayName = () => barangayNameByCode[currentBarangayCode()] || '';
+        const currentBarangayName = () => {
+            const select = document.getElementById('barangay');
+            // Prefer the boundary file's name, fall back to the selected option's label
+            return barangayNameByCode[select.value] ||
+                (select.value ? (select.selectedOptions[0] || {}).textContent || '' : '');
+        };
 
         // Show all barangays (hoverable) or isolate exactly one
         function applyBarangaySelection() {
