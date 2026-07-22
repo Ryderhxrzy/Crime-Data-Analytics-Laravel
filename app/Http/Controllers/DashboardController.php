@@ -1328,9 +1328,9 @@ class DashboardController extends Controller
     public function sanAgustinStreetStats()
     {
         try {
-            $stats = \Illuminate\Support\Facades\Cache::remember('sa_street_stats_v1', now()->addMinutes(10), function () {
+            $stats = \Illuminate\Support\Facades\Cache::remember('sa_street_stats_v2', now()->addMinutes(10), function () {
                 $rows = \App\Models\SanAgustinIncident::query()
-                    ->get(['address_details', 'category_name', 'incident_time']);
+                    ->get(['incident_code', 'address_details', 'category_name', 'incident_date', 'incident_time', 'latitude', 'longitude']);
 
                 $streets = [];
                 foreach ($rows as $row) {
@@ -1339,7 +1339,7 @@ class DashboardController extends Controller
                         continue;
                     }
 
-                    $streets[$street] ??= ['count' => 0, 'categories' => [], 'hours' => []];
+                    $streets[$street] ??= ['count' => 0, 'categories' => [], 'hours' => [], 'incidents' => []];
                     $streets[$street]['count']++;
 
                     $cat = $row->category_name ?: 'Uncategorized';
@@ -1349,6 +1349,17 @@ class DashboardController extends Controller
                         $h = (int) $m[1];
                         $streets[$street]['hours'][$h] = ($streets[$street]['hours'][$h] ?? 0) + 1;
                     }
+
+                    // Per-incident coordinates so the map can point from the
+                    // hovered street to each of its crime dots
+                    $streets[$street]['incidents'][] = [
+                        'code'     => $row->incident_code,
+                        'category' => $cat,
+                        'date'     => $row->incident_date ? $row->incident_date->toDateString() : null,
+                        'time'     => $row->incident_time ? substr((string) $row->incident_time, 0, 5) : null,
+                        'lat'      => (float) $row->latitude,
+                        'lng'      => (float) $row->longitude,
+                    ];
                 }
 
                 $out = [];
@@ -1361,6 +1372,7 @@ class DashboardController extends Controller
                         'count'        => $s['count'],
                         'top_category' => array_key_first($s['categories']),
                         'peak_hours'   => array_map(fn ($h) => sprintf('%02d:00', $h), $peaks),
+                        'incidents'    => $s['incidents'],
                     ];
                 }
 
