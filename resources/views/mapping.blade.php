@@ -721,6 +721,11 @@ if (request()->query('token')) {
             map.getPane('barangayPane').style.zIndex = 350;
             barangayRenderer = L.svg({ pane: 'barangayPane' });
 
+            // Street outlines sit above the barangay fills but below the incident
+            // circles (overlayPane, 400), so markers stay visible and clickable.
+            map.createPane('streetPane');
+            map.getPane('streetPane').style.zIndex = 360;
+
             // Ensure map size is calculated, then load boundary
             setTimeout(() => {
                 map.invalidateSize();
@@ -773,27 +778,27 @@ if (request()->query('token')) {
                         barangayLayersByCode[code] = layer;
                         barangayRingsByCode[code] = ringsOfGeometry(feature.geometry);
 
-                        // Hover -> identify
+                        // Hover -> identify. Tooltips are bound/unbound by
+                        // applyBarangaySelection(): they exist ONLY in the
+                        // All-Barangays view.
+                        layer._brgyName = name;
                         layer.bindTooltip(name, {
                             sticky: true,
                             direction: 'top',
                             className: 'brgy-tooltip'
                         });
 
-                        // Hover to identify — works whether or not a barangay is
-                        // filtered, but never overrides the active one's styling.
+                        // Hover-to-identify only works in the All-Barangays view.
+                        // With a specific barangay isolated, the neighbours stay
+                        // visible for context but do not react to the mouse.
                         layer.on('mouseover', function () {
-                            if (document.getElementById('barangay').value === code) return;
+                            if (document.getElementById('barangay').value) return;
                             this.setStyle(STYLE_BRGY_HOVER);
                             this.bringToFront();
                         });
                         layer.on('mouseout', function () {
-                            const activeCode = document.getElementById('barangay').value;
-                            if (activeCode === code) return;
+                            if (document.getElementById('barangay').value) return;
                             this.setStyle(styleForBarangay(code));
-                            // Hovering lifted this layer, so put the active one back on top
-                            const active = activeCode ? barangayLayersByCode[activeCode] : null;
-                            if (active) active.bringToFront();
                         });
                         // Click to make this barangay the active one
                         layer.on('click', function () {
@@ -879,6 +884,17 @@ if (request()->query('token')) {
             Object.entries(barangayLayersByCode).forEach(([code, layer]) => {
                 if (!barangayBoundaryLayer.hasLayer(layer)) barangayBoundaryLayer.addLayer(layer);
                 layer.setStyle(styleForBarangay(code));
+
+                // Identify-on-hover tooltips belong to the All-Barangays view only
+                if (selectedCode) {
+                    if (layer.getTooltip()) layer.unbindTooltip();
+                } else if (!layer.getTooltip() && layer._brgyName) {
+                    layer.bindTooltip(layer._brgyName, {
+                        sticky: true,
+                        direction: 'top',
+                        className: 'brgy-tooltip'
+                    });
+                }
             });
 
             // Ordering only shuffles layers within 'barangayPane'; the incident circles
@@ -909,11 +925,124 @@ if (request()->query('token')) {
                 // All Barangays -> frame the whole city again
                 map.fitBounds(qcBounds, { padding: [20, 20], animate });
             }
+
+            updateSanAgustinStreetVisibility();
         }
 
         // Frame a single barangay as closely as possible while keeping all of it visible
         function zoomToBarangayBounds(bounds, animate = true) {
             map.fitBounds(bounds, { padding: BARANGAY_FIT_PADDING, animate });
+        }
+
+        // ------------------------------------------------------------------
+        // San Agustin street layer — every street outlined, hover highlights
+        // the whole street and shows its incident stats. Visible only while
+        // Barangay San Agustin is the isolated barangay.
+        // ------------------------------------------------------------------
+        const SA_STREETS_URL = '/data/san_agustin_streets.geojson';
+        const SA_STREET_STATS_URL = @json(route('pattern-detection.street-stats'));
+
+        let saStreetLayer = null;       // layer group holding all street polylines
+        let saStreetsLoading = null;    // promise guard so we only build once
+
+        const escStreet = s => String(s ?? '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        async function ensureSanAgustinStreets() {
+            if (saStreetLayer) return saStreetLayer;
+            if (saStreetsLoading) return saStreetsLoading;
+
+            saStreetsLoading = (async () => {
+                let geo, stats = {};
+                try {
+                    const [gRes, sRes] = await Promise.all([
+                        fetch(SA_STREETS_URL, { headers: { 'Accept': 'application/json' } }),
+                        fetch(SA_STREET_STATS_URL, { headers: { 'Accept': 'application/json' } })
+                    ]);
+                    geo = await gRes.json();
+                    stats = (await sRes.json()).streets || {};
+                } catch (e) {
+                    console.error('San Agustin street layer failed to load:', e);
+                    return null;
+                }
+
+                const maxCount = Math.max(1, ...Object.values(stats).map(s => s.count));
+                const colorFor = c => !c ? '#94a3b8'
+                    : c <= maxCount / 3 ? '#f59e0b'
+                    : c <= (2 * maxCount) / 3 ? '#ea580c'
+                    : '#b91c1c';
+
+                saStreetLayer = L.layerGroup();
+
+                // Group all OSM segments of a street so hover lights up the
+                // whole street, not just one piece.
+                const groups = {};
+                (geo.features || []).forEach(f => {
+                    const name = f.properties && f.properties.name;
+                    if (!name || f.geometry.type !== 'LineString') return;
+
+                    const latlngs = f.geometry.coordinates.map(c => [c[1], c[0]]);
+                    const g = groups[name] = groups[name] ||
+                        { casing: [], inner: [], color: colorFor((stats[name] || {}).count) };
+
+                    // Dark casing underneath = the street outline; the coloured
+                    // core on top encodes how much crime the street carries.
+                    g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 6, opacity: 0.65, pane: 'streetPane' }).addTo(saStreetLayer));
+                    g.inner.push(L.polyline(latlngs, { color: g.color, weight: 3, opacity: 0.95, pane: 'streetPane' }).addTo(saStreetLayer));
+                });
+
+                Object.entries(groups).forEach(([name, g]) => {
+                    const st = stats[name];
+                    const tip = '<div style="font-weight:700;margin-bottom:2px;">' + escStreet(name) + '</div>' +
+                        (st
+                            ? '<div>' + st.count + ' incident' + (st.count === 1 ? '' : 's') +
+                              (st.top_category ? ' · mostly ' + escStreet(st.top_category) : '') + '</div>' +
+                              (st.peak_hours && st.peak_hours.length
+                                  ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(escStreet).join(', ') + '</div>' : '')
+                            : '<div>No recorded incidents</div>');
+
+                    const highlight = on => {
+                        g.casing.forEach(l => l.setStyle(on
+                            ? { weight: 10, color: '#111827', opacity: 0.95 }
+                            : { weight: 6, color: '#1e293b', opacity: 0.65 }));
+                        g.inner.forEach(l => l.setStyle(on
+                            ? { weight: 5, color: '#8b5cf6' }
+                            : { weight: 3, color: g.color }));
+                        if (on) g.inner.forEach(l => l.bringToFront());
+                    };
+
+                    g.casing.concat(g.inner).forEach(l => {
+                        l.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
+                        l.on('mouseover', () => highlight(true));
+                        l.on('mouseout', () => highlight(false));
+                    });
+                });
+
+                return saStreetLayer;
+            })();
+
+            return saStreetsLoading;
+        }
+
+        function updateSanAgustinStreetVisibility() {
+            const select = document.getElementById('barangay');
+            if (!select) return;
+            const label = (nameByPsgcCode[select.value] ||
+                (select.selectedOptions[0] || {}).textContent || '').trim().toLowerCase();
+
+            if (select.value && label === 'san agustin') {
+                ensureSanAgustinStreets().then(layer => {
+                    // Re-check: the filter may have changed while streets loaded
+                    const current = document.getElementById('barangay');
+                    const still = (nameByPsgcCode[current.value] ||
+                        (current.selectedOptions[0] || {}).textContent || '').trim().toLowerCase();
+                    if (layer && current.value && still === 'san agustin' && !map.hasLayer(layer)) {
+                        layer.addTo(map);
+                    }
+                });
+            } else if (saStreetLayer && map.hasLayer(saStreetLayer)) {
+                map.removeLayer(saStreetLayer);
+            }
         }
 
         // Apply boundary constraints
