@@ -1216,6 +1216,27 @@ class DashboardController extends Controller
     }
 
     /**
+     * AI-powered pattern analysis of San Agustin incidents via Gemini.
+     *
+     * Heavily cached (see GeminiPatternAnalysisService) so repeated runs on
+     * the same data never spend API quota.
+     */
+    public function aiPatternAnalysis(Request $request, \App\Services\GeminiPatternAnalysisService $ai)
+    {
+        try {
+            $result = $ai->analyze((int) $request->input('days', 180));
+
+            $status = ($result['success'] ?? false) ? 200 : 422;
+
+            return response()->json($result, $status, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in aiPatternAnalysis: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'error' => 'Error running AI analysis: '.$e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get hotspot data with analytics for Crime Hotspot Analysis page (with Redis caching)
      */
     public function getHotspotData(Request $request, \App\Services\HotspotAnalyticsService $analytics)
