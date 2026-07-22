@@ -113,6 +113,68 @@
         </div>
     </div>
 
+    <!-- AI Analysis (Gemini) -->
+    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-1">
+            <h2 class="text-lg font-bold text-gray-900">
+                <i class="fas fa-robot mr-2 text-violet-600"></i>AI Analysis &mdash; Barangay San Agustin
+            </h2>
+            <span id="aiMetaBadge" class="hidden text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 text-violet-800"></span>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">Gemini analyzes recorded San Agustin incidents, forecasts whether crime will rise or fall, and suggests interventions with their projected effect.</p>
+
+        <!-- placeholder -->
+        <div id="aiPlaceholder" class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
+            <i class="fas fa-wand-magic-sparkles text-violet-400 text-xl mb-2 block"></i>
+            Click <span class="font-semibold text-gray-700">Run Analysis</span> to generate the AI forecast and recommendations.
+        </div>
+
+        <!-- loading -->
+        <div id="aiLoading" class="hidden rounded-lg bg-violet-50 border border-violet-200 p-6 text-center">
+            <i class="fas fa-spinner fa-spin text-2xl text-violet-600 mb-2"></i>
+            <div class="text-sm font-semibold text-violet-900">Gemini is analyzing San Agustin incidents&hellip;</div>
+        </div>
+
+        <!-- error -->
+        <div id="aiError" class="hidden rounded-lg bg-red-50 border border-red-200 p-4">
+            <div class="flex items-start gap-3">
+                <i class="fas fa-triangle-exclamation text-red-600 mt-0.5"></i>
+                <div>
+                    <div class="font-bold text-red-900 text-sm">AI analysis failed</div>
+                    <p id="aiErrorMessage" class="text-red-800 text-xs mt-1"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- results -->
+        <div id="aiResults" class="hidden space-y-5">
+            <!-- Forecast -->
+            <div id="aiForecastCard" class="rounded-xl border-2 p-5">
+                <div class="flex flex-wrap items-center gap-3 mb-2">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Crime Forecast</span>
+                    <span id="aiForecastBadge" class="px-3 py-1 rounded-full text-xs font-bold"></span>
+                    <span id="aiForecastPercent" class="text-sm font-bold"></span>
+                    <span id="aiConfidence" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700"></span>
+                </div>
+                <p id="aiForecastSummary" class="text-sm text-gray-800"></p>
+            </div>
+
+            <!-- Key findings -->
+            <div>
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-magnifying-glass-chart mr-1"></i>Key Findings</h3>
+                <ul id="aiFindings" class="space-y-2"></ul>
+            </div>
+
+            <!-- Recommendations -->
+            <div>
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-clipboard-check mr-1"></i>Recommended Interventions &amp; Projected Effect</h3>
+                <div id="aiRecommendations" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
+            </div>
+
+            <p class="text-[11px] text-gray-400"><i class="fas fa-circle-info mr-1"></i>AI-generated analysis &mdash; verify against official records before operational use. Results are cached for 6 hours to conserve API quota.</p>
+        </div>
+    </div>
+
     <!-- Loading -->
     <div id="loadingState" class="hidden bg-white rounded-xl border border-gray-200 p-12 text-center">
         <i class="fas fa-spinner fa-spin text-3xl text-alertara-700 mb-3"></i>
@@ -238,6 +300,7 @@
     'use strict';
 
     const ANALYZE_URL = @json(route('pattern-detection.analyze'));
+    const AI_ANALYZE_URL = @json(route('pattern-detection.ai-analyze'));
 
     let simulationOn = false;
     let latest = null;
@@ -313,6 +376,102 @@
             $('errorMessage').textContent = e.message;
             $('errorState').classList.remove('hidden');
         }
+    }
+
+    // ---------- AI analysis (Gemini) ----------
+    let aiBusy = false;
+
+    async function runAi() {
+        if (aiBusy) return;        // one in-flight call at a time — conserves quota
+        aiBusy = true;
+
+        $('aiPlaceholder').classList.add('hidden');
+        $('aiResults').classList.add('hidden');
+        $('aiError').classList.add('hidden');
+        $('aiMetaBadge').classList.add('hidden');
+        $('aiLoading').classList.remove('hidden');
+
+        try {
+            const res = await fetch(AI_ANALYZE_URL + '?days=' + encodeURIComponent($('daysSelect').value),
+                { headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+
+            if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
+
+            renderAi(data);
+            $('aiLoading').classList.add('hidden');
+            $('aiResults').classList.remove('hidden');
+        } catch (e) {
+            console.error('AI analysis failed:', e);
+            $('aiLoading').classList.add('hidden');
+            $('aiErrorMessage').textContent = e.message;
+            $('aiError').classList.remove('hidden');
+        } finally {
+            aiBusy = false;
+        }
+    }
+
+    function renderAi(data) {
+        const a = data.analysis, f = a.forecast || {};
+
+        $('aiMetaBadge').textContent = (data.meta.from_cache ? 'CACHED · ' : '') +
+            data.meta.records_used.toLocaleString() + ' records · ' + data.meta.period_days + 'd';
+        $('aiMetaBadge').classList.remove('hidden');
+
+        const dir = String(f.direction || 'stable').toLowerCase();
+        const style = {
+            increase: { card: 'border-red-300 bg-red-50',   badge: 'bg-red-200 text-red-900',   label: 'CRIME LIKELY TO INCREASE', icon: 'fa-arrow-trend-up' },
+            decrease: { card: 'border-green-300 bg-green-50', badge: 'bg-green-200 text-green-900', label: 'CRIME LIKELY TO DECREASE', icon: 'fa-arrow-trend-down' },
+            stable:   { card: 'border-gray-300 bg-gray-50',  badge: 'bg-gray-200 text-gray-800',  label: 'CRIME LIKELY STABLE', icon: 'fa-arrows-left-right' }
+        }[dir] || { card: 'border-gray-300 bg-gray-50', badge: 'bg-gray-200 text-gray-800', label: dir.toUpperCase(), icon: 'fa-minus' };
+
+        $('aiForecastCard').className = 'rounded-xl border-2 p-5 ' + style.card;
+        $('aiForecastBadge').className = 'px-3 py-1 rounded-full text-xs font-bold ' + style.badge;
+        $('aiForecastBadge').innerHTML = '<i class="fas ' + style.icon + ' mr-1"></i>' + style.label;
+
+        const pct = Number(f.expected_change_percent);
+        $('aiForecastPercent').textContent = isFinite(pct) ? ((pct > 0 ? '+' : '') + pct + '% projected') : '';
+        $('aiForecastPercent').className = 'text-sm font-bold ' + (pct > 0 ? 'text-red-700' : pct < 0 ? 'text-green-700' : 'text-gray-700');
+
+        $('aiConfidence').textContent = 'CONFIDENCE: ' + String(f.confidence || 'low').toUpperCase();
+        $('aiForecastSummary').textContent = f.summary || '';
+
+        $('aiFindings').innerHTML = (a.key_findings || []).map(k =>
+            '<li class="flex items-start gap-2 text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3">' +
+                '<i class="fas fa-circle-check text-violet-600 mt-0.5"></i><span>' + esc(k) + '</span>' +
+            '</li>').join('') || '<li class="text-sm text-gray-500">No findings returned.</li>';
+
+        const prio = {
+            high:   'bg-red-100 text-red-800 border-red-200',
+            medium: 'bg-amber-100 text-amber-800 border-amber-200',
+            low:    'bg-gray-100 text-gray-700 border-gray-200'
+        };
+
+        $('aiRecommendations').innerHTML = (a.recommendations || []).map(r => {
+            const imp = r.expected_impact || {};
+            const impDir = String(imp.direction || '').toLowerCase();
+            const impPct = Number(imp.estimated_change_percent);
+            const good = impDir === 'decrease' || impPct < 0;
+            const p = String(r.priority || 'low').toLowerCase();
+
+            return '<div class="rounded-xl border border-gray-200 p-4 flex flex-col gap-2">' +
+                '<div class="flex items-start justify-between gap-2">' +
+                    '<div class="text-sm font-bold text-gray-900"><i class="fas fa-shield-halved text-violet-600 mr-1"></i>' + esc(r.action) + '</div>' +
+                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (prio[p] || prio.low) + '">' + p.toUpperCase() + '</span>' +
+                '</div>' +
+                (r.location ? '<div class="text-xs text-gray-600"><i class="fas fa-location-dot text-gray-400 mr-1"></i>' + esc(r.location) + '</div>' : '') +
+                (r.rationale ? '<p class="text-xs text-gray-600">' + esc(r.rationale) + '</p>' : '') +
+                '<div class="mt-auto rounded-lg p-3 border ' + (good ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200') + '">' +
+                    '<div class="text-[10px] font-bold uppercase tracking-wide ' + (good ? 'text-green-700' : 'text-red-700') + '">If implemented</div>' +
+                    '<div class="text-sm font-bold ' + (good ? 'text-green-800' : 'text-red-800') + '">' +
+                        '<i class="fas ' + (good ? 'fa-arrow-trend-down' : 'fa-arrow-trend-up') + ' mr-1"></i>' +
+                        'Crime expected to ' + (good ? 'decrease' : impDir === 'increase' ? 'increase' : 'stay stable') +
+                        (isFinite(impPct) ? ' by ~' + Math.abs(impPct) + '%' : '') +
+                    '</div>' +
+                    (imp.explanation ? '<p class="text-[11px] mt-1 ' + (good ? 'text-green-700' : 'text-red-700') + '">' + esc(imp.explanation) + '</p>' : '') +
+                '</div>' +
+            '</div>';
+        }).join('') || '<p class="text-sm text-gray-500">No recommendations returned.</p>';
     }
 
     // ---------- render ----------
@@ -642,7 +801,9 @@
     // ---------- wiring ----------
     function init() {
         $('simToggle').addEventListener('click', function () { setSimulation(!simulationOn); run(); });
-        $('runBtn').addEventListener('click', run);
+        // AI analysis fires only on an explicit Run Analysis click (not on page
+        // load or control changes) to keep Gemini API usage low.
+        $('runBtn').addEventListener('click', function () { run(); runAi(); });
         $('daysSelect').addEventListener('change', run);
         ['volumeMultiplier', 'surgeCategory', 'timeSpike', 'locationSurge'].forEach(function (id) {
             $(id).addEventListener('change', function () { if (simulationOn) run(); });

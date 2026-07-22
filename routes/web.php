@@ -70,6 +70,9 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
     Route::post('/pattern-detection/simulate', [DashboardController::class, 'simulatePatterns'])->name('pattern-detection.simulate');
     Route::get('/pattern-detection/analyze', [DashboardController::class, 'detectPatterns'])->name('pattern-detection.analyze');
+    Route::get('/pattern-detection/ai-analyze', [DashboardController::class, 'aiPatternAnalysis'])
+        ->middleware('throttle:5,1')
+        ->name('pattern-detection.ai-analyze');
     Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
     Route::get('/crime-incident/create', [CrimeIncidentController::class, 'create'])->name('crime-incident.create');
     Route::post('/crime-incident', [CrimeIncidentController::class, 'store'])->name('crime-incident.store');
