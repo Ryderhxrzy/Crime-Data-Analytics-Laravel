@@ -361,10 +361,12 @@ if (request()->query('token')) {
         let barangayLayer = null;       // all barangay polygons
         let selectedHaloLayer = null;   // dashed accent on the isolated barangay
         let selectedLabel = null;       // name label on the isolated barangay
-        let barangayLayersByName = {};  // name -> leaflet layer
-        let barangayRingsByName = {};   // name -> polygon rings (for point-in-polygon)
+        let barangayLayersByName = {};  // geojson name -> leaflet layer
+        let barangayRingsByName = {};   // geojson name -> polygon rings (for point-in-polygon)
         let qcBounds = null;
-        let barangayIdByName = {};      // name -> DB barangay_id
+        // The dropdown is driven by /api/barangays, so its values are DB barangay ids
+        let barangayNameById = {};      // DB barangay_id -> barangay_name
+        let barangayIdByName = {};      // normalized barangay_name -> DB barangay_id
         let currentData = [], currentListData = [], currentListPage = 1;
         let selectedIncidentId = null, arrowPointer = null, filterTimeout = null;
         const MAX_VISIBLE_INCIDENTS = 20;
@@ -509,7 +511,12 @@ if (request()->query('token')) {
                         // Click -> isolate this barangay
                         layer.on('click', function () {
                             if (currentBarangayName()) return;
-                            document.getElementById('barangay').value = name;
+                            const id = barangayIdByName[norm(name)];
+                            if (!id) {
+                                console.warn(`"${name}" has no matching row in /api/barangays — cannot isolate.`);
+                                return;
+                            }
+                            document.getElementById('barangay').value = id;
                             applyBarangaySelection();
                             loadCrimeData();
                         });
@@ -517,20 +524,16 @@ if (request()->query('token')) {
                 }).addTo(map);
 
                 if (!qcBounds || !qcBounds.isValid()) qcBounds = barangayLayer.getBounds();
-
-                populateBarangayDropdown(Object.keys(barangayLayersByName).sort());
             } catch (e) {
                 console.error('Error loading barangay boundaries:', e);
             }
 
             await loadCrimeCategories();
-            await resolveBarangayIds();
+            await populateBarangayDropdown();
 
-            // Default selection (San Agustin) if it exists in the data
-            const select = document.getElementById('barangay');
-            const match = Object.keys(barangayLayersByName)
-                .find(n => norm(n) === norm(DEFAULT_BARANGAY));
-            if (match) select.value = match;
+            // Default selection: San Agustin
+            const defaultId = barangayIdByName[norm(DEFAULT_BARANGAY)];
+            if (defaultId) document.getElementById('barangay').value = defaultId;
 
             setupAutoFilter();
             applyBarangaySelection();
@@ -538,17 +541,45 @@ if (request()->query('token')) {
             hideMapLoading();
         }
 
-        function populateBarangayDropdown(names) {
+        // Barangay options come from the QC barangay API, so the option values are
+        // the real DB ids the crime endpoints filter on.
+        async function populateBarangayDropdown() {
             const select = document.getElementById('barangay');
-            names.forEach(name => {
-                const opt = document.createElement('option');
-                opt.value = name;
-                opt.textContent = name;
-                select.appendChild(opt);
-            });
+            try {
+                const res = await fetch('/api/barangays');
+                const rows = await res.json();
+
+                rows.sort((a, b) => (a.barangay_name || '').localeCompare(b.barangay_name || ''));
+
+                rows.forEach(row => {
+                    const name = (row.barangay_name || '').trim();
+                    if (!name) return;
+
+                    barangayNameById[String(row.id)] = name;
+                    barangayIdByName[norm(name)] = String(row.id);
+
+                    const opt = document.createElement('option');
+                    opt.value = row.id;
+                    opt.textContent = name;
+                    select.appendChild(opt);
+                });
+
+                // Surface any name that has no polygon (or vice versa) instead of failing silently
+                const noPolygon = rows
+                    .map(r => (r.barangay_name || '').trim())
+                    .filter(n => n && !Object.keys(barangayLayersByName).some(g => norm(g) === norm(n)));
+                const noDbRow = Object.keys(barangayLayersByName)
+                    .filter(g => !barangayIdByName[norm(g)]);
+
+                if (noPolygon.length) console.warn('Barangays with no boundary polygon:', noPolygon);
+                if (noDbRow.length)   console.warn('Polygons with no /api/barangays row:', noDbRow);
+            } catch (e) {
+                console.error('Error loading barangays:', e);
+            }
         }
 
-        const currentBarangayName = () => document.getElementById('barangay').value;
+        const currentBarangayId = () => document.getElementById('barangay').value;
+        const currentBarangayName = () => barangayNameById[currentBarangayId()] || '';
 
         // Show all barangays (hoverable) or isolate exactly one with a lining border
         function applyBarangaySelection() {
@@ -618,17 +649,6 @@ if (request()->query('token')) {
             }
         }
 
-        // Map barangay names to DB ids so the API can filter server-side
-        async function resolveBarangayIds() {
-            try {
-                const res = await fetch('/api/barangays');
-                const rows = await res.json();
-                rows.forEach(r => { barangayIdByName[norm(r.barangay_name)] = r.id; });
-            } catch (e) {
-                console.error('Error loading barangay ids:', e);
-            }
-        }
-
         // ---- Crime data ----
         async function loadCrimeData() {
             showIncidentSkeleton();
@@ -646,7 +666,7 @@ if (request()->query('token')) {
                 if (caseStatus) params.append('status', caseStatus);
                 if (clearanceStatus) params.append('clearance_status', clearanceStatus);
 
-                const brgyId = selectedBrgy ? barangayIdByName[norm(selectedBrgy)] : null;
+                const brgyId = currentBarangayId();
                 if (brgyId) params.append('barangay', brgyId);
 
                 const res = await fetch(`/api/crime-heatmap?${params}`);
