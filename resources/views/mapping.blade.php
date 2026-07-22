@@ -990,13 +990,19 @@ if (request()->query('token')) {
 
                     // Thin, translucent lines: the faint casing keeps the outline
                     // readable, and the base map's street names show through.
-                    g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 5, opacity: 0.3, pane: 'streetPane' }).addTo(saStreetLayer));
-                    g.inner.push(L.polyline(latlngs, { color: g.color, weight: 2.5, opacity: 0.6, pane: 'streetPane' }).addTo(saStreetLayer));
+                    // NOT added to the layer here — each street's polylines are
+                    // mounted below through one featureGroup, so the group has a
+                    // map reference and its tooltip can actually open.
+                    g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 5, opacity: 0.3, pane: 'streetPane' }));
+                    g.inner.push(L.polyline(latlngs, { color: g.color, weight: 2.5, opacity: 0.6, pane: 'streetPane' }));
                 });
 
                 Object.entries(groups).forEach(([name, g]) => {
                     const st = stats[name];
                     const tip = '<div style="font-weight:700;margin-bottom:2px;">' + escStreet(name) + '</div>' +
+                        // the street's line colour, shown under the name so the
+                        // hovered line is easy to match by eye
+                        '<div style="margin-bottom:3px;"><span style="display:inline-block;width:28px;height:5px;border-radius:3px;background:' + g.color + ';vertical-align:middle;"></span></div>' +
                         (st
                             ? '<div>' + st.count + ' incident' + (st.count === 1 ? '' : 's') +
                               (st.top_category ? ' · mostly ' + escStreet(st.top_category) : '') + '</div>' +
@@ -1016,14 +1022,15 @@ if (request()->query('token')) {
                             : { weight: 2.5, color: g.color, opacity: 0.6 }));
                     };
 
-                    // ONE tooltip per street on the group, not one per segment,
-                    // so segment-to-segment moves cannot strand an open tooltip.
-                    const streetGroup = L.featureGroup(g.casing.concat(g.inner));
+                    // ONE tooltip per street bound to a featureGroup that is
+                    // itself mounted on the layer — the group then has a map
+                    // reference, which sticky tooltips need in order to open.
+                    const streetGroup = L.featureGroup(g.casing.concat(g.inner)).addTo(saStreetLayer);
                     streetGroup.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
                     streetGroup.on('mouseover', () => highlight(true));
                     streetGroup.on('mouseout', () => {
                         highlight(false);
-                        streetGroup.closeTooltip();   // belt and braces — never leave it open
+                        streetGroup.closeTooltip();   // never leave it hanging open
                     });
                 });
 

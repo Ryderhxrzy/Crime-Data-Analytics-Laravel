@@ -29,8 +29,8 @@ return new class extends Migration
     private const ANCHOR_DATE = '2026-07-22';
     private const SPAN_DAYS = 730;
 
-    /** Metres outside the strict polygon still counted as San Agustin */
-    private const EDGE_TOLERANCE_M = 40.0;
+    /** STRICT: generated points must sit inside the polygon itself */
+    private const EDGE_TOLERANCE_M = 0.0;
 
     private array $boundary = [];
 
