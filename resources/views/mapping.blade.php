@@ -1001,6 +1001,28 @@ if (request()->query('token')) {
                     g.inner.push(L.polyline(latlngs, { color: g.color, weight: 2.5, opacity: 0.6, pane: 'streetPane' }));
                 });
 
+                // Nearest point on the street's polylines to a given lat/lng —
+                // anchor of the thin pointer line drawn to each crime dot.
+                const nearestOnStreet = (g, lat, lng) => {
+                    const cosLat = Math.cos(lat * Math.PI / 180);
+                    let best = null, bestD = Infinity;
+                    g.inner.forEach(l => {
+                        const pts = l.getLatLngs();
+                        for (let i = 0; i < pts.length - 1; i++) {
+                            const ax = pts[i].lng * cosLat, ay = pts[i].lat;
+                            const bx = pts[i + 1].lng * cosLat, by = pts[i + 1].lat;
+                            const px = lng * cosLat, py = lat;
+                            const dx = bx - ax, dy = by - ay;
+                            const lsq = dx * dx + dy * dy;
+                            const t = lsq < 1e-18 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lsq));
+                            const qx = ax + t * dx, qy = ay + t * dy;
+                            const d = (px - qx) * (px - qx) + (py - qy) * (py - qy);
+                            if (d < bestD) { bestD = d; best = [qy, (qx / cosLat)]; }
+                        }
+                    });
+                    return best;
+                };
+
                 Object.entries(groups).forEach(([name, g]) => {
                     const st = stats[name];
                     const tip = '<div style="font-weight:700;margin-bottom:2px;">' + escStreet(name) + '</div>' +
@@ -1026,14 +1048,61 @@ if (request()->query('token')) {
                             : { weight: 2.5, color: g.color, opacity: 0.6 }));
                     };
 
+                    // Thin dashed pointer lines from the street to each of its
+                    // crime dots, labelled with the crime, shown only while
+                    // hovering. Everything is non-interactive so the pointers
+                    // can never steal the mouse and flicker the hover state.
+                    let connectors = null;
+                    const showConnectors = () => {
+                        if (connectors || !st || !st.incidents || !st.incidents.length) return;
+                        connectors = L.layerGroup();
+
+                        st.incidents.forEach(inc => {
+                            if (!isFinite(inc.lat) || !isFinite(inc.lng)) return;
+                            const anchor = nearestOnStreet(g, inc.lat, inc.lng);
+                            if (anchor) {
+                                L.polyline([anchor, [inc.lat, inc.lng]], {
+                                    color: '#111827', weight: 1.2, opacity: 0.85,
+                                    dashArray: '4,3', interactive: false
+                                }).addTo(connectors);
+                            }
+
+                            L.circleMarker([inc.lat, inc.lng], {
+                                radius: 4.5, color: '#111827', weight: 1.5,
+                                fillColor: g.color, fillOpacity: 1, interactive: false
+                            }).addTo(connectors);
+
+                            const label = escStreet(inc.category) + (inc.time ? ' · ' + escStreet(inc.time) : '');
+                            L.marker([inc.lat, inc.lng], {
+                                interactive: false,
+                                icon: L.divIcon({
+                                    className: '',
+                                    iconSize: null,
+                                    html: '<div style="transform:translate(-50%,-165%);display:inline-block;white-space:nowrap;' +
+                                          'background:#111827;color:#fff;font-size:10px;font-weight:600;' +
+                                          'padding:2px 7px;border-radius:9999px;box-shadow:0 1px 4px rgba(0,0,0,.35);' +
+                                          'border:1.5px solid ' + g.color + ';">' + label + '</div>'
+                                })
+                            }).addTo(connectors);
+                        });
+
+                        // Mounted on the street layer, not the map, so switching
+                        // barangay mid-hover sweeps the pointers away with it
+                        connectors.addTo(saStreetLayer);
+                    };
+                    const hideConnectors = () => {
+                        if (connectors) { saStreetLayer.removeLayer(connectors); connectors = null; }
+                    };
+
                     // ONE tooltip per street bound to a featureGroup that is
                     // itself mounted on the layer — the group then has a map
                     // reference, which sticky tooltips need in order to open.
                     const streetGroup = L.featureGroup(g.casing.concat(g.inner)).addTo(saStreetLayer);
                     streetGroup.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
-                    streetGroup.on('mouseover', () => highlight(true));
+                    streetGroup.on('mouseover', () => { highlight(true); showConnectors(); });
                     streetGroup.on('mouseout', () => {
                         highlight(false);
+                        hideConnectors();
                         streetGroup.closeTooltip();   // never leave it hanging open
                     });
                 });
