@@ -98,13 +98,16 @@ class GeminiPatternAnalysisService
                     $hour = (int) $m[1];
                 }
 
+                // "Susano Road, Barangay San Agustin, Quezon City" -> "Susano Road"
+                $street = trim(explode(',', (string) $i->address_details)[0] ?? '');
+
                 return [
                     'date'     => $date->toDateString(),
                     'month'    => $date->format('Y-m'),
                     'dow'      => $date->format('l'),
                     'hour'     => $hour,
                     'category' => $i->category_name ?: 'Uncategorized',
-                    'street'   => trim((string) $i->address_details) ?: null,
+                    'street'   => $street !== '' ? $street : null,
                     'status'   => $i->status,
                 ];
             })
@@ -138,6 +141,41 @@ class GeminiPatternAnalysisService
             }
         }
 
+        // Hour-by-hour distribution (00-23) — the strongest timing signal
+        $hourly = array_fill(0, 24, 0);
+        foreach ($incidents as $i) {
+            if ($i['hour'] !== null) {
+                $hourly[$i['hour']]++;
+            }
+        }
+        $hourlyLabeled = [];
+        foreach ($hourly as $h => $c) {
+            $hourlyLabeled[sprintf('%02d:00', $h)] = $c;
+        }
+
+        // Peak hours per top category, so recommendations can cite exact times
+        $categoryPeaks = [];
+        foreach ($incidents->countBy('category')->sortDesc()->take(8)->keys() as $cat) {
+            $hours = $incidents->where('category', $cat)->whereNotNull('hour')
+                ->countBy('hour')->sortDesc()->take(3);
+            $categoryPeaks[$cat] = [
+                'count'      => $incidents->where('category', $cat)->count(),
+                'peak_hours' => $hours->keys()->map(fn ($h) => sprintf('%02d:00', $h))->values()->all(),
+            ];
+        }
+
+        // Street-level profile: count, dominant crime, peak hours per street
+        $streetProfiles = [];
+        foreach ($incidents->whereNotNull('street')->groupBy('street')
+                     ->sortByDesc(fn ($g) => $g->count())->take(15) as $street => $group) {
+            $peak = $group->whereNotNull('hour')->countBy('hour')->sortDesc()->take(2);
+            $streetProfiles[$street] = [
+                'count'      => $group->count(),
+                'top_crime'  => $group->countBy('category')->sortDesc()->keys()->first(),
+                'peak_hours' => $peak->keys()->map(fn ($h) => sprintf('%02d:00', $h))->values()->all(),
+            ];
+        }
+
         return [
             'barangay'            => 'San Agustin, Quezon City',
             'period_days'         => $days,
@@ -146,10 +184,11 @@ class GeminiPatternAnalysisService
             'second_half_count'   => $recent,
             'monthly_counts'      => $incidents->countBy('month')->sortKeys()->all(),
             'by_category'         => $incidents->countBy('category')->sortDesc()->take(12)->all(),
-            'top_streets'         => $incidents->pluck('street')->filter()
-                                        ->countBy()->sortDesc()->take(8)->all(),
+            'category_peak_hours' => $categoryPeaks,
+            'street_profiles'     => $streetProfiles,
             'by_day_of_week'      => $incidents->countBy('dow')->all(),
             'by_time_of_day'      => $timeBuckets,
+            'hourly_counts'       => $hourlyLabeled,
             'unresolved_count'    => $incidents->whereNotIn('status', ['resolved', 'closed', 'cleared'])->count(),
         ];
     }
@@ -258,9 +297,9 @@ Analyze the data and respond with ONLY a valid JSON object in exactly this shape
   ],
   "recommendations": [
     {
-      "action": "<specific intervention, e.g. Install streetlights, Deploy roving patrol (roronda), Install CCTV, Community watch>",
-      "location": "<specific street/area from top_streets, or a time window from the data, where it should be applied>",
-      "rationale": "<1-2 sentences: why this intervention fits this data pattern>",
+      "action": "<specific intervention, e.g. Install streetlights, Deploy roving patrol (roronda), Install CCTV, Community watch, Anti-fraud awareness drive>",
+      "location": "<a specific street from street_profiles PLUS the exact time window it should cover, e.g. 'Susano Road, 21:00-02:00'>",
+      "rationale": "<1-2 sentences: why this intervention fits this street's dominant crime and peak hours>",
       "expected_impact": {
         "direction": "decrease" | "increase" | "stable",
         "estimated_change_percent": <signed number: projected change in crime IF this is implemented, e.g. -20>,
@@ -268,14 +307,15 @@ Analyze the data and respond with ONLY a valid JSON object in exactly this shape
       },
       "priority": "high" | "medium" | "low"
     },
-    "... 3 to 5 recommendations total"
+    "... 6 to 8 recommendations total, covering different streets and different intervention types"
   ]
 }
 
 Rules:
 - Base the forecast on the actual trend in monthly_counts and the first_half_count vs second_half_count comparison.
-- Recommendations must reference the actual streets, times, and crime categories in the data (e.g. lighting for night-time incidents, patrols for peak hours/days).
-- estimated_change_percent must be realistic and grounded in published crime-prevention research effect sizes (e.g. improved street lighting ≈ -20% area crime, CCTV ≈ -13%, hot-spot patrols ≈ -15 to -25%).
+- Be precise about TIMING: use hourly_counts and category_peak_hours to name the exact hours each intervention should run (e.g. night patrols where robbery peaks 21:00-02:00, daytime theft watch 10:00-14:00, anti-burglary checks in early-morning hours).
+- Ground every recommendation in a REAL street from street_profiles, matched to that street's top_crime and peak_hours. Cover at least 5 different streets across all recommendations.
+- estimated_change_percent must be realistic and grounded in published crime-prevention research effect sizes (e.g. improved street lighting ≈ -20% area crime, CCTV ≈ -13%, hot-spot patrols ≈ -15 to -25%, community watch ≈ -16%).
 - Keep every text field concise. Output JSON only, no markdown.
 PROMPT;
     }

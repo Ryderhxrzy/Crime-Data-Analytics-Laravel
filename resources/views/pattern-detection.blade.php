@@ -119,7 +119,12 @@
             <h2 class="text-lg font-bold text-gray-900">
                 <i class="fas fa-robot mr-2 text-violet-600"></i>AI Analysis &mdash; Barangay San Agustin
             </h2>
-            <span id="aiMetaBadge" class="hidden text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 text-violet-800"></span>
+            <div class="flex items-center gap-2">
+                <span id="aiMetaBadge" class="hidden text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 text-violet-800"></span>
+                <button id="aiSaveBtn" class="hidden px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-xs font-semibold items-center gap-1.5">
+                    <i class="fas fa-download mr-1"></i>Save Report
+                </button>
+            </div>
         </div>
         <p class="text-xs text-gray-500 mb-4">Gemini analyzes recorded San Agustin incidents, forecasts whether crime will rise or fall, and suggests interventions with their projected effect.</p>
 
@@ -171,8 +176,27 @@
                 <div id="aiRecommendations" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
             </div>
 
-            <p class="text-[11px] text-gray-400"><i class="fas fa-circle-info mr-1"></i>AI-generated analysis &mdash; verify against official records before operational use. Results are cached for 6 hours to conserve API quota.</p>
         </div>
+    </div>
+
+    <!-- San Agustin street map -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 mb-1">
+            <h2 class="text-lg font-bold text-gray-900">
+                <i class="fas fa-road mr-2 text-alertara-600"></i>San Agustin Street Map
+            </h2>
+            <div class="flex items-center gap-3 text-[11px] text-gray-600">
+                <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-1.5 rounded" style="background:#94a3b8"></span> No incidents</span>
+                <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-1.5 rounded" style="background:#f59e0b"></span> Low</span>
+                <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-1.5 rounded" style="background:#ea580c"></span> Moderate</span>
+                <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-1.5 rounded" style="background:#b91c1c"></span> High</span>
+            </div>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">Every street is outlined; hover over a street to highlight it and see its incident count, dominant crime, and peak hours. Click a street to zoom in.</p>
+        <div id="streetMap" class="rounded-lg border border-gray-200" style="height: 440px;"></div>
     </div>
 
     <!-- Loading -->
@@ -380,6 +404,7 @@
 
     // ---------- AI analysis (Gemini) ----------
     let aiBusy = false;
+    let latestAi = null;
 
     async function runAi() {
         if (aiBusy) return;        // one in-flight call at a time — conserves quota
@@ -398,9 +423,11 @@
 
             if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
 
+            latestAi = data;
             renderAi(data);
             $('aiLoading').classList.add('hidden');
             $('aiResults').classList.remove('hidden');
+            $('aiSaveBtn').classList.remove('hidden');
         } catch (e) {
             console.error('AI analysis failed:', e);
             $('aiLoading').classList.add('hidden');
@@ -414,7 +441,7 @@
     function renderAi(data) {
         const a = data.analysis, f = a.forecast || {};
 
-        $('aiMetaBadge').textContent = (data.meta.from_cache ? 'CACHED · ' : '') +
+        $('aiMetaBadge').textContent =
             data.meta.records_used.toLocaleString() + ' records · ' + data.meta.period_days + 'd';
         $('aiMetaBadge').classList.remove('hidden');
 
@@ -472,6 +499,145 @@
                 '</div>' +
             '</div>';
         }).join('') || '<p class="text-sm text-gray-500">No recommendations returned.</p>';
+    }
+
+    // ---------- save AI report ----------
+    function saveAiReport() {
+        if (!latestAi) return;
+        const a = latestAi.analysis, f = a.forecast || {}, m = latestAi.meta;
+        const pct = Number(f.expected_change_percent);
+        const dirColor = { increase: '#b91c1c', decrease: '#15803d', stable: '#374151' }[String(f.direction).toLowerCase()] || '#374151';
+
+        const rec = r => {
+            const imp = r.expected_impact || {};
+            const good = String(imp.direction).toLowerCase() === 'decrease' || Number(imp.estimated_change_percent) < 0;
+            return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin-bottom:10px;">' +
+                '<div style="font-weight:700;">' + esc(r.action) + ' <span style="float:right;font-size:11px;color:#6b7280;text-transform:uppercase;">' + esc(r.priority || '') + ' priority</span></div>' +
+                (r.location ? '<div style="font-size:12px;color:#4b5563;margin-top:2px;">📍 ' + esc(r.location) + '</div>' : '') +
+                (r.rationale ? '<div style="font-size:12px;color:#4b5563;margin-top:6px;">' + esc(r.rationale) + '</div>' : '') +
+                '<div style="margin-top:8px;padding:10px;border-radius:8px;background:' + (good ? '#f0fdf4' : '#fef2f2') + ';color:' + (good ? '#15803d' : '#b91c1c') + ';font-size:12px;">' +
+                    '<strong>If implemented:</strong> crime expected to ' + (good ? 'decrease' : 'increase') +
+                    (isFinite(Number(imp.estimated_change_percent)) ? ' by ~' + Math.abs(Number(imp.estimated_change_percent)) + '%' : '') +
+                    (imp.explanation ? ' — ' + esc(imp.explanation) : '') +
+                '</div></div>';
+        };
+
+        const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>AI Crime Analysis — Barangay San Agustin</title></head>' +
+            '<body style="font-family:Segoe UI,Arial,sans-serif;max-width:800px;margin:32px auto;padding:0 16px;color:#111827;">' +
+            '<h1 style="margin-bottom:4px;">AI Crime Pattern Analysis</h1>' +
+            '<div style="color:#6b7280;font-size:13px;margin-bottom:24px;">Barangay San Agustin, Quezon City · ' +
+                esc(m.period_start) + ' to ' + esc(m.period_end) + ' (' + m.period_days + ' days) · ' +
+                m.records_used.toLocaleString() + ' records · Generated ' + new Date(m.generated_at).toLocaleString() + '</div>' +
+            '<div style="border:2px solid ' + dirColor + ';border-radius:12px;padding:16px;margin-bottom:24px;">' +
+                '<div style="font-size:11px;text-transform:uppercase;color:#6b7280;font-weight:700;">Crime Forecast</div>' +
+                '<div style="font-size:20px;font-weight:800;color:' + dirColor + ';margin:4px 0;">' + esc(String(f.direction || '').toUpperCase()) +
+                    (isFinite(pct) ? ' (' + (pct > 0 ? '+' : '') + pct + '%)' : '') +
+                    ' <span style="font-size:12px;color:#6b7280;font-weight:600;">confidence: ' + esc(f.confidence || '-') + '</span></div>' +
+                '<div style="font-size:14px;">' + esc(f.summary || '') + '</div>' +
+            '</div>' +
+            '<h2 style="font-size:16px;">Key Findings</h2><ul>' +
+            (a.key_findings || []).map(k => '<li style="margin-bottom:6px;font-size:13px;">' + esc(k) + '</li>').join('') +
+            '</ul>' +
+            '<h2 style="font-size:16px;">Recommended Interventions &amp; Projected Effect</h2>' +
+            (a.recommendations || []).map(rec).join('') +
+            '</body></html>';
+
+        const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+        const blob = new Blob([html], { type: 'text/html' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'ai-crime-analysis-san-agustin-' + stamp + '.html';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+    }
+
+    // ---------- San Agustin street map ----------
+    const STREETS_GEOJSON_URL = '/data/san_agustin_streets.geojson';
+    const STREET_STATS_URL = @json(route('pattern-detection.street-stats'));
+
+    async function initStreetMap() {
+        const el = $('streetMap');
+        if (!el || typeof L === 'undefined') return;
+
+        const map = L.map('streetMap', { scrollWheelZoom: false });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let geo, stats = {};
+        try {
+            const [gRes, sRes] = await Promise.all([
+                fetch(STREETS_GEOJSON_URL, { headers: { 'Accept': 'application/json' } }),
+                fetch(STREET_STATS_URL, { headers: { 'Accept': 'application/json' } })
+            ]);
+            geo = await gRes.json();
+            stats = (await sRes.json()).streets || {};
+        } catch (e) {
+            console.error('Street map data failed to load:', e);
+            el.innerHTML = '<p style="padding:2rem;text-align:center;color:#6b7280;font-size:13px;">Street map data could not be loaded.</p>';
+            return;
+        }
+
+        const maxCount = Math.max(1, ...Object.values(stats).map(s => s.count));
+        const colorFor = c => !c ? '#94a3b8'
+            : c <= maxCount / 3 ? '#f59e0b'
+            : c <= (2 * maxCount) / 3 ? '#ea580c'
+            : '#b91c1c';
+
+        // Group all OSM segments of the same street so hover lights up the
+        // whole street, not just one piece.
+        const groups = {};
+        (geo.features || []).forEach(f => {
+            const name = f.properties && f.properties.name;
+            if (!name || f.geometry.type !== 'LineString') return;
+
+            const latlngs = f.geometry.coordinates.map(c => [c[1], c[0]]);
+            const g = groups[name] = groups[name] || { casing: [], inner: [], color: colorFor((stats[name] || {}).count) };
+
+            // Two polylines per segment: a dark casing underneath gives every
+            // street its outline/border, the coloured core carries the data.
+            g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 7, opacity: 0.7 }).addTo(map));
+            g.inner.push(L.polyline(latlngs, { color: g.color, weight: 3.5, opacity: 0.95 }).addTo(map));
+        });
+
+        const bounds = [];
+        Object.entries(groups).forEach(([name, g]) => {
+            const st = stats[name];
+            const tip = '<div style="font-weight:700;margin-bottom:2px;">' + esc(name) + '</div>' +
+                (st
+                    ? '<div>' + st.count + ' incident' + (st.count === 1 ? '' : 's') +
+                      (st.top_category ? ' · mostly ' + esc(st.top_category) : '') + '</div>' +
+                      (st.peak_hours && st.peak_hours.length ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(esc).join(', ') + '</div>' : '')
+                    : '<div>No recorded incidents</div>');
+
+            const highlight = on => {
+                g.casing.forEach(l => l.setStyle(on
+                    ? { weight: 11, color: '#111827', opacity: 0.95 }
+                    : { weight: 7, color: '#1e293b', opacity: 0.7 }));
+                g.inner.forEach(l => l.setStyle(on
+                    ? { weight: 5.5, color: '#8b5cf6' }
+                    : { weight: 3.5, color: g.color }));
+                if (on) g.inner.forEach(l => l.bringToFront());
+            };
+
+            g.casing.concat(g.inner).forEach(l => {
+                l.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
+                l.on('mouseover', () => highlight(true));
+                l.on('mouseout', () => highlight(false));
+                l.on('click', () => map.fitBounds(L.featureGroup(g.inner).getBounds().pad(0.4)));
+            });
+
+            g.inner.forEach(l => bounds.push(l.getBounds()));
+        });
+
+        if (bounds.length) {
+            map.fitBounds(bounds.reduce((acc, b) => acc.extend(b), L.latLngBounds(bounds[0])).pad(0.05));
+        } else {
+            map.setView([14.7305, 121.0345], 16);   // San Agustin centre fallback
+        }
     }
 
     // ---------- render ----------
@@ -804,6 +970,8 @@
         // AI analysis fires only on an explicit Run Analysis click (not on page
         // load or control changes) to keep Gemini API usage low.
         $('runBtn').addEventListener('click', function () { run(); runAi(); });
+        $('aiSaveBtn').addEventListener('click', saveAiReport);
+        initStreetMap();
         $('daysSelect').addEventListener('change', run);
         ['volumeMultiplier', 'surgeCategory', 'timeSpike', 'locationSurge'].forEach(function (id) {
             $(id).addEventListener('change', function () { if (simulationOn) run(); });

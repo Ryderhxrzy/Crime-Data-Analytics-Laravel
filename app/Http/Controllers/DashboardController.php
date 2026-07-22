@@ -1237,6 +1237,60 @@ class DashboardController extends Controller
     }
 
     /**
+     * Per-street incident stats for the San Agustin street map
+     * (hover tooltips: count, dominant crime, peak hours).
+     */
+    public function sanAgustinStreetStats()
+    {
+        try {
+            $stats = \Illuminate\Support\Facades\Cache::remember('sa_street_stats_v1', now()->addMinutes(10), function () {
+                $rows = \App\Models\SanAgustinIncident::query()
+                    ->get(['address_details', 'category_name', 'incident_time']);
+
+                $streets = [];
+                foreach ($rows as $row) {
+                    $street = trim(explode(',', (string) $row->address_details)[0] ?? '');
+                    if ($street === '' || str_starts_with($street, 'Purok')) {
+                        continue;
+                    }
+
+                    $streets[$street] ??= ['count' => 0, 'categories' => [], 'hours' => []];
+                    $streets[$street]['count']++;
+
+                    $cat = $row->category_name ?: 'Uncategorized';
+                    $streets[$street]['categories'][$cat] = ($streets[$street]['categories'][$cat] ?? 0) + 1;
+
+                    if ($row->incident_time && preg_match('/^(\d{1,2}):/', (string) $row->incident_time, $m)) {
+                        $h = (int) $m[1];
+                        $streets[$street]['hours'][$h] = ($streets[$street]['hours'][$h] ?? 0) + 1;
+                    }
+                }
+
+                $out = [];
+                foreach ($streets as $name => $s) {
+                    arsort($s['categories']);
+                    arsort($s['hours']);
+                    $peaks = array_slice(array_keys($s['hours']), 0, 2);
+
+                    $out[$name] = [
+                        'count'        => $s['count'],
+                        'top_category' => array_key_first($s['categories']),
+                        'peak_hours'   => array_map(fn ($h) => sprintf('%02d:00', $h), $peaks),
+                    ];
+                }
+
+                return $out;
+            });
+
+            return response()->json(['streets' => $stats], 200, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in sanAgustinStreetStats: '.$e->getMessage());
+
+            return response()->json(['error' => 'Error loading street stats', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get hotspot data with analytics for Crime Hotspot Analysis page (with Redis caching)
      */
     public function getHotspotData(Request $request, \App\Services\HotspotAnalyticsService $analytics)
