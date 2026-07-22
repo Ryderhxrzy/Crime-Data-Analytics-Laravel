@@ -618,9 +618,10 @@ if (request()->query('token')) {
         // the whole barangay.
         const BARANGAY_FIT_PADDING = [12, 12];
 
-        const STYLE_BRGY_IDLE     = { color: '#5b8f8c', weight: 1,   opacity: 0.85, fillColor: '#e8f5f3', fillOpacity: 0.25, dashArray: null };
-        const STYLE_BRGY_HOVER    = { color: '#274d4c', weight: 1.5, opacity: 1,    fillColor: '#9ed4cb', fillOpacity: 0.55, dashArray: null };
-        const STYLE_BRGY_SELECTED = { color: '#274d4c', weight: 1.5, opacity: 1,    fillColor: '#bde5dd', fillOpacity: 0.35, dashArray: null };
+        // Thin borders throughout — the active barangay reads through fill, not weight
+        const STYLE_BRGY_IDLE   = { color: '#5b8f8c', weight: 1,   opacity: 0.8, fillColor: '#e8f5f3', fillOpacity: 0.18, dashArray: null };
+        const STYLE_BRGY_HOVER  = { color: '#274d4c', weight: 1.5, opacity: 1,   fillColor: '#bde5dd', fillOpacity: 0.45, dashArray: null };
+        const STYLE_BRGY_ACTIVE = { color: '#274d4c', weight: 2,   opacity: 1,   fillColor: '#7fc9bd', fillOpacity: 0.6,  dashArray: null };
         let currentData = [];
         let selectedIncidentId = null;
         let pointerMarker = null;
@@ -761,18 +762,24 @@ if (request()->query('token')) {
                             className: 'brgy-tooltip'
                         });
 
+                        // Hover to identify — works whether or not a barangay is
+                        // filtered, but never overrides the active one's styling.
                         layer.on('mouseover', function () {
-                            if (document.getElementById('barangay').value) return;
+                            if (document.getElementById('barangay').value === code) return;
                             this.setStyle(STYLE_BRGY_HOVER);
                             this.bringToFront();
                         });
                         layer.on('mouseout', function () {
-                            if (document.getElementById('barangay').value) return;
-                            this.setStyle(STYLE_BRGY_IDLE);
+                            const activeCode = document.getElementById('barangay').value;
+                            if (activeCode === code) return;
+                            this.setStyle(styleForBarangay(code));
+                            // Hovering lifted this layer, so put the active one back on top
+                            const active = activeCode ? barangayLayersByCode[activeCode] : null;
+                            if (active) active.bringToFront();
                         });
-                        // Click -> isolate
+                        // Click to make this barangay the active one
                         layer.on('click', function () {
-                            if (document.getElementById('barangay').value) return;
+                            if (document.getElementById('barangay').value === code) return;
                             document.getElementById('barangay').value = code;
                             applyBarangaySelection();
                             loadCrimeData();
@@ -790,9 +797,12 @@ if (request()->query('token')) {
             }
 
             map.invalidateSize();
-            if (qcBounds && qcBounds.isValid()) {
-                map.fitBounds(qcBounds, { padding: [20, 20], animate: true });
-            } else {
+
+            // No fitBounds here on purpose. applyBarangaySelection() below does the
+            // framing — to the default barangay, or to the whole city if none is set.
+            // Fitting to the city first started an animation that outran the barangay
+            // zoom and left the map sitting at city level.
+            if (!qcBounds || !qcBounds.isValid()) {
                 map.setView([14.6349, 121.0446], 12);
             }
 
@@ -812,7 +822,7 @@ if (request()->query('token')) {
 
             setupAutoFilter();
             setupZoomScaling();
-            applyBarangaySelection();
+            applyBarangaySelection(false);   // snap straight there, no competing animation
             loadCrimeData();
             loadTotalStats();
         }
@@ -824,9 +834,18 @@ if (request()->query('token')) {
             return [];
         }
 
-        // Show every barangay (hoverable) or isolate the filtered one.
-        // With no barangay selected the map zooms back out to the whole city.
-        function applyBarangaySelection() {
+        // Style a barangay according to whether it is the filtered one
+        function styleForBarangay(code) {
+            const selectedCode = document.getElementById('barangay').value;
+            return Object.assign({}, code === selectedCode && selectedCode
+                ? STYLE_BRGY_ACTIVE
+                : STYLE_BRGY_IDLE);
+        }
+
+        // The city outline and every barangay stay on the map at all times. Filtering
+        // marks one barangay active and zooms to it; it never hides the rest, so you
+        // keep the Quezon City boundary and the neighbouring barangays for context.
+        function applyBarangaySelection(animate = true) {
             const selectedCode = document.getElementById('barangay').value;
 
             if (selectedBarangayLabel) {
@@ -836,25 +855,22 @@ if (request()->query('token')) {
 
             if (!barangayBoundaryLayer) return;
 
-            // The city outline is context for the full view only
-            if (boundaryLayer) {
-                if (selectedCode) map.removeLayer(boundaryLayer);
-                else if (!map.hasLayer(boundaryLayer)) boundaryLayer.addTo(map).bringToBack();
-            }
+            // QC outline is always visible
+            if (boundaryLayer && !map.hasLayer(boundaryLayer)) boundaryLayer.addTo(map);
 
             Object.entries(barangayLayersByCode).forEach(([code, layer]) => {
-                const isTarget = selectedCode && code === selectedCode;
-
-                if (!selectedCode || isTarget) {
-                    if (!barangayBoundaryLayer.hasLayer(layer)) barangayBoundaryLayer.addLayer(layer);
-                    layer.setStyle(Object.assign({}, isTarget ? STYLE_BRGY_SELECTED : STYLE_BRGY_IDLE));
-                } else {
-                    if (barangayBoundaryLayer.hasLayer(layer)) barangayBoundaryLayer.removeLayer(layer);
-                }
+                if (!barangayBoundaryLayer.hasLayer(layer)) barangayBoundaryLayer.addLayer(layer);
+                layer.setStyle(styleForBarangay(code));
             });
 
+            // Push the whole set behind the incident markers FIRST, then lift the
+            // active barangay above its neighbours — the group call would otherwise
+            // undo the bringToFront.
             barangayBoundaryLayer.bringToBack();
             if (boundaryLayer && map.hasLayer(boundaryLayer)) boundaryLayer.bringToBack();
+
+            const activeLayer = selectedCode ? barangayLayersByCode[selectedCode] : null;
+            if (activeLayer) activeLayer.bringToFront();
 
             if (selectedCode) {
                 const layer = barangayLayersByCode[selectedCode];
@@ -873,17 +889,17 @@ if (request()->query('token')) {
                         className: 'brgy-label-selected'
                     }).openTooltip();
 
-                    zoomToBarangayBounds(b);
+                    zoomToBarangayBounds(b, animate);
                 }
             } else if (qcBounds && qcBounds.isValid()) {
                 // All Barangays -> frame the whole city again
-                map.fitBounds(qcBounds, { padding: [20, 20], animate: true });
+                map.fitBounds(qcBounds, { padding: [20, 20], animate });
             }
         }
 
         // Frame a single barangay as closely as possible while keeping all of it visible
-        function zoomToBarangayBounds(bounds) {
-            map.fitBounds(bounds, { padding: BARANGAY_FIT_PADDING, animate: true });
+        function zoomToBarangayBounds(bounds, animate = true) {
+            map.fitBounds(bounds, { padding: BARANGAY_FIT_PADDING, animate });
         }
 
         // Apply boundary constraints
