@@ -189,7 +189,7 @@ class GeminiPatternAnalysisService
             'by_day_of_week'      => $incidents->countBy('dow')->all(),
             'by_time_of_day'      => $timeBuckets,
             'hourly_counts'       => $hourlyLabeled,
-            'unresolved_count'    => $incidents->whereNotIn('status', ['resolved', 'closed', 'cleared'])->count(),
+            'unresolved_count'    => $incidents->whereNotIn('status', ['solved', 'resolved', 'closed', 'cleared'])->count(),
         ];
     }
 

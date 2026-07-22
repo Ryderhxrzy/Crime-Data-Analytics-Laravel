@@ -83,11 +83,6 @@ return new class extends Migration
 
     private const WEATHER = ['Clear', 'Cloudy', 'Rainy', 'Overcast', 'Humid'];
 
-    private const REPORTERS = [
-        'Concerned Citizen', 'Barangay Tanod', 'Victim', 'Store Owner', 'Resident',
-        'Tricycle Driver', 'Barangay Official', 'Passerby',
-    ];
-
     private const OFFICERS = [
         'PO1 R. Dela Cruz', 'PO2 M. Santos', 'PO3 J. Reyes', 'SPO1 A. Garcia',
         'PO1 K. Mendoza', 'PO2 L. Bautista', 'SPO2 E. Villanueva',
@@ -274,8 +269,9 @@ return new class extends Migration
         $time = $this->sampleTime($category, $seed);
         [$lng, $lat] = $this->pointAlongStreet($street, $seed);
 
-        $status = $this->pick($seed, ['reported', 'reported', 'under_investigation', 'under_investigation', 'resolved', 'closed']);
-        $cleared = in_array($status, ['resolved', 'closed'], true);
+        // status enum on this table: reported / under_investigation / solved / closed / archived
+        $status = $this->pick($seed, ['reported', 'reported', 'under_investigation', 'under_investigation', 'solved', 'closed']);
+        $cleared = in_array($status, ['solved', 'closed'], true);
         $modus = $this->pick($seed, self::MODUS[$category] ?? ['Under investigation']);
 
         return [
@@ -297,7 +293,7 @@ return new class extends Migration
             'clearance_date'       => $cleared ? $date->modify('+' . (3 + $this->nextInt($seed, 21)) . ' days')->format('Y-m-d') : null,
             'modus_operandi'       => $modus,
             'weather_condition'    => $this->pick($seed, self::WEATHER),
-            'reported_by'          => $this->pick($seed, self::REPORTERS),
+            'reported_by'          => null,   // unsignedBigInteger user id — no synthetic reporter accounts
             'assigned_officer'     => $this->pick($seed, self::OFFICERS),
             'created_at'           => $now,
             'updated_at'           => $now,
