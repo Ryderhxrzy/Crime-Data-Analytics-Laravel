@@ -188,26 +188,6 @@
         </div>
     </div>
 
-    <!-- San Agustin street map -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-
-    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 mb-1">
-            <h2 class="text-lg font-bold text-gray-900">
-                <i class="fas fa-road mr-2 text-alertara-600"></i>San Agustin Street Map
-            </h2>
-            <div class="flex items-center gap-3 text-[11px] text-gray-600">
-                <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-1.5 rounded" style="background:#94a3b8"></span> No incidents</span>
-                <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-1.5 rounded" style="background:#f59e0b"></span> Low</span>
-                <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-1.5 rounded" style="background:#ea580c"></span> Moderate</span>
-                <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-1.5 rounded" style="background:#b91c1c"></span> High</span>
-            </div>
-        </div>
-        <p class="text-xs text-gray-500 mb-4">Every street is outlined; hover over a street to highlight it and see its incident count, dominant crime, and peak hours. Click a street to zoom in.</p>
-        <div id="streetMap" class="rounded-lg border border-gray-200" style="height: 440px;"></div>
-    </div>
-
     <!-- Loading -->
     <div id="loadingState" class="hidden bg-white rounded-xl border border-gray-200 p-12 text-center">
         <i class="fas fa-spinner fa-spin text-3xl text-alertara-700 mb-3"></i>
@@ -633,93 +613,6 @@
         URL.revokeObjectURL(link.href);
     }
 
-    // ---------- San Agustin street map ----------
-    const STREETS_GEOJSON_URL = '/data/san_agustin_streets.geojson';
-    const STREET_STATS_URL = @json(route('pattern-detection.street-stats'));
-
-    async function initStreetMap() {
-        const el = $('streetMap');
-        if (!el || typeof L === 'undefined') return;
-
-        const map = L.map('streetMap', { scrollWheelZoom: false });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        let geo, stats = {};
-        try {
-            const [gRes, sRes] = await Promise.all([
-                fetch(STREETS_GEOJSON_URL, { headers: { 'Accept': 'application/json' } }),
-                fetch(STREET_STATS_URL, { headers: { 'Accept': 'application/json' } })
-            ]);
-            geo = await gRes.json();
-            stats = (await sRes.json()).streets || {};
-        } catch (e) {
-            console.error('Street map data failed to load:', e);
-            el.innerHTML = '<p style="padding:2rem;text-align:center;color:#6b7280;font-size:13px;">Street map data could not be loaded.</p>';
-            return;
-        }
-
-        const maxCount = Math.max(1, ...Object.values(stats).map(s => s.count));
-        const colorFor = c => !c ? '#94a3b8'
-            : c <= maxCount / 3 ? '#f59e0b'
-            : c <= (2 * maxCount) / 3 ? '#ea580c'
-            : '#b91c1c';
-
-        // Group all OSM segments of the same street so hover lights up the
-        // whole street, not just one piece.
-        const groups = {};
-        (geo.features || []).forEach(f => {
-            const name = f.properties && f.properties.name;
-            if (!name || f.geometry.type !== 'LineString') return;
-
-            const latlngs = f.geometry.coordinates.map(c => [c[1], c[0]]);
-            const g = groups[name] = groups[name] || { casing: [], inner: [], color: colorFor((stats[name] || {}).count) };
-
-            // Two polylines per segment: a dark casing underneath gives every
-            // street its outline/border, the coloured core carries the data.
-            g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 7, opacity: 0.7 }).addTo(map));
-            g.inner.push(L.polyline(latlngs, { color: g.color, weight: 3.5, opacity: 0.95 }).addTo(map));
-        });
-
-        const bounds = [];
-        Object.entries(groups).forEach(([name, g]) => {
-            const st = stats[name];
-            const tip = '<div style="font-weight:700;margin-bottom:2px;">' + esc(name) + '</div>' +
-                (st
-                    ? '<div>' + st.count + ' incident' + (st.count === 1 ? '' : 's') +
-                      (st.top_category ? ' · mostly ' + esc(st.top_category) : '') + '</div>' +
-                      (st.peak_hours && st.peak_hours.length ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(esc).join(', ') + '</div>' : '')
-                    : '<div>No recorded incidents</div>');
-
-            const highlight = on => {
-                g.casing.forEach(l => l.setStyle(on
-                    ? { weight: 11, color: '#111827', opacity: 0.95 }
-                    : { weight: 7, color: '#1e293b', opacity: 0.7 }));
-                g.inner.forEach(l => l.setStyle(on
-                    ? { weight: 5.5, color: '#8b5cf6' }
-                    : { weight: 3.5, color: g.color }));
-                if (on) g.inner.forEach(l => l.bringToFront());
-            };
-
-            g.casing.concat(g.inner).forEach(l => {
-                l.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
-                l.on('mouseover', () => highlight(true));
-                l.on('mouseout', () => highlight(false));
-                l.on('click', () => map.fitBounds(L.featureGroup(g.inner).getBounds().pad(0.4)));
-            });
-
-            g.inner.forEach(l => bounds.push(l.getBounds()));
-        });
-
-        if (bounds.length) {
-            map.fitBounds(bounds.reduce((acc, b) => acc.extend(b), L.latLngBounds(bounds[0])).pad(0.05));
-        } else {
-            map.setView([14.7305, 121.0345], 16);   // San Agustin centre fallback
-        }
-    }
-
     // ---------- render ----------
     function render(d) {
         const m = d.meta;
@@ -1052,7 +945,6 @@
         $('runBtn').addEventListener('click', function () { run(); runAi(); });
         $('aiSaveBtn').addEventListener('click', saveAiToDb);
         $('aiDownloadBtn').addEventListener('click', saveAiReport);
-        initStreetMap();
         loadSavedReports();
         $('daysSelect').addEventListener('change', run);
         ['volumeMultiplier', 'surgeCategory', 'timeSpike', 'locationSurge'].forEach(function (id) {
