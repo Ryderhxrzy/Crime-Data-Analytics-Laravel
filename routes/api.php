@@ -39,6 +39,19 @@ Route::get('/barangays', function() {
     return \App\Models\Barangay::select('id', 'barangay_name')->get();
 })->middleware('throttle:60,1');
 
+// Official Quezon City barangay list (142) with PSGC codes.
+// Use this for QC-scoped filters — /barangays returns every barangay on file,
+// including ones outside QC such as Addition Hills.
+Route::get('/qc-barangays', function() {
+    $path = storage_path('app/qc_barangays.json');
+
+    if (!is_file($path)) {
+        return response()->json(['message' => 'QC barangay list not found'], 404);
+    }
+
+    return response()->json(json_decode(file_get_contents($path), true));
+})->middleware('throttle:60,1');
+
 // Crimes data endpoint for crime page
 Route::get('/crimes', function() {
     $crimes = \App\Models\CrimeIncident::with(['category', 'barangay', 'personsInvolved', 'evidence'])
