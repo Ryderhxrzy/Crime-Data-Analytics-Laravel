@@ -1880,6 +1880,18 @@ if (request()->query('token')) {
 
         // Adjust heatmap radius based on zoom level (dynamic scaling)
         function setupZoomScaling() {
+            // Resize the incident dots in place — cheaper than rebuilding the layer
+            map.on('zoomend', function() {
+                if (markerLayer) {
+                    const radius = markerRadiusForZoom();
+                    const weight = markerWeightForZoom();
+                    markerLayer.eachLayer(layer => {
+                        if (layer.setRadius) layer.setRadius(radius);
+                        if (layer.setStyle) layer.setStyle({ weight });
+                    });
+                }
+            });
+
             map.on('zoomend', function() {
                 if (currentVisualizationMode === 'heatmap' && heatmapLayer) {
                     const zoom = map.getZoom();
@@ -1939,6 +1951,22 @@ if (request()->query('token')) {
             }
         }
 
+        // Incident dots shrink as you zoom out so a dense barangay does not turn into
+        // one solid blob of overlapping circles.
+        function markerRadiusForZoom() {
+            const z = map.getZoom();
+            if (z <= 12) return 2.5;
+            if (z <= 13) return 3;
+            if (z <= 14) return 4;
+            if (z <= 15) return 5;
+            if (z <= 16) return 6;
+            return 7;
+        }
+
+        function markerWeightForZoom() {
+            return map.getZoom() <= 13 ? 1 : 2;
+        }
+
         // Display individual markers
         function displayMarkers(data) {
             markerLayer = L.featureGroup();
@@ -1952,10 +1980,10 @@ if (request()->query('token')) {
                 const markerColor = incident.color_code || '#274d4c';
 
                 const marker = L.circleMarker([incident.latitude, incident.longitude], {
-                    radius: 6,
+                    radius: markerRadiusForZoom(),
                     fillColor: markerColor,
                     color: markerColor,
-                    weight: 2,
+                    weight: markerWeightForZoom(),
                     opacity: 0.8,
                     fillOpacity: 0.7
                 });

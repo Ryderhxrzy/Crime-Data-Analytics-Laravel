@@ -14,10 +14,16 @@ class CrimeIncident extends Model
 {
     use HasFactory;
 
-    protected $table = 'crime_department_crime_incidents';
+    // Points at the San Agustin table so every page — dashboard, hotspots, alerts,
+    // pattern detection — reads the same San Agustin records as the map, without
+    // rewriting the ~50 queries spread across those controllers and services.
+    protected $table = 'crime_department_san_agustin_incidents';
 
     protected $fillable = [
         'incident_code',
+        'record_type',
+        'category_name',
+        'barangay_name',
         'crime_category_id',
         'barangay_id',
         'incident_title',
