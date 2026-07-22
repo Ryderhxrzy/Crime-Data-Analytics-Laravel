@@ -37,7 +37,7 @@ class LandingController extends Controller
     {
         return view('barangay-mapping', [
             'barangayName' => 'San Agustin',
-            'barangayGeojson' => asset('sanagustin.geojson'),
+            'barangayGeojson' => '/sanagustin.geojson',
         ]);
     }
 
@@ -47,9 +47,12 @@ class LandingController extends Controller
      */
     public function barangayBoundaries()
     {
+        // Root-relative paths, not asset(): asset() builds an absolute URL from
+        // APP_URL (http://localhost), which points at the wrong origin whenever the
+        // app is served on another port such as `php artisan serve`.
         return view('barangay-boundaries', [
-            'qcOutlineGeojson' => asset('fullmapqc.geojson'),
-            'barangaysGeojson' => asset('qc_barangays.geojson'),
+            'qcOutlineGeojson' => '/fullmapqc.geojson',
+            'barangaysGeojson' => '/qc_barangays.geojson',
             'defaultBarangay' => 'San Agustin',
         ]);
     }
