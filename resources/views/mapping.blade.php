@@ -968,22 +968,102 @@ if (request()->query('token')) {
             }
         }
 
+        // Barangay filter state.
+        // Options come from /api/qc-barangays — the official 142 Quezon City barangays
+        // with PSGC codes — so this page matches the Barangay Boundaries page.
+        // /api/barangays is NOT used for the options: it lists every barangay on file,
+        // including ones outside QC such as Addition Hills.
+        let barangayUsesPsgcCodes = false;
+        let dbIdByPsgcCode = {};        // PSGC code -> DB barangay id
+        let nameByPsgcCode = {};        // PSGC code -> official name
+
+        const normBrgy = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        // "New Era" vs "New Era (Constitution Hills)"
+        const baseBrgy = s => normBrgy(s).replace(/\s*\(.*?\)\s*/g, ' ').trim();
+
         // Load barangays for Barangay filter
         async function loadBarangays() {
+            const barangaySelect = document.getElementById('barangay');
+
+            // Called from both branches of loadQCBoundary, so start from a clean list
+            // and keep only the "All Barangays" placeholder.
+            while (barangaySelect.options.length > 1) barangaySelect.remove(1);
+            dbIdByPsgcCode = {};
+            nameByPsgcCode = {};
+
+            // 1. Official QC list drives the options
+            let qcRows = [];
+            try {
+                const response = await fetch('/api/qc-barangays');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                qcRows = await response.json();
+                barangayUsesPsgcCodes = true;
+            } catch (error) {
+                console.warn('/api/qc-barangays unavailable, falling back to /api/barangays:', error.message);
+                barangayUsesPsgcCodes = false;
+            }
+
+            // 2. DB rows, needed either as the fallback list or as the id bridge
+            let dbRows = [];
             try {
                 const response = await fetch('/api/barangays');
-                const barangays = await response.json();
+                dbRows = await response.json();
+            } catch (error) {
+                console.error('Error loading barangays:', error);
+            }
 
-                const barangaySelect = document.getElementById('barangay');
-                barangays.forEach(barangay => {
+            if (barangayUsesPsgcCodes) {
+                const dbIdByName = {};
+                dbRows.forEach(r => {
+                    const n = (r.barangay_name || '').trim();
+                    if (!n) return;
+                    dbIdByName[normBrgy(n)] = String(r.id);
+                    if (!dbIdByName[baseBrgy(n)]) dbIdByName[baseBrgy(n)] = String(r.id);
+                });
+
+                const unlinked = [];
+                qcRows.forEach(row => {
+                    const code = String(row.code || '');
+                    const name = (row.name || '').trim();
+                    if (!code || !name) return;
+
+                    nameByPsgcCode[code] = name;
+                    const dbId = dbIdByName[normBrgy(name)] || dbIdByName[baseBrgy(name)];
+                    if (dbId) dbIdByPsgcCode[code] = dbId;
+                    else unlinked.push(name);
+
+                    const option = document.createElement('option');
+                    option.value = code;
+                    option.textContent = name;
+                    barangaySelect.appendChild(option);
+                });
+
+                if (unlinked.length) {
+                    console.warn(
+                        `${unlinked.length} QC barangay(s) have no row in /api/barangays, ` +
+                        `so they will show zero incidents: ${unlinked.join(', ')}`
+                    );
+                }
+            } else {
+                dbRows.forEach(barangay => {
                     const option = document.createElement('option');
                     option.value = barangay.id;
                     option.textContent = barangay.barangay_name;
                     barangaySelect.appendChild(option);
                 });
-            } catch (error) {
-                console.error('Error loading barangays:', error);
             }
+        }
+
+        // The crime endpoints filter on the DB's barangay id, so translate whatever
+        // the dropdown is currently carrying.
+        function resolveBarangayFilterId() {
+            const value = document.getElementById('barangay').value;
+            if (!value) return null;
+            if (!barangayUsesPsgcCodes) return value;   // fallback mode: already a DB id
+
+            // A QC barangay with no DB row genuinely has no incidents on file, so use an
+            // id that matches nothing rather than silently dropping the filter.
+            return dbIdByPsgcCode[value] || '-1';
         }
 
         // Debug variables
@@ -1103,7 +1183,7 @@ if (request()->query('token')) {
                 const crimeType = document.getElementById('crimeType').value;
                 const caseStatus = document.getElementById('caseStatus').value;
                 const clearanceStatus = document.getElementById('clearanceStatus').value;
-                const barangay = document.getElementById('barangay').value;
+                const barangay = resolveBarangayFilterId();
 
                 console.log('loadCrimeData: timePeriod=', timePeriod, 'mode=', visualizationMode, 'type=', crimeType, 'status=', caseStatus, 'clearance=', clearanceStatus, 'barangay=', barangay);
 
