@@ -220,8 +220,12 @@ if (request()->query('token')) {
                         <!-- Statistics Cards -->
                         <div class="grid grid-cols-2 gap-3">
                             <div class="bg-gradient-to-br from-alertara-700 to-alertara-600 text-white p-4 rounded-lg shadow-sm">
-                                <div class="text-xs opacity-90 mb-1">Total Incidents</div>
-                                <div id="statTotal" class="text-2xl font-bold">0</div>
+                                <div class="text-xs opacity-90 mb-1">Total Crime</div>
+                                <div id="statTotalCrime" class="text-2xl font-bold">0</div>
+                            </div>
+                            <div class="bg-gradient-to-br from-amber-600 to-amber-500 text-white p-4 rounded-lg shadow-sm">
+                                <div class="text-xs opacity-90 mb-1">Incidents</div>
+                                <div id="statTotalIncident" class="text-2xl font-bold">0</div>
                             </div>
                             <div class="bg-gradient-to-br from-green-600 to-green-500 text-white p-4 rounded-lg shadow-sm">
                                 <div class="text-xs opacity-90 mb-1">Cleared Cases</div>
@@ -231,7 +235,7 @@ if (request()->query('token')) {
                                 <div class="text-xs opacity-90 mb-1">Uncleared Cases</div>
                                 <div id="statUncleared" class="text-2xl font-bold">0</div>
                             </div>
-                            <div class="bg-gradient-to-br from-blue-600 to-blue-500 text-white p-4 rounded-lg shadow-sm">
+                            <div class="bg-gradient-to-br from-blue-600 to-blue-500 text-white p-4 rounded-lg shadow-sm col-span-2">
                                 <div class="text-xs opacity-90 mb-1">Categories</div>
                                 <div id="statCategories" class="text-2xl font-bold">0</div>
                             </div>
@@ -1102,26 +1106,7 @@ if (request()->query('token')) {
         // with PSGC codes — so this page matches the Barangay Boundaries page.
         // /api/barangays is NOT used for the options: it lists every barangay on file,
         // including ones outside QC such as Addition Hills.
-        let barangayUsesPsgcCodes = false;
-        let dbIdByPsgcCode = {};        // PSGC code -> DB barangay id
         let nameByPsgcCode = {};        // PSGC code -> official name
-
-        // PSGC spells some barangays differently from the crime database, so fold the
-        // differences away before matching:
-        //   accents      "Doña Imelda"          vs "Dona Imelda"
-        //   punctuation  "N.S. Amoranto"        vs "NS Amoranto"
-        //   suffix       "Pasong Putik Proper"  vs "Pasong Putik"
-        //   alt name     "New Era (Constitution Hills)" vs "New Era"
-        const normBrgy = s => (s || '')
-            .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip diacritics
-            .trim().toLowerCase().replace(/\s+/g, ' ');
-
-        const baseBrgy = s => normBrgy(s)
-            .replace(/\s*\(.*?\)\s*/g, ' ')      // drop "(alternate name)"
-            .replace(/[.,]/g, '')                // drop punctuation
-            .replace(/\s+/g, ' ')
-            .replace(/\s+proper$/, '')           // drop a trailing "Proper"
-            .trim();
 
         // Load barangays for Barangay filter
         async function loadBarangays() {
@@ -1130,82 +1115,48 @@ if (request()->query('token')) {
             // Called from both branches of loadQCBoundary, so start from a clean list
             // and keep only the "All Barangays" placeholder.
             while (barangaySelect.options.length > 1) barangaySelect.remove(1);
-            dbIdByPsgcCode = {};
             nameByPsgcCode = {};
 
-            // 1. Official QC list drives the options
+            // The official QC list drives the options. No DB id bridge is needed —
+            // the incident table stores barangay_name, so the filter sends the name.
             let qcRows = [];
             try {
                 const response = await fetch('/api/qc-barangays');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 qcRows = await response.json();
-                barangayUsesPsgcCodes = true;
             } catch (error) {
                 console.warn('/api/qc-barangays unavailable, falling back to /api/barangays:', error.message);
-                barangayUsesPsgcCodes = false;
-            }
-
-            // 2. DB rows, needed either as the fallback list or as the id bridge
-            let dbRows = [];
-            try {
-                const response = await fetch('/api/barangays');
-                dbRows = await response.json();
-            } catch (error) {
-                console.error('Error loading barangays:', error);
-            }
-
-            if (barangayUsesPsgcCodes) {
-                const dbIdByName = {};
-                dbRows.forEach(r => {
-                    const n = (r.barangay_name || '').trim();
-                    if (!n) return;
-                    dbIdByName[normBrgy(n)] = String(r.id);
-                    if (!dbIdByName[baseBrgy(n)]) dbIdByName[baseBrgy(n)] = String(r.id);
-                });
-
-                const unlinked = [];
-                qcRows.forEach(row => {
-                    const code = String(row.code || '');
-                    const name = (row.name || '').trim();
-                    if (!code || !name) return;
-
-                    nameByPsgcCode[code] = name;
-                    const dbId = dbIdByName[normBrgy(name)] || dbIdByName[baseBrgy(name)];
-                    if (dbId) dbIdByPsgcCode[code] = dbId;
-                    else unlinked.push(name);
-
-                    const option = document.createElement('option');
-                    option.value = code;
-                    option.textContent = name;
-                    barangaySelect.appendChild(option);
-                });
-
-                if (unlinked.length) {
-                    console.warn(
-                        `${unlinked.length} QC barangay(s) have no row in /api/barangays, ` +
-                        `so they will show zero incidents: ${unlinked.join(', ')}`
-                    );
+                try {
+                    const response = await fetch('/api/barangays');
+                    qcRows = (await response.json()).map(b => ({ code: String(b.id), name: b.barangay_name }));
+                } catch (e) {
+                    console.error('Error loading barangays:', e);
                 }
-            } else {
-                dbRows.forEach(barangay => {
-                    const option = document.createElement('option');
-                    option.value = barangay.id;
-                    option.textContent = barangay.barangay_name;
-                    barangaySelect.appendChild(option);
-                });
             }
+
+            qcRows.forEach(row => {
+                const code = String(row.code || '');
+                const name = (row.name || '').trim();
+                if (!code || !name) return;
+
+                nameByPsgcCode[code] = name;
+
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = name;
+                barangaySelect.appendChild(option);
+            });
+
+            console.log(`Barangay filter: ${barangaySelect.options.length - 1} barangays loaded.`);
         }
 
-        // The crime endpoints filter on the DB's barangay id, so translate whatever
-        // the dropdown is currently carrying.
+        // The incident table stores barangay_name as plain text, so the filter sends
+        // the barangay NAME rather than any id.
         function resolveBarangayFilterId() {
-            const value = document.getElementById('barangay').value;
-            if (!value) return null;
-            if (!barangayUsesPsgcCodes) return value;   // fallback mode: already a DB id
-
-            // A QC barangay with no DB row genuinely has no incidents on file, so use an
-            // id that matches nothing rather than silently dropping the filter.
-            return dbIdByPsgcCode[value] || '-1';
+            const select = document.getElementById('barangay');
+            if (!select.value) return null;
+            return nameByPsgcCode[select.value] ||
+                (select.selectedOptions[0] || {}).textContent.trim() || null;
         }
 
         // Debug variables
@@ -1299,10 +1250,11 @@ if (request()->query('token')) {
                 const response = await fetch('/api/crime-stats');
                 const stats = await response.json();
                 
-                document.getElementById('statTotal').textContent = stats.total;
-                document.getElementById('statCleared').textContent = stats.cleared;
-                document.getElementById('statUncleared').textContent = stats.uncleared;
-                document.getElementById('statCategories').textContent = stats.categories;
+                document.getElementById('statTotalCrime').textContent = stats.total_crime ?? 0;
+                document.getElementById('statTotalIncident').textContent = stats.total_incident ?? 0;
+                document.getElementById('statCleared').textContent = stats.cleared ?? 0;
+                document.getElementById('statUncleared').textContent = stats.uncleared ?? 0;
+                document.getElementById('statCategories').textContent = stats.categories ?? 0;
                 
                 console.log('Total stats loaded:', stats);
             } catch (error) {
