@@ -140,17 +140,19 @@ Route::get('/crimes', function() {
 })->middleware('throttle:60,1');
 
 // Total crime statistics endpoint (unfiltered)
+// Totals for the map stat cards, served from the San Agustin incident table.
+// record_type splits criminal offences from non-criminal incidents.
 Route::get('/crime-stats', function() {
-    $totalIncidents = \App\Models\CrimeIncident::count();
-    $clearedCases = \App\Models\CrimeIncident::where('clearance_status', 'cleared')->count();
-    $unclearedCases = \App\Models\CrimeIncident::where('clearance_status', 'uncleared')->count();
-    $totalCategories = \App\Models\CrimeCategory::count();
-    
+    $rows = \App\Models\SanAgustinIncident::query()
+        ->get(['record_type', 'clearance_status', 'category_name']);
+
     return response()->json([
-        'total' => $totalIncidents,
-        'cleared' => $clearedCases,
-        'uncleared' => $unclearedCases,
-        'categories' => $totalCategories
+        'total_crime'    => $rows->where('record_type', 'crime')->count(),
+        'total_incident' => $rows->where('record_type', 'incident')->count(),
+        'total'          => $rows->count(),
+        'cleared'        => $rows->where('clearance_status', 'cleared')->count(),
+        'uncleared'      => $rows->where('clearance_status', 'uncleared')->count(),
+        'categories'     => $rows->pluck('category_name')->filter()->unique()->count(),
     ]);
 })->middleware('throttle:60,1');
 
