@@ -1199,6 +1199,31 @@ class DashboardController extends Controller
                         'multiplier' => min(10.0, max(1.0, (float) $request->input('location_surge_multiplier', 2))),
                     ];
                 }
+
+                // Focus area: specific streets. Empty / absent = whole barangay.
+                $streets = array_values(array_filter(array_map(
+                    fn ($s) => trim((string) $s),
+                    (array) $request->input('focus_streets', [])
+                )));
+                if (! empty($streets)) {
+                    $points = $this->sanAgustinStreetPoints($streets);
+                    if (! empty($points)) {
+                        $scenarios['focus_streets'] = $streets;
+                        $scenarios['street_points'] = $points;
+                    }
+                }
+
+                // Prevention interventions that blunt the surge
+                $prevention = [
+                    'patrol'      => min(2, max(0, (int) $request->input('prev_patrol', 0))),
+                    'cctv'        => $request->boolean('prev_cctv'),
+                    'lighting'    => $request->boolean('prev_lighting'),
+                    'community'   => $request->boolean('prev_community'),
+                    'checkpoints' => $request->boolean('prev_checkpoints'),
+                ];
+                if ($prevention['patrol'] > 0 || $prevention['cctv'] || $prevention['lighting'] || $prevention['community'] || $prevention['checkpoints']) {
+                    $scenarios['prevention'] = $prevention;
+                }
             }
 
             $result = $detector->analyzeWithInsights([
@@ -1213,6 +1238,50 @@ class DashboardController extends Controller
 
             return response()->json(['error' => 'Error running pattern detection', 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Polyline points ([lat, lng]) for the named San Agustin streets, read from
+     * the public street geojson. Used to land a street-targeted simulated surge
+     * on exactly the streets the user picked. Cached — the file is static.
+     */
+    private function sanAgustinStreetPoints(array $streetNames): array
+    {
+        $path = public_path('data/san_agustin_streets.geojson');
+        if (! is_file($path)) {
+            return [];
+        }
+
+        $index = \Illuminate\Support\Facades\Cache::remember('sa_street_points_v1', now()->addHours(6), function () use ($path) {
+            $geo = json_decode((string) file_get_contents($path), true);
+            $index = [];
+
+            foreach (($geo['features'] ?? []) as $feature) {
+                $name = mb_strtolower(trim((string) ($feature['properties']['name'] ?? '')));
+                if ($name === '') {
+                    continue;
+                }
+
+                foreach (($feature['geometry']['coordinates'] ?? []) as $coord) {
+                    // GeoJSON stores [lng, lat]; the simulator wants [lat, lng]
+                    if (isset($coord[0], $coord[1]) && is_numeric($coord[0]) && is_numeric($coord[1])) {
+                        $index[$name][] = [(float) $coord[1], (float) $coord[0]];
+                    }
+                }
+            }
+
+            return $index;
+        });
+
+        $points = [];
+        foreach ($streetNames as $name) {
+            $key = mb_strtolower(trim($name));
+            if (! empty($index[$key])) {
+                array_push($points, ...$index[$key]);
+            }
+        }
+
+        return $points;
     }
 
     /**
