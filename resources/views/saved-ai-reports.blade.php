@@ -101,8 +101,18 @@
 
                 <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     <!-- Batch header -->
-                    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    @php $isSim = ($batch['data_source'] ?? 'real') === 'simulation'; @endphp
+                    <div class="px-6 py-4 border-b border-gray-200 {{ $isSim ? 'bg-amber-50' : 'bg-gray-50' }} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div class="flex items-center gap-3 flex-wrap">
+                            @if($isSim)
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-amber-200 text-amber-900 text-xs font-bold">
+                                    <i class="fas fa-flask mr-1"></i>SIMULATION
+                                </span>
+                            @else
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+                                    <i class="fas fa-database mr-1"></i>REAL DATA
+                                </span>
+                            @endif
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-alertara-100 text-alertara-800 text-xs font-bold">
                                 <i class="fas fa-location-dot mr-1"></i>{{ $batch['barangay_name'] ?? 'San Agustin' }}
                             </span>
@@ -122,6 +132,24 @@
                     </div>
 
                     <div class="p-6 space-y-6">
+                        @if($isSim && !empty($batch['scenario']))
+                            @php $sc = $batch['scenario']; @endphp
+                            <div class="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-900 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                <span class="font-bold uppercase tracking-wide text-amber-700">Scenario</span>
+                                <span><i class="fas fa-sliders-h mr-1"></i>{{ ($sc['scenario_type'] ?? '') === 'prevention' ? 'With prevention measures' : 'Risk — no prevention' }}</span>
+                                @if(!empty($sc['missing_safeguards']))
+                                    <span><i class="fas fa-triangle-exclamation mr-1"></i>Missing: {{ implode(', ', (array) $sc['missing_safeguards']) }}</span>
+                                @endif
+                                @if(!empty($sc['prevention_measures']))
+                                    <span><i class="fas fa-shield-halved mr-1"></i>Measures: {{ implode(', ', (array) $sc['prevention_measures']) }}</span>
+                                @endif
+                                @if(!empty($sc['crime_types']))
+                                    <span><i class="fas fa-tags mr-1"></i>Types: {{ implode(', ', (array) $sc['crime_types']) }}</span>
+                                @endif
+                                <span><i class="fas fa-location-crosshairs mr-1"></i>{{ ($sc['focus'] ?? '') === 'streets' && !empty($sc['streets']) ? (count((array) $sc['streets']) . ' street(s)') : 'Whole barangay' }}</span>
+                            </div>
+                        @endif
+
                         <!-- Forecast -->
                         @if(!empty($forecast))
                             <div>
