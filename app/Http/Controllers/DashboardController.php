@@ -1322,6 +1322,119 @@ class DashboardController extends Controller
     }
 
     /**
+     * "Custom Report" page: every saved AI output, grouped by save batch.
+     * Each batch = one Save click on Pattern Detection (1 analysis row + N
+     * recommendation rows sharing a batch_key). Rendered server-side so it
+     * reads straight from the production DB with no client fetch.
+     */
+    public function savedAiReports(Request $request)
+    {
+        return view('saved-ai-reports', ['batches' => $this->collectSavedAiReportBatches()]);
+    }
+
+    /**
+     * JSON API for the "Custom Report" page: the same saved AI outputs grouped
+     * by batch, with full payloads (forecast, findings, recommendations).
+     * Exposed so the data can be pulled programmatically / copied from the UI.
+     */
+    public function savedAiReportsData(Request $request)
+    {
+        try {
+            $batches = array_map(function ($b) {
+                $analysis = $b['analysis'];
+                return [
+                    'batch_key'     => $b['batch_key'],
+                    'barangay_name' => $b['barangay_name'],
+                    'saved_at'      => $b['created_at']?->toIso8601String(),
+                    'saved_by'      => $b['saved_by'],
+                    'period_days'   => $b['period_days'],
+                    'period_start'  => $b['period_start']?->toDateString(),
+                    'period_end'    => $b['period_end']?->toDateString(),
+                    'records_used'  => $b['records_used'],
+                    'model'         => $b['model'],
+                    'analysis'      => $analysis ? [
+                        'title'        => $analysis->title,
+                        'summary'      => $analysis->summary,
+                        'forecast'     => $analysis->payload['forecast'] ?? null,
+                        'key_findings' => $analysis->payload['key_findings'] ?? [],
+                    ] : null,
+                    'recommendations' => array_map(function ($rec) {
+                        return $rec->payload ?: ['action' => $rec->title, 'rationale' => $rec->summary];
+                    }, $b['recommendations']),
+                ];
+            }, $this->collectSavedAiReportBatches());
+
+            return response()->json([
+                'success'   => true,
+                'count'     => count($batches),
+                'generated' => now()->toIso8601String(),
+                'reports'   => array_values($batches),
+            ], 200, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in savedAiReportsData: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'error' => 'Error loading saved reports'], 500);
+        }
+    }
+
+    /**
+     * Load every saved AI report row and group it by save batch (one Save
+     * click = 1 analysis row + N recommendation rows sharing a batch_key).
+     * Returns a newest-first list. Shared by the page and its JSON API.
+     */
+    private function collectSavedAiReportBatches(): array
+    {
+        $batches = [];
+
+        try {
+            $rows = \App\Models\SanAgustinAiReport::query()
+                ->orderByDesc('created_at')
+                ->orderBy('id')
+                ->limit(1000)
+                ->get();
+
+            foreach ($rows as $row) {
+                $key = $row->batch_key ?: ('row-' . $row->id);
+
+                if (!isset($batches[$key])) {
+                    $batches[$key] = [
+                        'batch_key'       => $key,
+                        'barangay_name'   => $row->barangay_name,
+                        'created_at'      => $row->created_at,
+                        'saved_by'        => $row->saved_by,
+                        'period_days'     => $row->period_days,
+                        'period_start'    => $row->period_start,
+                        'period_end'      => $row->period_end,
+                        'records_used'    => $row->records_used,
+                        'model'           => $row->model,
+                        'analysis'        => null,
+                        'recommendations' => [],
+                    ];
+                }
+
+                if ($row->report_type === 'analysis') {
+                    $batches[$key]['analysis'] = $row;
+                    // Prefer the analysis row's timestamp/meta for the batch header
+                    $batches[$key]['created_at'] = $row->created_at;
+                    $batches[$key]['saved_by']   = $row->saved_by ?? $batches[$key]['saved_by'];
+                } else {
+                    $batches[$key]['recommendations'][] = $row;
+                }
+            }
+
+            // Newest batch first
+            usort($batches, function ($a, $b) {
+                return ($b['created_at']?->timestamp ?? 0) <=> ($a['created_at']?->timestamp ?? 0);
+            });
+        } catch (\Exception $e) {
+            \Log::error('Error in collectSavedAiReportBatches: '.$e->getMessage());
+            $batches = [];
+        }
+
+        return $batches;
+    }
+
+    /**
      * Per-street incident stats for the San Agustin street map
      * (hover tooltips: count, dominant crime, peak hours).
      */
