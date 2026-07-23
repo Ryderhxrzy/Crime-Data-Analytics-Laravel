@@ -42,11 +42,27 @@ class PatternDetectionService
         $real = $this->loadRealIncidents($days);
 
         $simulated = collect();
+        $genStats = [];
         if ($simulationOn) {
-            $simulated = (new PatternSimulationGenerator())->generate($real, $scenarios, $days);
+            $generator = new PatternSimulationGenerator();
+            $simulated = $generator->generate($real, $scenarios, $days);
+            $genStats = $generator->stats;
         }
 
         $all = $real->concat($simulated);
+
+        // Echo the scenario back to the client without the bulky street geometry,
+        // and attach the prevention outcome so the UI can report it.
+        $scenariosMeta = $scenarios;
+        unset($scenariosMeta['street_points']);
+        if ($simulationOn) {
+            $scenariosMeta['prevention_result'] = [
+                'active'    => $genStats['active_interventions'] ?? [],
+                'percent'   => $genStats['prevention_percent'] ?? 0,
+                'prevented' => $genStats['prevented'] ?? 0,
+                'target'    => $genStats['target'] ?? 0,
+            ];
+        }
 
         return [
             'meta' => [
@@ -55,7 +71,7 @@ class PatternDetectionService
                 'period_start'       => now()->subDays($days)->toDateString(),
                 'period_end'         => now()->toDateString(),
                 'simulation_enabled' => $simulationOn,
-                'scenarios'          => $simulationOn ? $scenarios : [],
+                'scenarios'          => $simulationOn ? $scenariosMeta : [],
                 'real_count'         => $real->count(),
                 'simulated_count'    => $simulated->count(),
                 'total_count'        => $all->count(),
