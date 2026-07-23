@@ -1186,6 +1186,18 @@ class DashboardController extends Controller
                     ];
                 }
 
+                // Multi-select crime types surge together
+                $crimeTypes = array_values(array_filter(array_map(
+                    fn ($s) => trim((string) $s),
+                    (array) $request->input('crime_types', [])
+                )));
+                if (! empty($crimeTypes)) {
+                    $scenarios['category_surges'] = [
+                        'categories' => $crimeTypes,
+                        'multiplier' => min(10.0, max(1.0, (float) $request->input('crime_types_multiplier', 3))),
+                    ];
+                }
+
                 if ($request->filled('spike_start_hour') && $request->filled('spike_end_hour')) {
                     $scenarios['time_spike'] = [
                         'start_hour' => (int) $request->input('spike_start_hour'),
