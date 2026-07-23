@@ -207,6 +207,18 @@
                     </div>
                 </div>-->
 
+                <!-- Custom Report Section -->
+                <div class="nav-section">
+                    <span class="section-label">Custom Report</span>
+                    <div class="tree-node mt-0.5">
+                        <a href="{{ authUrl('saved-ai-reports') }}"
+                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('saved-ai-reports') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
+                            <i class="fas fa-robot w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>Saved AI Reports</span>
+                        </a>
+                    </div>
+                </div>
+
                 <!-- Audit Logs Section -->
                 <div class="nav-section">
                     <span class="section-label">History</span>
