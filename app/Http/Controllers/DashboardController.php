@@ -1306,6 +1306,35 @@ class DashboardController extends Controller
     }
 
     /**
+     * AI what-if SIMULATION analysis via Gemini. Same output shape as
+     * aiPatternAnalysis, but the AI reasons about a scenario (safeguards absent,
+     * or prevention measures deployed) instead of the raw baseline.
+     */
+    public function aiSimulateAnalysis(Request $request, \App\Services\GeminiPatternAnalysisService $ai)
+    {
+        try {
+            $scenario = [
+                'scenario_type'       => $request->input('scenario_type') === 'prevention' ? 'prevention' : 'risk',
+                'missing_safeguards'  => array_values(array_filter(array_map('strval', (array) $request->input('missing_safeguards', [])))),
+                'prevention_measures' => array_values(array_filter(array_map('strval', (array) $request->input('prevention_measures', [])))),
+                'crime_types'         => array_values(array_filter(array_map('strval', (array) $request->input('crime_types', [])))),
+                'focus'               => $request->input('focus') === 'streets' ? 'streets' : 'barangay',
+                'streets'             => array_values(array_filter(array_map('strval', (array) $request->input('streets', [])))),
+            ];
+
+            $result = $ai->analyzeSimulation((int) $request->input('days', 180), $scenario);
+
+            $status = ($result['success'] ?? false) ? 200 : 422;
+
+            return response()->json($result, $status, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in aiSimulateAnalysis: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'error' => 'Error running AI simulation: '.$e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Save a generated AI analysis to the database. The forecast + findings
      * become one 'analysis' row; every recommendation becomes its own
      * 'recommendation' row, all sharing a batch_key.
@@ -1324,10 +1353,15 @@ class DashboardController extends Controller
             $authData = $this->getAuthUser();
             $savedBy = $authData['userEmail'] ?? null;
 
+            $dataSource = $request->input('data_source') === 'simulation' ? 'simulation' : 'real';
+            $scenario = $dataSource === 'simulation' ? $request->input('scenario') : null;
+
             $batchKey = (string) \Illuminate\Support\Str::uuid();
             $shared = [
                 'batch_key'    => $batchKey,
                 'barangay_name'=> 'San Agustin',
+                'data_source'  => $dataSource,
+                'scenario'     => $scenario,
                 'period_days'  => (int) ($meta['period_days'] ?? 0),
                 'period_start' => $meta['period_start'] ?? null,
                 'period_end'   => $meta['period_end'] ?? null,
@@ -1380,7 +1414,7 @@ class DashboardController extends Controller
             $reports = \App\Models\SanAgustinAiReport::query()
                 ->orderByDesc('created_at')
                 ->limit(min(50, max(1, (int) $request->input('limit', 20))))
-                ->get(['id', 'batch_key', 'report_type', 'title', 'summary', 'period_days', 'records_used', 'saved_by', 'created_at']);
+                ->get(['id', 'batch_key', 'data_source', 'report_type', 'title', 'summary', 'period_days', 'records_used', 'saved_by', 'created_at']);
 
             return response()->json(['success' => true, 'reports' => $reports]);
         } catch (\Exception $e) {
@@ -1414,6 +1448,8 @@ class DashboardController extends Controller
                 return [
                     'batch_key'     => $b['batch_key'],
                     'barangay_name' => $b['barangay_name'],
+                    'data_source'   => $b['data_source'] ?? 'real',
+                    'scenario'      => $b['scenario'] ?? null,
                     'saved_at'      => $b['created_at']?->toIso8601String(),
                     'saved_by'      => $b['saved_by'],
                     'period_days'   => $b['period_days'],
@@ -1469,6 +1505,8 @@ class DashboardController extends Controller
                     $batches[$key] = [
                         'batch_key'       => $key,
                         'barangay_name'   => $row->barangay_name,
+                        'data_source'     => $row->data_source ?? 'real',
+                        'scenario'        => $row->scenario,
                         'created_at'      => $row->created_at,
                         'saved_by'        => $row->saved_by,
                         'period_days'     => $row->period_days,
