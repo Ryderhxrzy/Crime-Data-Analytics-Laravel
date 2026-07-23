@@ -78,6 +78,20 @@ class PatternSimulationGenerator
             $categoryWeights = $this->normalize($categoryWeights);
         }
 
+        // Multiple selected crime types surge together (multi-select on the UI)
+        $categorySurges = $scenarios['category_surges'] ?? null;
+        if (is_array($categorySurges) && !empty($categorySurges['categories'])) {
+            $mult = max(1.0, (float) ($categorySurges['multiplier'] ?? 2));
+            foreach ((array) $categorySurges['categories'] as $name) {
+                $name = (string) $name;
+                if ($name === '') {
+                    continue;
+                }
+                $categoryWeights[$name] = ($categoryWeights[$name] ?? 0.05) * $mult;
+            }
+            $categoryWeights = $this->normalize($categoryWeights);
+        }
+
         if ($timeSpike && isset($timeSpike['start_hour'], $timeSpike['end_hour'])) {
             $mult = max(1.0, (float) ($timeSpike['multiplier'] ?? 2));
             for ($h = (int) $timeSpike['start_hour']; $h <= (int) $timeSpike['end_hour']; $h++) {
