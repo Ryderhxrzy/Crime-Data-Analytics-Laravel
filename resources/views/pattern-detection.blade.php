@@ -7,48 +7,20 @@
 
     <!-- Page Header -->
     <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-            <div>
-                <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Pattern Detection</h1>
-                <p class="text-gray-600 mt-1 text-sm lg:text-base">
-                    Trends, hotspots, timing, repeat activity and anomalies extracted from recorded incidents.
-                </p>
-            </div>
-
-            <!-- Simulation toggle -->
-            <div class="flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-                <div>
-                    <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Simulation Mode</div>
-                    <div id="simStateLabel" class="text-sm font-bold text-gray-700">OFF &mdash; real data only</div>
-                </div>
-                <button type="button" id="simToggle" role="switch" aria-checked="false"
-                        class="relative inline-flex h-7 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-alertara-500 focus:ring-offset-2"
-                        style="width: 3.25rem;">
-                    <span id="simKnob" class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 translate-x-0"></span>
-                </button>
-            </div>
-        </div>
+        <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Pattern Detection</h1>
+        <p class="text-gray-600 mt-1 text-sm lg:text-base">
+            Analyze recorded incidents (real data), or run a what-if <span class="font-semibold text-amber-700">simulation</span> to model how crime could rise or be prevented.
+        </p>
     </div>
 
-    <!-- Simulation banner (hidden when OFF) -->
-    <div id="simBanner" class="hidden mb-6 rounded-xl border-2 border-amber-400 bg-amber-50 p-4">
-        <div class="flex items-start gap-3">
-            <i class="fas fa-flask text-amber-600 mt-0.5"></i>
-            <div class="flex-1">
-                <div class="font-bold text-amber-900 text-sm">Simulation is ON &mdash; results are not operational data</div>
-                <p class="text-amber-800 text-xs mt-1">
-                    Generated records are mixed into the analysis below and marked
-                    <span class="inline-block px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold">SIMULATED</span>.
-                    Synthetic records resample the shape of existing data &mdash; they are not a forecast and must not be used for deployment or reporting.
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Controls -->
-    <div class="mb-6 bg-white rounded-xl border border-gray-200 p-4">
-        <div class="mb-4 pb-4 border-b border-gray-200">
-            <h3 class="text-sm font-bold text-gray-900"><i class="fas fa-sliders-h mr-2 text-alertara-700"></i>Analysis Settings</h3>
+    <!-- ============================================================= -->
+    <!-- PANEL A — REAL DATA ANALYSIS                                   -->
+    <!-- ============================================================= -->
+    <div class="mb-6 bg-white rounded-xl border-2 border-blue-200 p-4">
+        <div class="mb-4 pb-4 border-b border-gray-200 flex items-center gap-2">
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-100 text-blue-700"><i class="fas fa-database text-sm"></i></span>
+            <h3 class="text-sm font-bold text-gray-900">Real Data Analysis</h3>
+            <span class="text-xs text-gray-400">— recorded incidents only</span>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -63,14 +35,15 @@
                 </select>
             </div>
             <div class="flex items-end">
-                <button id="runBtn" class="w-full px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 transition-colors flex items-center justify-center gap-2 font-semibold">
-                    <i class="fas fa-play"></i> Run Analysis
+                <button id="runRealBtn" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-semibold">
+                    <i class="fas fa-database"></i> Analyze Real Data
                 </button>
             </div>
         </div>
+    </div>
 
-        <!-- Scenario + Prevention controls, only meaningful while simulating -->
-        <div id="scenarioPanel" class="hidden mt-4 pt-4 border-t border-gray-200 space-y-5">
+    <!-- Placeholder kept so JS references resolve; unused scenario panel removed -->
+    <div id="scenarioPanel" class="hidden">
 
             <!-- ============ SCENARIO ============ -->
             <div>
