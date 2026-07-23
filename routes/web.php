@@ -28,6 +28,11 @@ Route::get('/', [LandingController::class, 'index'])->name('landing');
 // Public tip submission
 Route::post('/submit-tip', [LandingController::class, 'submitTip'])->name('submit-tip');
 
+// Public JSON API: saved AI reports (San Agustin) — intentionally outside the
+// jwt.api group so it can be consumed by external services / dashboards.
+Route::get('/saved-ai-reports/data', [DashboardController::class, 'savedAiReportsData'])
+    ->name('saved-ai-reports.data');
+
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // The password-based login flow only exists for local development. In production,
@@ -81,8 +86,6 @@ Route::middleware('jwt.api')->group(function () {
         ->name('pattern-detection.ai-reports');
     Route::get('/saved-ai-reports', [DashboardController::class, 'savedAiReports'])
         ->name('saved-ai-reports');
-    Route::get('/saved-ai-reports/data', [DashboardController::class, 'savedAiReportsData'])
-        ->name('saved-ai-reports.data');
     Route::get('/crimes', [CrimeIncidentController::class, 'index'])->name('crimes.index');
     Route::get('/crime-incident/create', [CrimeIncidentController::class, 'create'])->name('crime-incident.create');
     Route::post('/crime-incident', [CrimeIncidentController::class, 'store'])->name('crime-incident.store');
