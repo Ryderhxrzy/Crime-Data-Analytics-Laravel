@@ -42,113 +42,12 @@
         </div>
     </div>
 
-    <!-- Placeholder kept so JS references resolve; unused scenario panel removed -->
-    <div id="scenarioPanel" class="hidden">
-
-            <!-- ============ SCENARIO ============ -->
-            <div>
-                <h4 class="text-sm font-bold text-amber-800 mb-0.5">
-                    <i class="fas fa-flask mr-1"></i>Scenario &mdash; what if crime rises?
-                </h4>
-                <p class="text-xs text-gray-500 mb-3">Choose where and how much. Simulated incidents are added on top of real data to model the surge.</p>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Focus area</label>
-                        <select id="focusMode" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                            <option value="barangay" selected>Whole barangay</option>
-                            <option value="streets">Selected streets</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Surge level</label>
-                        <select id="surgeLevel" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                            <option value="0.25">Minor (+25%)</option>
-                            <option value="0.5" selected>Moderate (+50%)</option>
-                            <option value="1">Major (+100%)</option>
-                            <option value="2">Severe (+200%)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Crime type <span class="text-gray-400">(optional)</span></label>
-                        <select id="surgeCategory" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                            <option value="">All types evenly</option>
-                            @foreach($crimeCategories as $category)
-                                <option value="{{ $category->category_name }}">Mostly {{ $category->category_name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Street picker (only when Focus area = Selected streets) -->
-                <div id="streetPickerWrap" class="hidden mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-                    <div class="flex items-center justify-between mb-2">
-                        <label class="text-xs font-bold text-gray-700">
-                            <i class="fas fa-road mr-1 text-amber-700"></i>Target streets
-                            <span id="streetCount" class="ml-1 text-amber-700 font-semibold"></span>
-                        </label>
-                        <div class="flex items-center gap-2 text-xs">
-                            <button type="button" id="streetSelectAll" class="text-alertara-700 hover:underline font-semibold">Select all</button>
-                            <span class="text-gray-300">|</span>
-                            <button type="button" id="streetClear" class="text-gray-500 hover:underline font-semibold">Clear</button>
-                        </div>
-                    </div>
-                    <input type="text" id="streetSearch" placeholder="Search street…"
-                           class="w-full px-3 py-1.5 mb-2 border border-gray-200 rounded-lg text-sm bg-white">
-                    <div id="streetList" class="max-h-44 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 pr-1">
-                        <div class="text-xs text-gray-400 py-2">Loading streets…</div>
-                    </div>
-                    <p id="streetHint" class="hidden text-[11px] text-amber-700 mt-2"><i class="fas fa-circle-info mr-1"></i>No streets selected — the surge will fall back to the whole barangay.</p>
-                </div>
-            </div>
-
-            <!-- ============ PREVENTION ============ -->
-            <div class="pt-4 border-t border-dashed border-gray-200">
-                <h4 class="text-sm font-bold text-emerald-800 mb-0.5">
-                    <i class="fas fa-shield-halved mr-1"></i>Prevention &mdash; what blunts the surge?
-                </h4>
-                <p class="text-xs text-gray-500 mb-3">Toggle interventions on the targeted area. Each reduces the simulated surge using published crime-prevention effect sizes.</p>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1"><i class="fas fa-shield mr-1 text-emerald-600"></i>Police patrol</label>
-                        <select id="prevPatrol" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                            <option value="0" selected>None</option>
-                            <option value="1">Standard (~10%)</option>
-                            <option value="2">Intensive (~15%)</option>
-                        </select>
-                    </div>
-                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
-                        <input type="checkbox" id="prevCctv" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
-                        <span><i class="fas fa-video mr-1 text-emerald-600"></i>CCTV <span class="text-gray-400 text-xs">(~18%)</span></span>
-                    </label>
-                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
-                        <input type="checkbox" id="prevLighting" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
-                        <span><i class="fas fa-lightbulb mr-1 text-emerald-600"></i>Street lighting <span class="text-gray-400 text-xs">(~20%)</span></span>
-                    </label>
-                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
-                        <input type="checkbox" id="prevCommunity" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
-                        <span><i class="fas fa-people-group mr-1 text-emerald-600"></i>Community watch <span class="text-gray-400 text-xs">(~9%)</span></span>
-                    </label>
-                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
-                        <input type="checkbox" id="prevCheckpoints" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
-                        <span><i class="fas fa-car-burst mr-1 text-emerald-600"></i>Checkpoints <span class="text-gray-400 text-xs">(~13%)</span></span>
-                    </label>
-                </div>
-
-                <!-- Prevention effect summary (filled after a run) -->
-                <div id="preventionResult" class="hidden mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                    <i class="fas fa-arrow-trend-down mr-1"></i><span id="preventionResultText"></span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- AI Analysis (Gemini) -->
+    <!-- AI Analysis (Gemini) — REAL DATA -->
     <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-1">
             <h2 class="text-lg font-bold text-gray-900">
-                <i class="fas fa-robot mr-2 text-violet-600"></i>AI Analysis &mdash; Barangay San Agustin
+                <i class="fas fa-robot mr-2 text-violet-600"></i>AI Analysis &mdash; Real Data
+                <span class="ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 align-middle">REAL</span>
             </h2>
             <div class="flex items-center gap-2">
                 <span id="aiMetaBadge" class="hidden text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 text-violet-800"></span>
@@ -165,7 +64,7 @@
         <!-- placeholder -->
         <div id="aiPlaceholder" class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
             <i class="fas fa-wand-magic-sparkles text-violet-400 text-xl mb-2 block"></i>
-            Click <span class="font-semibold text-gray-700">Run Analysis</span> to generate the AI forecast and recommendations.
+            Click <span class="font-semibold text-blue-700">Analyze Real Data</span> to generate the AI forecast and recommendations from recorded incidents.
         </div>
 
         <!-- loading -->
@@ -240,14 +139,10 @@
     <div id="results" class="hidden space-y-6">
 
         <!-- Data provenance -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <div class="bg-gradient-to-br from-alertara-700 to-alertara-600 text-white p-4 rounded-lg">
                 <div class="text-xs opacity-90 mb-1">Real Records</div>
                 <div id="statReal" class="text-2xl font-bold">0</div>
-            </div>
-            <div id="simStatCard" class="bg-gradient-to-br from-amber-600 to-amber-500 text-white p-4 rounded-lg opacity-40">
-                <div class="text-xs opacity-90 mb-1">Simulated Records</div>
-                <div id="statSimulated" class="text-2xl font-bold">0</div>
             </div>
             <div class="bg-gradient-to-br from-blue-600 to-blue-500 text-white p-4 rounded-lg">
                 <div class="text-xs opacity-90 mb-1">Analyzed Total</div>
@@ -335,6 +230,220 @@
             </div>
         </div>
     </div>
+
+    <!-- ============================================================= -->
+    <!-- PANEL B — SIMULATION (WHAT-IF)                                 -->
+    <!-- ============================================================= -->
+    <div class="mb-6 bg-amber-50/40 rounded-xl border-2 border-amber-300 p-4 lg:p-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4 pb-4 border-b border-amber-200">
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-amber-200 text-amber-800"><i class="fas fa-flask text-sm"></i></span>
+                <h3 class="text-sm font-bold text-gray-900">Simulation (What-If)</h3>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">SIMULATION</span>
+            </div>
+            <p class="text-xs text-amber-800"><i class="fas fa-circle-info mr-1"></i>Projected scenario &mdash; not operational data.</p>
+        </div>
+
+        <!-- Configuration -->
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Scenario type</label>
+                    <select id="simScenarioType" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                        <option value="risk" selected>Risk &mdash; no prevention</option>
+                        <option value="prevention">With prevention measures</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Surge level</label>
+                    <select id="surgeLevel" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                        <option value="0.25">Minor (+25%)</option>
+                        <option value="0.5" selected>Moderate (+50%)</option>
+                        <option value="1">Major (+100%)</option>
+                        <option value="2">Severe (+200%)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Focus area</label>
+                    <select id="focusMode" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                        <option value="barangay" selected>Whole barangay</option>
+                        <option value="streets">Selected streets</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Risk mode: missing safeguards -->
+            <div id="simMissingWrap" class="rounded-lg border border-amber-200 bg-white p-3">
+                <label class="block text-xs font-bold text-amber-800 mb-2">
+                    <i class="fas fa-triangle-exclamation mr-1"></i>Missing safeguards <span class="text-gray-400 font-normal">(what's absent that raises crime)</span>
+                </label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    @foreach(['No street lighting','No CCTV','No police patrol','No community watch','No checkpoints'] as $sg)
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" class="sim-missing rounded border-gray-300 text-amber-600 focus:ring-amber-500" value="{{ $sg }}"
+                                   @if($sg === 'No street lighting' || $sg === 'No CCTV') checked @endif>
+                            <span>{{ $sg }}</span>
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+
+            <!-- Prevention mode: measures deployed -->
+            <div id="simPreventionWrap" class="hidden rounded-lg border border-emerald-200 bg-white p-3">
+                <label class="block text-xs font-bold text-emerald-800 mb-2">
+                    <i class="fas fa-shield-halved mr-1"></i>Prevention measures deployed <span class="text-gray-400 font-normal">(each reduces crime)</span>
+                </label>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1"><i class="fas fa-shield mr-1 text-emerald-600"></i>Police patrol</label>
+                        <select id="prevPatrol" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                            <option value="0" selected>None</option>
+                            <option value="1">Standard (~10%)</option>
+                            <option value="2">Intensive (~15%)</option>
+                        </select>
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
+                        <input type="checkbox" id="prevCctv" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span><i class="fas fa-video mr-1 text-emerald-600"></i>CCTV <span class="text-gray-400 text-xs">(~18%)</span></span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
+                        <input type="checkbox" id="prevLighting" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span><i class="fas fa-lightbulb mr-1 text-emerald-600"></i>Street lighting <span class="text-gray-400 text-xs">(~20%)</span></span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
+                        <input type="checkbox" id="prevCommunity" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span><i class="fas fa-people-group mr-1 text-emerald-600"></i>Community watch <span class="text-gray-400 text-xs">(~9%)</span></span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
+                        <input type="checkbox" id="prevCheckpoints" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span><i class="fas fa-car-burst mr-1 text-emerald-600"></i>Checkpoints <span class="text-gray-400 text-xs">(~13%)</span></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Crime types (multi-select) -->
+            <div class="rounded-lg border border-gray-200 bg-white p-3">
+                <label class="block text-xs font-bold text-gray-700 mb-2">
+                    <i class="fas fa-tags mr-1 text-alertara-600"></i>Crime types <span class="text-gray-400 font-normal">(leave all unchecked = all types)</span>
+                </label>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    @foreach($crimeCategories as $category)
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" class="sim-crime-type rounded border-gray-300 text-alertara-600 focus:ring-alertara-500" value="{{ $category->category_name }}">
+                            <span class="truncate" title="{{ $category->category_name }}">{{ $category->category_name }}</span>
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+
+            <!-- Street picker (only when Focus area = Selected streets) -->
+            <div id="streetPickerWrap" class="hidden rounded-lg border border-amber-200 bg-white p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-bold text-gray-700">
+                        <i class="fas fa-road mr-1 text-amber-700"></i>Target streets
+                        <span id="streetCount" class="ml-1 text-amber-700 font-semibold"></span>
+                    </label>
+                    <div class="flex items-center gap-2 text-xs">
+                        <button type="button" id="streetSelectAll" class="text-alertara-700 hover:underline font-semibold">Select all</button>
+                        <span class="text-gray-300">|</span>
+                        <button type="button" id="streetClear" class="text-gray-500 hover:underline font-semibold">Clear</button>
+                    </div>
+                </div>
+                <input type="text" id="streetSearch" placeholder="Search street…"
+                       class="w-full px-3 py-1.5 mb-2 border border-gray-200 rounded-lg text-sm bg-white">
+                <div id="streetList" class="max-h-44 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 pr-1">
+                    <div class="text-xs text-gray-400 py-2">Loading streets…</div>
+                </div>
+                <p id="streetHint" class="hidden text-[11px] text-amber-700 mt-2"><i class="fas fa-circle-info mr-1"></i>No streets selected — the surge will fall back to the whole barangay.</p>
+            </div>
+
+            <div>
+                <button id="runSimBtn" class="px-5 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 font-semibold">
+                    <i class="fas fa-flask"></i> Run Simulation
+                </button>
+            </div>
+        </div>
+
+        <!-- Numeric surge / prevention summary -->
+        <div id="simSummary" class="hidden mt-5 pt-5 border-t border-amber-200">
+            <div class="grid grid-cols-3 gap-3">
+                <div class="bg-white rounded-lg border border-gray-200 p-3 text-center">
+                    <div class="text-[10px] font-bold text-gray-400 uppercase">Real</div>
+                    <div id="simStatReal" class="text-xl font-bold text-gray-800">0</div>
+                </div>
+                <div class="bg-white rounded-lg border border-amber-200 p-3 text-center">
+                    <div class="text-[10px] font-bold text-amber-500 uppercase">Simulated</div>
+                    <div id="simStatSim" class="text-xl font-bold text-amber-700">0</div>
+                </div>
+                <div class="bg-white rounded-lg border border-emerald-200 p-3 text-center">
+                    <div class="text-[10px] font-bold text-emerald-500 uppercase">Prevented</div>
+                    <div id="simStatPrevented" class="text-xl font-bold text-emerald-700">0</div>
+                </div>
+            </div>
+            <div id="preventionResult" class="hidden mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                <i class="fas fa-arrow-trend-down mr-1"></i><span id="preventionResultText"></span>
+            </div>
+        </div>
+
+        <!-- AI simulation analysis -->
+        <div class="mt-5 pt-5 border-t border-amber-200">
+            <div class="flex items-center justify-between mb-1">
+                <h4 class="text-base font-bold text-gray-900"><i class="fas fa-robot mr-2 text-amber-600"></i>AI Simulation Analysis</h4>
+                <div class="flex items-center gap-2">
+                    <span id="simMetaBadge" class="hidden text-[10px] font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-800"></span>
+                    <button id="simSaveBtn" class="hidden px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-xs font-semibold">
+                        <i class="fas fa-floppy-disk mr-1"></i>Save
+                    </button>
+                    <button id="simDownloadBtn" class="hidden px-3 py-1.5 bg-white text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors text-xs font-semibold">
+                        <i class="fas fa-download mr-1"></i>Download
+                    </button>
+                </div>
+            </div>
+            <p id="simIntro" class="text-xs text-gray-500 mb-4">Run the simulation to see how high crime could go under this scenario and what to do about it.</p>
+
+            <div id="simPlaceholder" class="rounded-lg border border-dashed border-amber-300 bg-white p-6 text-center text-sm text-gray-500">
+                <i class="fas fa-wand-magic-sparkles text-amber-400 text-xl mb-2 block"></i>
+                Click <span class="font-semibold text-amber-700">Run Simulation</span> to generate the what-if AI forecast.
+            </div>
+
+            <div id="simLoading" class="hidden rounded-lg bg-amber-50 border border-amber-200 p-6 text-center">
+                <i class="fas fa-spinner fa-spin text-2xl text-amber-600 mb-2"></i>
+                <div class="text-sm font-semibold text-amber-900">Gemini is analyzing the scenario&hellip;</div>
+            </div>
+
+            <div id="simError" class="hidden rounded-lg bg-red-50 border border-red-200 p-4">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-triangle-exclamation text-red-600 mt-0.5"></i>
+                    <div>
+                        <div class="font-bold text-red-900 text-sm">Simulation analysis failed</div>
+                        <p id="simErrorMessage" class="text-red-800 text-xs mt-1"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="simResults" class="hidden space-y-5">
+                <div id="simForecastCard" class="rounded-xl border-2 p-5">
+                    <div class="flex flex-wrap items-center gap-3 mb-2">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Scenario Forecast</span>
+                        <span id="simForecastBadge" class="px-3 py-1 rounded-full text-xs font-bold"></span>
+                        <span id="simForecastPercent" class="text-sm font-bold"></span>
+                        <span id="simConfidence" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700"></span>
+                    </div>
+                    <p id="simForecastSummary" class="text-sm text-gray-800"></p>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-magnifying-glass-chart mr-1"></i>Key Findings</h3>
+                    <ul id="simFindings" class="space-y-2"></ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-clipboard-check mr-1"></i>Recommended Interventions &amp; Projected Effect</h3>
+                    <div id="simRecommendations" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 @endsection
 
@@ -345,11 +454,11 @@
 
     const ANALYZE_URL = @json(route('pattern-detection.analyze'));
     const AI_ANALYZE_URL = @json(route('pattern-detection.ai-analyze'));
+    const AI_SIMULATE_URL = @json(route('pattern-detection.ai-simulate'));
     const AI_SAVE_URL = @json(route('pattern-detection.ai-save'));
     const AI_REPORTS_URL = @json(route('pattern-detection.ai-reports'));
     const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 
-    let simulationOn = false;
     let latest = null;
     let trendGrain = 'daily';
 
@@ -359,23 +468,32 @@
 
     const SIM_TAG = '<span class="inline-block px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold ml-2">SIMULATED</span>';
 
-    // ---------- simulation toggle ----------
-    function setSimulation(on) {
-        simulationOn = on;
-        const toggle = $('simToggle'), knob = $('simKnob');
+    // ---------- simulation scenario helpers ----------
+    // Show the right config for the chosen scenario type (risk vs prevention)
+    function syncScenarioType() {
+        const prevention = $('simScenarioType').value === 'prevention';
+        $('simMissingWrap').classList.toggle('hidden', prevention);
+        $('simPreventionWrap').classList.toggle('hidden', !prevention);
+    }
 
-        toggle.setAttribute('aria-checked', String(on));
-        toggle.classList.toggle('bg-amber-500', on);
-        toggle.classList.toggle('bg-gray-300', !on);
-        knob.classList.toggle('translate-x-6', on);
-        knob.classList.toggle('translate-x-0', !on);
+    // The whole simulation configuration, read from the form
+    function simScenario() {
+        const type = $('simScenarioType').value === 'prevention' ? 'prevention' : 'risk';
+        const focus = $('focusMode').value === 'streets' ? 'streets' : 'barangay';
+        const crimeTypes = Array.from(document.querySelectorAll('.sim-crime-type:checked')).map(c => c.value);
+        const missing = Array.from(document.querySelectorAll('.sim-missing:checked')).map(c => c.value);
+        const streets = focus === 'streets' ? selectedStreets() : [];
 
-        $('simStateLabel').textContent = on ? 'ON — real + simulated' : 'OFF — real data only';
-        $('simStateLabel').className = on ? 'text-sm font-bold text-amber-700' : 'text-sm font-bold text-gray-700';
+        const measures = [];
+        if (type === 'prevention') {
+            if (Number($('prevPatrol').value) > 0) measures.push('Police patrol');
+            if ($('prevCctv').checked)        measures.push('CCTV');
+            if ($('prevLighting').checked)    measures.push('Street lighting');
+            if ($('prevCommunity').checked)   measures.push('Community watch');
+            if ($('prevCheckpoints').checked) measures.push('Checkpoints');
+        }
 
-        $('simBanner').classList.toggle('hidden', !on);
-        $('scenarioPanel').classList.toggle('hidden', !on);
-        $('simStatCard').classList.toggle('opacity-40', !on);
+        return { type, focus, crimeTypes, missing, streets, measures };
     }
 
     // ---------- street picker (San Agustin) ----------
@@ -424,35 +542,13 @@
         }
     }
 
-    // ---------- run ----------
-    async function run() {
+    // ---------- REAL DATA: statistical pattern detection ----------
+    async function runReal() {
         $('loadingState').classList.remove('hidden');
         $('results').classList.add('hidden');
         $('errorState').classList.add('hidden');
 
         const params = new URLSearchParams({ days: $('daysSelect').value });
-
-        if (simulationOn) {
-            params.set('simulation', '1');
-            params.set('volume_multiplier', $('surgeLevel').value);
-
-            if ($('surgeCategory').value) {
-                params.set('surge_category', $('surgeCategory').value);
-                params.set('surge_category_multiplier', '3');
-            }
-
-            // Focus area: whole barangay (nothing extra) or selected streets
-            if ($('focusMode').value === 'streets') {
-                selectedStreets().forEach(function (name) { params.append('focus_streets[]', name); });
-            }
-
-            // Prevention interventions
-            params.set('prev_patrol', $('prevPatrol').value);
-            if ($('prevCctv').checked)        params.set('prev_cctv', '1');
-            if ($('prevLighting').checked)    params.set('prev_lighting', '1');
-            if ($('prevCommunity').checked)   params.set('prev_community', '1');
-            if ($('prevCheckpoints').checked) params.set('prev_checkpoints', '1');
-        }
 
         try {
             const res = await fetch(ANALYZE_URL + '?' + params, { headers: { 'Accept': 'application/json' } });
@@ -473,20 +569,54 @@
         }
     }
 
-    // ---------- AI analysis (Gemini) ----------
-    let aiBusy = false;
-    let latestAi = null;
+    // ---------- SIMULATION: statistical surge / prevention summary ----------
+    async function runSimStats() {
+        const sc = simScenario();
+        const params = new URLSearchParams({ days: $('daysSelect').value });
+        params.set('simulation', '1');
+        params.set('volume_multiplier', $('surgeLevel').value);
 
+        sc.crimeTypes.forEach(function (t) { params.append('crime_types[]', t); });
+        if (sc.focus === 'streets') {
+            sc.streets.forEach(function (name) { params.append('focus_streets[]', name); });
+        }
+
+        // Prevention only bites in the "with prevention" scenario
+        if (sc.type === 'prevention') {
+            params.set('prev_patrol', $('prevPatrol').value);
+            if ($('prevCctv').checked)        params.set('prev_cctv', '1');
+            if ($('prevLighting').checked)    params.set('prev_lighting', '1');
+            if ($('prevCommunity').checked)   params.set('prev_community', '1');
+            if ($('prevCheckpoints').checked) params.set('prev_checkpoints', '1');
+        }
+
+        try {
+            const res = await fetch(ANALYZE_URL + '?' + params, { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.message || data.error);
+
+            const m = data.meta || {};
+            $('simStatReal').textContent = (m.real_count || 0).toLocaleString();
+            $('simStatSim').textContent = (m.simulated_count || 0).toLocaleString();
+            const pr = m.scenarios && m.scenarios.prevention_result;
+            $('simStatPrevented').textContent = (pr && pr.prevented > 0 ? pr.prevented : 0).toLocaleString();
+            renderPreventionResult(pr);
+            $('simSummary').classList.remove('hidden');
+        } catch (e) {
+            console.error('Simulation stats failed:', e);
+        }
+    }
+
+    // ---------- AI analysis (Gemini) ----------
+    let aiBusy = false, simBusy = false;
+    let latestAi = null, latestSimAi = null;
+
+    // REAL DATA AI
     async function runAi() {
         if (aiBusy) return;        // one in-flight call at a time — conserves quota
         aiBusy = true;
-
-        $('aiPlaceholder').classList.add('hidden');
-        $('aiResults').classList.add('hidden');
-        $('aiError').classList.add('hidden');
-        $('aiMetaBadge').classList.add('hidden');
-        $('aiLoading').classList.remove('hidden');
-
+        showAiLoading('ai');
         try {
             const res = await fetch(AI_ANALYZE_URL + '?days=' + encodeURIComponent($('daysSelect').value),
                 { headers: { 'Accept': 'application/json' } });
@@ -495,28 +625,80 @@
             if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
 
             latestAi = data;
-            renderAi(data);
-            $('aiLoading').classList.add('hidden');
-            $('aiResults').classList.remove('hidden');
-            $('aiSaveBtn').classList.remove('hidden');
-            $('aiDownloadBtn').classList.remove('hidden');
-            resetSaveButton();
+            renderAiInto('ai', data, 'violet');
+            showAiResults('ai');
+            resetSaveBtn('aiSaveBtn', 'violet');
         } catch (e) {
             console.error('AI analysis failed:', e);
-            $('aiLoading').classList.add('hidden');
-            $('aiErrorMessage').textContent = e.message;
-            $('aiError').classList.remove('hidden');
+            showAiError('ai', e.message);
         } finally {
             aiBusy = false;
         }
     }
 
-    function renderAi(data) {
-        const a = data.analysis, f = a.forecast || {};
+    // SIMULATION AI (what-if scenario)
+    async function runSimAi() {
+        if (simBusy) return;
+        simBusy = true;
+        showAiLoading('sim');
+        const sc = simScenario();
+        try {
+            const res = await fetch(AI_SIMULATE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+                body: JSON.stringify({
+                    days:                $('daysSelect').value,
+                    scenario_type:       sc.type,
+                    missing_safeguards:  sc.missing,
+                    prevention_measures: sc.measures,
+                    crime_types:         sc.crimeTypes,
+                    focus:               sc.focus,
+                    streets:             sc.streets
+                })
+            });
+            const data = await res.json();
 
-        $('aiMetaBadge').textContent =
-            data.meta.records_used.toLocaleString() + ' records · ' + data.meta.period_days + 'd';
-        $('aiMetaBadge').classList.remove('hidden');
+            if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
+
+            latestSimAi = data;
+            renderAiInto('sim', data, 'amber');
+            showAiResults('sim');
+            resetSaveBtn('simSaveBtn', 'amber');
+        } catch (e) {
+            console.error('AI simulation failed:', e);
+            showAiError('sim', e.message);
+        } finally {
+            simBusy = false;
+        }
+    }
+
+    // ---------- AI block show/hide (shared by 'ai' and 'sim') ----------
+    function showAiLoading(p) {
+        $(p + 'Placeholder').classList.add('hidden');
+        $(p + 'Results').classList.add('hidden');
+        $(p + 'Error').classList.add('hidden');
+        $(p + 'MetaBadge').classList.add('hidden');
+        $(p + 'Loading').classList.remove('hidden');
+    }
+    function showAiResults(p) {
+        $(p + 'Loading').classList.add('hidden');
+        $(p + 'Results').classList.remove('hidden');
+        $(p + 'SaveBtn').classList.remove('hidden');
+        $(p + 'DownloadBtn').classList.remove('hidden');
+    }
+    function showAiError(p, msg) {
+        $(p + 'Loading').classList.add('hidden');
+        $(p + 'ErrorMessage').textContent = msg;
+        $(p + 'Error').classList.remove('hidden');
+    }
+
+    // ---------- AI result renderer (shared) ----------
+    function renderAiInto(p, data, accent) {
+        const a = data.analysis, f = a.forecast || {}, meta = data.meta || {};
+
+        $(p + 'MetaBadge').textContent =
+            (meta.records_used || 0).toLocaleString() + ' records · ' + (meta.period_days || 0) + 'd';
+        $(p + 'MetaBadge').classList.remove('hidden');
 
         const dir = String(f.direction || 'stable').toLowerCase();
         const style = {
@@ -525,20 +707,20 @@
             stable:   { card: 'border-gray-300 bg-gray-50',  badge: 'bg-gray-200 text-gray-800',  label: 'CRIME LIKELY STABLE', icon: 'fa-arrows-left-right' }
         }[dir] || { card: 'border-gray-300 bg-gray-50', badge: 'bg-gray-200 text-gray-800', label: dir.toUpperCase(), icon: 'fa-minus' };
 
-        $('aiForecastCard').className = 'rounded-xl border-2 p-5 ' + style.card;
-        $('aiForecastBadge').className = 'px-3 py-1 rounded-full text-xs font-bold ' + style.badge;
-        $('aiForecastBadge').innerHTML = '<i class="fas ' + style.icon + ' mr-1"></i>' + style.label;
+        $(p + 'ForecastCard').className = 'rounded-xl border-2 p-5 ' + style.card;
+        $(p + 'ForecastBadge').className = 'px-3 py-1 rounded-full text-xs font-bold ' + style.badge;
+        $(p + 'ForecastBadge').innerHTML = '<i class="fas ' + style.icon + ' mr-1"></i>' + style.label;
 
         const pct = Number(f.expected_change_percent);
-        $('aiForecastPercent').textContent = isFinite(pct) ? ((pct > 0 ? '+' : '') + pct + '% projected') : '';
-        $('aiForecastPercent').className = 'text-sm font-bold ' + (pct > 0 ? 'text-red-700' : pct < 0 ? 'text-green-700' : 'text-gray-700');
+        $(p + 'ForecastPercent').textContent = isFinite(pct) ? ((pct > 0 ? '+' : '') + pct + '% projected') : '';
+        $(p + 'ForecastPercent').className = 'text-sm font-bold ' + (pct > 0 ? 'text-red-700' : pct < 0 ? 'text-green-700' : 'text-gray-700');
 
-        $('aiConfidence').textContent = 'CONFIDENCE: ' + String(f.confidence || 'low').toUpperCase();
-        $('aiForecastSummary').textContent = f.summary || '';
+        $(p + 'Confidence').textContent = 'CONFIDENCE: ' + String(f.confidence || 'low').toUpperCase();
+        $(p + 'ForecastSummary').textContent = f.summary || '';
 
-        $('aiFindings').innerHTML = (a.key_findings || []).map(k =>
+        $(p + 'Findings').innerHTML = (a.key_findings || []).map(k =>
             '<li class="flex items-start gap-2 text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3">' +
-                '<i class="fas fa-circle-check text-violet-600 mt-0.5"></i><span>' + esc(k) + '</span>' +
+                '<i class="fas fa-circle-check text-' + accent + '-600 mt-0.5"></i><span>' + esc(k) + '</span>' +
             '</li>').join('') || '<li class="text-sm text-gray-500">No findings returned.</li>';
 
         const prio = {
@@ -547,17 +729,17 @@
             low:    'bg-gray-100 text-gray-700 border-gray-200'
         };
 
-        $('aiRecommendations').innerHTML = (a.recommendations || []).map(r => {
+        $(p + 'Recommendations').innerHTML = (a.recommendations || []).map(r => {
             const imp = r.expected_impact || {};
             const impDir = String(imp.direction || '').toLowerCase();
             const impPct = Number(imp.estimated_change_percent);
             const good = impDir === 'decrease' || impPct < 0;
-            const p = String(r.priority || 'low').toLowerCase();
+            const pr = String(r.priority || 'low').toLowerCase();
 
             return '<div class="rounded-xl border border-gray-200 p-4 flex flex-col gap-2">' +
                 '<div class="flex items-start justify-between gap-2">' +
-                    '<div class="text-sm font-bold text-gray-900"><i class="fas fa-shield-halved text-violet-600 mr-1"></i>' + esc(r.action) + '</div>' +
-                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (prio[p] || prio.low) + '">' + p.toUpperCase() + '</span>' +
+                    '<div class="text-sm font-bold text-gray-900"><i class="fas fa-shield-halved text-' + accent + '-600 mr-1"></i>' + esc(r.action) + '</div>' +
+                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (prio[pr] || prio.low) + '">' + pr.toUpperCase() + '</span>' +
                 '</div>' +
                 (r.location ? '<div class="text-xs text-gray-600"><i class="fas fa-location-dot text-gray-400 mr-1"></i>' + esc(r.location) + '</div>' : '') +
                 (r.rationale ? '<p class="text-xs text-gray-600">' + esc(r.rationale) + '</p>' : '') +
@@ -574,29 +756,34 @@
         }).join('') || '<p class="text-sm text-gray-500">No recommendations returned.</p>';
     }
 
-    // ---------- save AI report to database ----------
-    function resetSaveButton() {
-        const btn = $('aiSaveBtn');
+    // ---------- save AI report to database (shared) ----------
+    function resetSaveBtn(btnId, accent) {
+        const btn = $(btnId);
         btn.disabled = false;
-        btn.className = 'px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-xs font-semibold';
+        btn.className = 'px-3 py-1.5 bg-' + accent + '-600 text-white rounded-lg hover:bg-' + accent + '-700 transition-colors text-xs font-semibold';
         btn.innerHTML = '<i class="fas fa-floppy-disk mr-1"></i>Save';
     }
 
-    async function saveAiToDb() {
-        if (!latestAi) return;
-        const btn = $('aiSaveBtn');
+    async function saveToDb(opts) {
+        if (!opts.latest) return;
+        const btn = $(opts.btnId);
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving…';
 
         try {
+            const body = {
+                meta: opts.latest.meta,
+                analysis: opts.latest.analysis,
+                data_source: opts.dataSource
+            };
+            if (opts.dataSource === 'simulation') {
+                body.scenario = (opts.latest.meta && opts.latest.meta.scenario) || null;
+            }
+
             const res = await fetch(AI_SAVE_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': CSRF
-                },
-                body: JSON.stringify({ meta: latestAi.meta, analysis: latestAi.analysis })
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+                body: JSON.stringify(body)
             });
             const data = await res.json();
             if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
@@ -621,8 +808,12 @@
             $('savedReportsWrap').classList.remove('hidden');
             $('savedReportsList').innerHTML = data.reports.map(r => {
                 const isRec = r.report_type === 'recommendation';
+                const isSim = r.data_source === 'simulation';
                 const when = new Date(r.created_at).toLocaleString();
                 return '<div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">' +
+                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ' +
+                        (isSim ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800') + '">' +
+                        (isSim ? 'SIM' : 'REAL') + '</span>' +
                     '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ' +
                         (isRec ? 'bg-blue-100 text-blue-800' : 'bg-violet-100 text-violet-800') + '">' +
                         (isRec ? 'RECOMMENDATION' : 'ANALYSIS') + '</span>' +
@@ -641,9 +832,9 @@
     }
 
     // ---------- download AI report as file ----------
-    function saveAiReport() {
-        if (!latestAi) return;
-        const a = latestAi.analysis, f = a.forecast || {}, m = latestAi.meta;
+    function downloadReport(latestReport) {
+        if (!latestReport) return;
+        const a = latestReport.analysis, f = a.forecast || {}, m = latestReport.meta;
         const pct = Number(f.expected_change_percent);
         const dirColor = { increase: '#b91c1c', decrease: '#15803d', stable: '#374151' }[String(f.direction).toLowerCase()] || '#374151';
 
@@ -697,14 +888,12 @@
         const m = d.meta;
 
         $('statReal').textContent = m.real_count.toLocaleString();
-        $('statSimulated').textContent = m.simulated_count.toLocaleString();
         $('statTotal').textContent = m.total_count.toLocaleString();
         $('statPeriod').textContent = m.period_days + 'd';
 
         $('confidenceWarning').classList.toggle('hidden', !m.low_confidence);
         if (m.low_confidence) $('confidenceNote').textContent = m.confidence_note;
 
-        renderPreventionResult(m.scenarios && m.scenarios.prevention_result);
         renderInsights(d.insights);
         renderTrend(d.trends);
         renderTypes(d.type_distribution, m.total_count);
@@ -1032,26 +1221,28 @@
 
     // ---------- wiring ----------
     function init() {
-        $('simToggle').addEventListener('click', function () { setSimulation(!simulationOn); run(); });
-        // AI analysis fires only on an explicit Run Analysis click (not on page
-        // load or control changes) to keep Gemini API usage low.
-        $('runBtn').addEventListener('click', function () { run(); runAi(); });
-        $('aiSaveBtn').addEventListener('click', saveAiToDb);
-        $('aiDownloadBtn').addEventListener('click', saveAiReport);
-        loadSavedReports();
-        loadStreets();
-        $('daysSelect').addEventListener('change', run);
-
-        // Scenario + prevention controls re-run the simulation on change
-        ['surgeLevel', 'surgeCategory', 'prevPatrol', 'prevCctv', 'prevLighting', 'prevCommunity', 'prevCheckpoints'].forEach(function (id) {
-            $(id).addEventListener('change', function () { if (simulationOn) run(); });
+        // REAL DATA: statistical + AI fire together on an explicit click
+        $('runRealBtn').addEventListener('click', function () { runReal(); runAi(); });
+        $('aiSaveBtn').addEventListener('click', function () {
+            saveToDb({ btnId: 'aiSaveBtn', latest: latestAi, dataSource: 'real' });
         });
+        $('aiDownloadBtn').addEventListener('click', function () { downloadReport(latestAi); });
+        $('daysSelect').addEventListener('change', runReal);
+
+        // SIMULATION: its own button runs the surge summary + AI scenario
+        $('runSimBtn').addEventListener('click', function () { runSimStats(); runSimAi(); });
+        $('simSaveBtn').addEventListener('click', function () {
+            saveToDb({ btnId: 'simSaveBtn', latest: latestSimAi, dataSource: 'simulation' });
+        });
+        $('simDownloadBtn').addEventListener('click', function () { downloadReport(latestSimAi); });
+
+        // Scenario type switches which config block is shown
+        $('simScenarioType').addEventListener('change', syncScenarioType);
 
         // Focus area toggle shows/hides the street picker
         $('focusMode').addEventListener('change', function () {
             $('streetPickerWrap').classList.toggle('hidden', this.value !== 'streets');
             updateStreetCount();
-            if (simulationOn) run();
         });
 
         // Street picker: search, select-all, clear, and per-checkbox selection
@@ -1060,21 +1251,19 @@
             streetNames.forEach(n => selectedStreetSet.add(n));
             renderStreetList($('streetSearch').value);
             updateStreetCount();
-            if (simulationOn) run();
         });
         $('streetClear').addEventListener('click', function () {
             selectedStreetSet.clear();
             renderStreetList($('streetSearch').value);
             updateStreetCount();
-            if (simulationOn) run();
         });
         $('streetList').addEventListener('change', function (e) {
             const cb = e.target;
             if (!cb.classList || !cb.classList.contains('street-cb')) return;
             if (cb.checked) selectedStreetSet.add(cb.value); else selectedStreetSet.delete(cb.value);
             updateStreetCount();
-            if (simulationOn) run();
         });
+
         document.querySelectorAll('.trend-tab').forEach(function (tab) {
             tab.addEventListener('click', function () {
                 trendGrain = tab.dataset.grain;
@@ -1082,9 +1271,12 @@
             });
         });
 
-        // Simulation starts OFF, as required
-        setSimulation(false);
-        run();
+        loadSavedReports();
+        loadStreets();
+        syncScenarioType();
+
+        // Auto-run the real-data statistical analysis on load (AI stays manual)
+        runReal();
     }
 
     // Chart.js is loaded with defer by the layout, so it is only guaranteed to

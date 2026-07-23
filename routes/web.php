@@ -78,6 +78,9 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/pattern-detection/ai-analyze', [DashboardController::class, 'aiPatternAnalysis'])
         ->middleware('throttle:5,1')
         ->name('pattern-detection.ai-analyze');
+    Route::post('/pattern-detection/ai-simulate', [DashboardController::class, 'aiSimulateAnalysis'])
+        ->middleware('throttle:5,1')
+        ->name('pattern-detection.ai-simulate');
     Route::get('/pattern-detection/street-stats', [DashboardController::class, 'sanAgustinStreetStats'])
         ->name('pattern-detection.street-stats');
     Route::post('/pattern-detection/ai-save', [DashboardController::class, 'saveAiAnalysis'])
