@@ -69,45 +69,103 @@
             </div>
         </div>
 
-        <!-- Scenario controls, only meaningful while simulating -->
-        <div id="scenarioPanel" class="hidden mt-4 pt-4 border-t border-gray-200">
-            <h4 class="text-xs font-bold text-amber-800 uppercase tracking-wide mb-3">
-                <i class="fas fa-flask mr-1"></i>Scenario Configuration
-            </h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                    <label class="block text-xs font-medium text-gray-700 mb-1">Simulated volume</label>
-                    <select id="volumeMultiplier" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                        <option value="0.25">+25% of real volume</option>
-                        <option value="0.5" selected>+50% of real volume</option>
-                        <option value="1">+100% of real volume</option>
-                        <option value="2">+200% of real volume</option>
-                    </select>
+        <!-- Scenario + Prevention controls, only meaningful while simulating -->
+        <div id="scenarioPanel" class="hidden mt-4 pt-4 border-t border-gray-200 space-y-5">
+
+            <!-- ============ SCENARIO ============ -->
+            <div>
+                <h4 class="text-sm font-bold text-amber-800 mb-0.5">
+                    <i class="fas fa-flask mr-1"></i>Scenario &mdash; what if crime rises?
+                </h4>
+                <p class="text-xs text-gray-500 mb-3">Choose where and how much. Simulated incidents are added on top of real data to model the surge.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Focus area</label>
+                        <select id="focusMode" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                            <option value="barangay" selected>Whole barangay</option>
+                            <option value="streets">Selected streets</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Surge level</label>
+                        <select id="surgeLevel" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                            <option value="0.25">Minor (+25%)</option>
+                            <option value="0.5" selected>Moderate (+50%)</option>
+                            <option value="1">Major (+100%)</option>
+                            <option value="2">Severe (+200%)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Crime type <span class="text-gray-400">(optional)</span></label>
+                        <select id="surgeCategory" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                            <option value="">All types evenly</option>
+                            @foreach($crimeCategories as $category)
+                                <option value="{{ $category->category_name }}">Mostly {{ $category->category_name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-700 mb-1">Surge in crime type</label>
-                    <select id="surgeCategory" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                        <option value="">None</option>
-                        @foreach($crimeCategories as $category)
-                            <option value="{{ $category->category_name }}">{{ $category->category_name }}</option>
-                        @endforeach
-                    </select>
+
+                <!-- Street picker (only when Focus area = Selected streets) -->
+                <div id="streetPickerWrap" class="hidden mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-gray-700">
+                            <i class="fas fa-road mr-1 text-amber-700"></i>Target streets
+                            <span id="streetCount" class="ml-1 text-amber-700 font-semibold"></span>
+                        </label>
+                        <div class="flex items-center gap-2 text-xs">
+                            <button type="button" id="streetSelectAll" class="text-alertara-700 hover:underline font-semibold">Select all</button>
+                            <span class="text-gray-300">|</span>
+                            <button type="button" id="streetClear" class="text-gray-500 hover:underline font-semibold">Clear</button>
+                        </div>
+                    </div>
+                    <input type="text" id="streetSearch" placeholder="Search street…"
+                           class="w-full px-3 py-1.5 mb-2 border border-gray-200 rounded-lg text-sm bg-white">
+                    <div id="streetList" class="max-h-44 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 pr-1">
+                        <div class="text-xs text-gray-400 py-2">Loading streets…</div>
+                    </div>
+                    <p id="streetHint" class="hidden text-[11px] text-amber-700 mt-2"><i class="fas fa-circle-info mr-1"></i>No streets selected — the surge will fall back to the whole barangay.</p>
                 </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-700 mb-1">Time-based spike</label>
-                    <select id="timeSpike" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-                        <option value="">None</option>
-                        <option value="0,5">Early morning (00:00-05:59)</option>
-                        <option value="6,11">Morning (06:00-11:59)</option>
-                        <option value="12,17">Afternoon (12:00-17:59)</option>
-                        <option value="18,23">Evening/Night (18:00-23:59)</option>
-                    </select>
-                </div>
-                <div class="flex items-end">
-                    <label class="flex items-center gap-2 text-sm text-gray-700 pb-2 cursor-pointer">
-                        <input type="checkbox" id="locationSurge" class="rounded border-gray-300 text-alertara-700 focus:ring-alertara-500">
-                        <span>Concentrate on top hotspot</span>
+            </div>
+
+            <!-- ============ PREVENTION ============ -->
+            <div class="pt-4 border-t border-dashed border-gray-200">
+                <h4 class="text-sm font-bold text-emerald-800 mb-0.5">
+                    <i class="fas fa-shield-halved mr-1"></i>Prevention &mdash; what blunts the surge?
+                </h4>
+                <p class="text-xs text-gray-500 mb-3">Toggle interventions on the targeted area. Each reduces the simulated surge using published crime-prevention effect sizes.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1"><i class="fas fa-shield mr-1 text-emerald-600"></i>Police patrol</label>
+                        <select id="prevPatrol" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                            <option value="0" selected>None</option>
+                            <option value="1">Standard (~10%)</option>
+                            <option value="2">Intensive (~15%)</option>
+                        </select>
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
+                        <input type="checkbox" id="prevCctv" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span><i class="fas fa-video mr-1 text-emerald-600"></i>CCTV <span class="text-gray-400 text-xs">(~18%)</span></span>
                     </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
+                        <input type="checkbox" id="prevLighting" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span><i class="fas fa-lightbulb mr-1 text-emerald-600"></i>Street lighting <span class="text-gray-400 text-xs">(~20%)</span></span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
+                        <input type="checkbox" id="prevCommunity" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span><i class="fas fa-people-group mr-1 text-emerald-600"></i>Community watch <span class="text-gray-400 text-xs">(~9%)</span></span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-emerald-50">
+                        <input type="checkbox" id="prevCheckpoints" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span><i class="fas fa-car-burst mr-1 text-emerald-600"></i>Checkpoints <span class="text-gray-400 text-xs">(~13%)</span></span>
+                    </label>
+                </div>
+
+                <!-- Prevention effect summary (filled after a run) -->
+                <div id="preventionResult" class="hidden mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                    <i class="fas fa-arrow-trend-down mr-1"></i><span id="preventionResultText"></span>
                 </div>
             </div>
         </div>
@@ -347,6 +405,52 @@
         $('simStatCard').classList.toggle('opacity-40', !on);
     }
 
+    // ---------- street picker (San Agustin) ----------
+    const STREETS_URL = @json(asset('data/san_agustin_streets.geojson'));
+    let streetNames = [];                    // unique, sorted
+    const selectedStreetSet = new Set();     // selection survives search filtering
+
+    function selectedStreets() { return Array.from(selectedStreetSet); }
+
+    function updateStreetCount() {
+        const n = selectedStreetSet.size;
+        $('streetCount').textContent = n ? '(' + n + ' selected)' : '';
+        $('streetHint').classList.toggle('hidden', !($('focusMode').value === 'streets' && n === 0));
+    }
+
+    function renderStreetList(filter) {
+        const q = String(filter || '').toLowerCase().trim();
+        const list = streetNames.filter(n => !q || n.toLowerCase().includes(q));
+        if (!list.length) {
+            $('streetList').innerHTML = '<div class="text-xs text-gray-400 py-2 col-span-full">No matching streets.</div>';
+            return;
+        }
+        $('streetList').innerHTML = list.map(n =>
+            '<label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer py-0.5">' +
+                '<input type="checkbox" value="' + esc(n) + '"' + (selectedStreetSet.has(n) ? ' checked' : '') +
+                    ' class="street-cb rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+                '<span class="truncate" title="' + esc(n) + '">' + esc(n) + '</span>' +
+            '</label>').join('');
+    }
+
+    async function loadStreets() {
+        try {
+            const res = await fetch(STREETS_URL, { headers: { 'Accept': 'application/json' } });
+            const geo = await res.json();
+            const names = new Set();
+            (geo.features || []).forEach(f => {
+                const nm = f && f.properties && f.properties.name;
+                if (nm) names.add(String(nm).trim());
+            });
+            streetNames = Array.from(names).sort((a, b) => a.localeCompare(b));
+            renderStreetList('');
+            updateStreetCount();
+        } catch (e) {
+            console.error('Loading streets failed:', e);
+            $('streetList').innerHTML = '<div class="text-xs text-red-500 py-2 col-span-full">Could not load street list.</div>';
+        }
+    }
+
     // ---------- run ----------
     async function run() {
         $('loadingState').classList.remove('hidden');
@@ -357,22 +461,24 @@
 
         if (simulationOn) {
             params.set('simulation', '1');
-            params.set('volume_multiplier', $('volumeMultiplier').value);
+            params.set('volume_multiplier', $('surgeLevel').value);
 
             if ($('surgeCategory').value) {
                 params.set('surge_category', $('surgeCategory').value);
                 params.set('surge_category_multiplier', '3');
             }
-            if ($('timeSpike').value) {
-                const [start, end] = $('timeSpike').value.split(',');
-                params.set('spike_start_hour', start);
-                params.set('spike_end_hour', end);
-                params.set('spike_multiplier', '3');
+
+            // Focus area: whole barangay (nothing extra) or selected streets
+            if ($('focusMode').value === 'streets') {
+                selectedStreets().forEach(function (name) { params.append('focus_streets[]', name); });
             }
-            if ($('locationSurge').checked) {
-                params.set('location_surge', '1');
-                params.set('location_surge_multiplier', '3');
-            }
+
+            // Prevention interventions
+            params.set('prev_patrol', $('prevPatrol').value);
+            if ($('prevCctv').checked)        params.set('prev_cctv', '1');
+            if ($('prevLighting').checked)    params.set('prev_lighting', '1');
+            if ($('prevCommunity').checked)   params.set('prev_community', '1');
+            if ($('prevCheckpoints').checked) params.set('prev_checkpoints', '1');
         }
 
         try {
@@ -625,6 +731,7 @@
         $('confidenceWarning').classList.toggle('hidden', !m.low_confidence);
         if (m.low_confidence) $('confidenceNote').textContent = m.confidence_note;
 
+        renderPreventionResult(m.scenarios && m.scenarios.prevention_result);
         renderInsights(d.insights);
         renderTrend(d.trends);
         renderTypes(d.type_distribution, m.total_count);
@@ -632,6 +739,19 @@
         renderHotspots(d.hotspots);
         renderClusters(d.repeat_clusters);
         renderAnomalies(d.anomalies);
+    }
+
+    function renderPreventionResult(pr) {
+        const box = $('preventionResult');
+        if (!pr || !pr.active || !pr.active.length || !(pr.prevented > 0)) {
+            box.classList.add('hidden');
+            return;
+        }
+        $('preventionResultText').textContent =
+            pr.active.join(', ') + ' cut the surge by ~' + pr.percent + '% — about ' +
+            pr.prevented.toLocaleString() + ' of ' + pr.target.toLocaleString() +
+            ' simulated incidents prevented on the targeted area.';
+        box.classList.remove('hidden');
     }
 
     function renderInsights(list) {
@@ -946,9 +1066,41 @@
         $('aiSaveBtn').addEventListener('click', saveAiToDb);
         $('aiDownloadBtn').addEventListener('click', saveAiReport);
         loadSavedReports();
+        loadStreets();
         $('daysSelect').addEventListener('change', run);
-        ['volumeMultiplier', 'surgeCategory', 'timeSpike', 'locationSurge'].forEach(function (id) {
+
+        // Scenario + prevention controls re-run the simulation on change
+        ['surgeLevel', 'surgeCategory', 'prevPatrol', 'prevCctv', 'prevLighting', 'prevCommunity', 'prevCheckpoints'].forEach(function (id) {
             $(id).addEventListener('change', function () { if (simulationOn) run(); });
+        });
+
+        // Focus area toggle shows/hides the street picker
+        $('focusMode').addEventListener('change', function () {
+            $('streetPickerWrap').classList.toggle('hidden', this.value !== 'streets');
+            updateStreetCount();
+            if (simulationOn) run();
+        });
+
+        // Street picker: search, select-all, clear, and per-checkbox selection
+        $('streetSearch').addEventListener('input', function () { renderStreetList(this.value); });
+        $('streetSelectAll').addEventListener('click', function () {
+            streetNames.forEach(n => selectedStreetSet.add(n));
+            renderStreetList($('streetSearch').value);
+            updateStreetCount();
+            if (simulationOn) run();
+        });
+        $('streetClear').addEventListener('click', function () {
+            selectedStreetSet.clear();
+            renderStreetList($('streetSearch').value);
+            updateStreetCount();
+            if (simulationOn) run();
+        });
+        $('streetList').addEventListener('change', function (e) {
+            const cb = e.target;
+            if (!cb.classList || !cb.classList.contains('street-cb')) return;
+            if (cb.checked) selectedStreetSet.add(cb.value); else selectedStreetSet.delete(cb.value);
+            updateStreetCount();
+            if (simulationOn) run();
         });
         document.querySelectorAll('.trend-tab').forEach(function (tab) {
             tab.addEventListener('click', function () {
