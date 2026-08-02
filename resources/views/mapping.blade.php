@@ -1102,6 +1102,40 @@ if (request()->query('token')) {
         const escStreet = s => String(s ?? '').replace(/[&<>"']/g, c =>
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+        // Streets are COLOR-CODED by how many crimes they carry. Highest
+        // matching threshold wins; the same scale drives the map legend.
+        const STREET_SEVERITY = [
+            { min: 15, label: 'Critical', range: '15+ crimes',  color: '#7f1d1d' },
+            { min: 10, label: 'High',     range: '10-14 crimes', color: '#dc2626' },
+            { min: 5,  label: 'Moderate', range: '5-9 crimes',   color: '#f97316' },
+            { min: 1,  label: 'Low',      range: '1-4 crimes',   color: '#ca8a04' },
+            { min: 0,  label: 'Cleared',  range: 'no crime',     color: '#16a34a' },
+        ];
+        function severityForCount(n) {
+            return STREET_SEVERITY.find(function (s) { return n >= s.min; }) || STREET_SEVERITY[STREET_SEVERITY.length - 1];
+        }
+
+        // Legend explaining the color criteria — mounted on whichever map is
+        // showing the street layer (main map and the street modal)
+        function makeStreetLegend() {
+            const ctl = L.control({ position: 'bottomright' });
+            ctl.onAdd = function () {
+                const div = L.DomUtil.create('div');
+                div.style.cssText = 'background:rgba(255,255,255,0.96);border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;box-shadow:0 2px 10px rgba(0,0,0,0.18);font-size:11px;color:#374151;line-height:1.7;';
+                div.innerHTML = '<div style="font-weight:800;font-size:11px;color:#111827;margin-bottom:2px;"><i class="fas fa-road" style="color:#274d4c;"></i> Street crime level</div>' +
+                    STREET_SEVERITY.map(function (s) {
+                        return '<div style="display:flex;align-items:center;gap:7px;">' +
+                            '<span style="display:inline-block;width:20px;height:5px;border-radius:3px;background:' + s.color + ';"></span>' +
+                            '<span style="font-weight:700;">' + s.label + '</span>' +
+                            '<span style="color:#9ca3af;">' + s.range + '</span>' +
+                        '</div>';
+                    }).join('');
+                return div;
+            };
+            return ctl;
+        }
+        let saStreetLegendCtl = null;   // legend instance on the MAIN map
+
         async function ensureSanAgustinStreets() {
             if (saStreetLayer) return saStreetLayer;
             if (saStreetsLoading) return saStreetsLoading;
@@ -1113,7 +1147,7 @@ if (request()->query('token')) {
                     // and a stale cached copy would redraw streets past the boundary
                     const [gRes, sRes] = await Promise.all([
                         fetch(SA_STREETS_URL + '?t=' + Date.now(), { headers: { 'Accept': 'application/json' } }),
-                        fetch(SA_STREET_STATS_URL, { headers: { 'Accept': 'application/json' } })
+                        fetch(SA_STREET_STATS_URL + '?t=' + Date.now(), { headers: { 'Accept': 'application/json' } })
                     ]);
                     geo = await gRes.json();
                     stats = (await sRes.json()).streets || {};
@@ -1122,19 +1156,11 @@ if (request()->query('token')) {
                     return null;
                 }
 
-                // Every street gets its OWN colour (stable hash of its name →
-                // golden-angle hue), so adjacent streets always read apart.
-                // Crime numbers stay in the hover tooltip.
-                const colorForStreet = name => {
-                    let h = 0;
-                    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-                    return 'hsl(' + Math.round((h * 137.508) % 360) + ', 68%, 42%)';
-                };
-
                 saStreetLayer = L.layerGroup();
 
                 // Group all OSM segments of a street so hover lights up the
-                // whole street, not just one piece.
+                // whole street, not just one piece. The line colour encodes
+                // the street's crime level (see STREET_SEVERITY).
                 const groups = {};
                 (geo.features || []).forEach(f => {
                     const name = f.properties && f.properties.name;
@@ -1142,7 +1168,7 @@ if (request()->query('token')) {
 
                     const latlngs = f.geometry.coordinates.map(c => [c[1], c[0]]);
                     const g = groups[name] = groups[name] ||
-                        { casing: [], inner: [], color: colorForStreet(name) };
+                        { casing: [], inner: [], color: severityForCount(stats[name] ? stats[name].count : 0).color };
 
                     // Thin, translucent lines: the faint casing keeps the outline
                     // readable, and the base map's street names show through.
@@ -1182,16 +1208,17 @@ if (request()->query('token')) {
 
                 Object.entries(groups).forEach(([name, g]) => {
                     const st = stats[name];
+                    const sev = severityForCount(st ? st.count : 0);
                     const tip = '<div style="font-weight:700;margin-bottom:2px;">' + escStreet(name) + '</div>' +
-                        // the street's line colour, shown under the name so the
-                        // hovered line is easy to match by eye
-                        '<div style="margin-bottom:3px;"><span style="display:inline-block;width:28px;height:5px;border-radius:3px;background:' + g.color + ';vertical-align:middle;"></span></div>' +
+                        // colour + severity label so the criteria reads on hover
+                        '<div style="margin-bottom:3px;"><span style="display:inline-block;width:28px;height:5px;border-radius:3px;background:' + g.color + ';vertical-align:middle;"></span>' +
+                        ' <span style="font-weight:700;color:' + g.color + ';">' + sev.label + '</span></div>' +
                         (st
                             ? '<div>' + st.count + ' crime' + (st.count === 1 ? '' : 's') +
                               (st.top_category ? ' · mostly ' + escStreet(st.top_category) : '') + '</div>' +
                               (st.peak_hours && st.peak_hours.length
                                   ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(escStreet).join(', ') + '</div>' : '')
-                            : '<div>No recorded crimes</div>') +
+                            : '<div>No recorded crimes — cleared</div>') +
                         '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> Click for full details &amp; AI advice</div>';
 
                     // No bringToFront() here on purpose: raising the SVG path
@@ -1293,10 +1320,14 @@ if (request()->query('token')) {
                         (current.selectedOptions[0] || {}).textContent || '').trim().toLowerCase();
                     if (layer && current.value && still === 'san agustin' && !map.hasLayer(layer)) {
                         layer.addTo(map);
+                        // Color-criteria legend rides along with the street layer
+                        if (!saStreetLegendCtl) saStreetLegendCtl = makeStreetLegend();
+                        saStreetLegendCtl.addTo(map);
                     }
                 });
             } else if (saStreetLayer && map.hasLayer(saStreetLayer)) {
                 map.removeLayer(saStreetLayer);
+                if (saStreetLegendCtl) saStreetLegendCtl.remove();
             }
         }
 
@@ -1340,6 +1371,7 @@ if (request()->query('token')) {
 
             streetModalMap = createCrimeMap('streetModalMap');
             streetModalBase = L.layerGroup().addTo(streetModalMap);
+            makeStreetLegend().addTo(streetModalMap);   // same color criteria as the main map
 
             // Barangay San Agustin boundary — faint dashed ring for context
             const saCode = Object.keys(nameByPsgcCode || {}).find(function (c) {
@@ -1371,14 +1403,16 @@ if (request()->query('token')) {
                 // street so any segment lights up the entire street
                 const grp = L.featureGroup(lines).addTo(streetModalBase);
                 const st = saStreetStatsAll[name];
+                const sev = severityForCount(st ? st.count : 0);
                 const tip = '<div style="font-weight:700;margin-bottom:2px;">' + escStreet(name) + '</div>' +
-                    '<div style="margin-bottom:3px;"><span style="display:inline-block;width:28px;height:5px;border-radius:3px;background:' + g.color + ';vertical-align:middle;"></span></div>' +
+                    '<div style="margin-bottom:3px;"><span style="display:inline-block;width:28px;height:5px;border-radius:3px;background:' + g.color + ';vertical-align:middle;"></span>' +
+                    ' <span style="font-weight:700;color:' + sev.color + ';">' + sev.label + '</span></div>' +
                     (st
                         ? '<div>' + st.count + ' crime' + (st.count === 1 ? '' : 's') +
                           (st.top_category ? ' · mostly ' + escStreet(st.top_category) : '') + '</div>' +
                           (st.peak_hours && st.peak_hours.length
                               ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(escStreet).join(', ') + '</div>' : '')
-                        : '<div>No recorded crimes</div>') +
+                        : '<div>No recorded crimes — cleared</div>') +
                     '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> Click to select / unselect</div>';
                 grp.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
 
@@ -1583,8 +1617,12 @@ if (request()->query('token')) {
             const top = Object.keys(cats).sort(function (a, b) { return cats[b] - cats[a]; })[0];
 
             const pills = [];
-            pills.push('<span class="sm-pill"><i class="fas fa-triangle-exclamation" style="color:#b45309;"></i>' +
-                total + ' crime' + (total === 1 ? '' : 's') + '</span>');
+            if (total === 0 && loaded > 0 && loaded === modalStreets.length) {
+                pills.push('<span class="sm-pill" style="background:#dcfce7;color:#15803d;"><i class="fas fa-circle-check"></i>Cleared — no crime</span>');
+            } else {
+                pills.push('<span class="sm-pill"><i class="fas fa-triangle-exclamation" style="color:#b45309;"></i>' +
+                    total + ' crime' + (total === 1 ? '' : 's') + '</span>');
+            }
             if (top) {
                 pills.push('<span class="sm-pill"><span style="width:9px;height:9px;border-radius:50%;background:' +
                     colorForCategory(top) + ';display:inline-block;"></span>Mostly ' + escStreet(top) + '</span>');
@@ -1732,10 +1770,16 @@ if (request()->query('token')) {
                 } else {
                     const incs = d.incidents || [];
                     grand += incs.length;
-                    countChip = '<span style="font-size:10px;font-weight:800;background:' + ms.color + ';color:#fff;border-radius:9999px;padding:2px 8px;">' + incs.length + '</span>';
-                    bodyHtml = incs.length
-                        ? incs.map(crimeCardHtml).join('')
-                        : '<div style="font-size:12px;color:#9ca3af;">No recorded crimes on this street.</div>';
+                    if (incs.length) {
+                        countChip = '<span style="font-size:10px;font-weight:800;background:' + ms.color + ';color:#fff;border-radius:9999px;padding:2px 8px;">' + incs.length + '</span>';
+                        bodyHtml = incs.map(crimeCardHtml).join('');
+                    } else {
+                        // A selected street with zero crimes stays active — it
+                        // simply reads as CLEARED
+                        countChip = '<span style="font-size:10px;font-weight:800;background:#dcfce7;color:#15803d;border-radius:9999px;padding:2px 8px;"><i class="fas fa-circle-check mr-1"></i>CLEARED</span>';
+                        bodyHtml = '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;">' +
+                            '<i class="fas fa-circle-check"></i><span><span style="font-weight:700;">No crime on this street — cleared.</span> Keep routine patrol coverage to sustain it.</span></div>';
+                    }
                 }
 
                 return '<div class="sm-acc">' +
