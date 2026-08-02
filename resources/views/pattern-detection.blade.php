@@ -11,11 +11,23 @@
         <p class="text-gray-600 mt-1 text-sm lg:text-base">
             Analyze recorded incidents (real data), or run a what-if <span class="font-semibold text-amber-700">simulation</span> to model how crime could rise or be prevented.
         </p>
+
+        <!-- Mode tabs: real data vs simulation are fully separate views -->
+        <div class="mt-4 flex gap-2 border-b border-gray-200 -mb-6 pb-0">
+            <button id="tabRealBtn" class="px-4 py-2.5 text-sm font-bold rounded-t-lg border border-b-0 flex items-center gap-2">
+                <i class="fas fa-database"></i> Real Data
+            </button>
+            <button id="tabSimBtn" class="px-4 py-2.5 text-sm font-bold rounded-t-lg border border-b-0 flex items-center gap-2">
+                <i class="fas fa-flask"></i> Simulation (What-If)
+                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900">SIM</span>
+            </button>
+        </div>
     </div>
 
     <!-- ============================================================= -->
-    <!-- PANEL A — REAL DATA ANALYSIS                                   -->
+    <!-- TAB 1 — REAL DATA ANALYSIS                                     -->
     <!-- ============================================================= -->
+    <div id="tabRealPanel">
     <div class="mb-6 bg-white rounded-xl border-2 border-blue-200 p-4">
         <div class="mb-4 pb-4 border-b border-gray-200 flex items-center gap-2">
             <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-100 text-blue-700"><i class="fas fa-database text-sm"></i></span>
@@ -230,10 +242,12 @@
             </div>
         </div>
     </div>
+    </div><!-- /tabRealPanel -->
 
     <!-- ============================================================= -->
-    <!-- PANEL B — SIMULATION (WHAT-IF)                                 -->
+    <!-- TAB 2 — SIMULATION (WHAT-IF)                                   -->
     <!-- ============================================================= -->
+    <div id="tabSimPanel" class="hidden">
     <div class="mb-6 bg-amber-50/40 rounded-xl border-2 border-amber-300 p-4 lg:p-6">
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4 pb-4 border-b border-amber-200">
             <div class="flex items-center gap-2">
@@ -246,7 +260,17 @@
 
         <!-- Configuration -->
         <div class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Baseline period</label>
+                    <select id="simDaysSelect" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="180">Last 6 months</option>
+                        <option value="365">Last 12 months</option>
+                        <option value="730" selected>Last 24 months</option>
+                    </select>
+                </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">Scenario type</label>
                     <select id="simScenarioType" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
@@ -444,6 +468,7 @@
             </div>
         </div>
     </div>
+    </div><!-- /tabSimPanel -->
 </div>
 @endsection
 
@@ -572,7 +597,7 @@
     // ---------- SIMULATION: statistical surge / prevention summary ----------
     async function runSimStats() {
         const sc = simScenario();
-        const params = new URLSearchParams({ days: $('daysSelect').value });
+        const params = new URLSearchParams({ days: $('simDaysSelect').value });
         params.set('simulation', '1');
         params.set('volume_multiplier', $('surgeLevel').value);
 
@@ -647,7 +672,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
                 body: JSON.stringify({
-                    days:                $('daysSelect').value,
+                    days:                $('simDaysSelect').value,
                     scenario_type:       sc.type,
                     missing_safeguards:  sc.missing,
                     prevention_measures: sc.measures,
@@ -1219,8 +1244,26 @@
             '</div>').join('');
     }
 
+    // ---------- tabs: real data vs simulation ----------
+    function switchTab(which) {
+        const real = which === 'real';
+        $('tabRealPanel').classList.toggle('hidden', !real);
+        $('tabSimPanel').classList.toggle('hidden', real);
+
+        $('tabRealBtn').className = 'px-4 py-2.5 text-sm font-bold rounded-t-lg border border-b-0 flex items-center gap-2 ' +
+            (real ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100');
+        $('tabSimBtn').className = 'px-4 py-2.5 text-sm font-bold rounded-t-lg border border-b-0 flex items-center gap-2 ' +
+            (!real ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100');
+
+        // Charts drawn while a tab was hidden have zero width — redraw on show
+        if (real && latest) render(latest);
+    }
+
     // ---------- wiring ----------
     function init() {
+        $('tabRealBtn').addEventListener('click', function () { switchTab('real'); });
+        $('tabSimBtn').addEventListener('click', function () { switchTab('sim'); });
+        switchTab('real');
         // REAL DATA: statistical + AI fire together on an explicit click
         $('runRealBtn').addEventListener('click', function () { runReal(); runAi(); });
         $('aiSaveBtn').addEventListener('click', function () {
