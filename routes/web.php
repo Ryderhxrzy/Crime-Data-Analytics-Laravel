@@ -33,6 +33,12 @@ Route::post('/submit-tip', [LandingController::class, 'submitTip'])->name('submi
 Route::get('/saved-ai-reports/data', [DashboardController::class, 'savedAiReportsData'])
     ->name('saved-ai-reports.data');
 
+// Public JSON API: active crime alerts — intentionally outside the jwt.api group
+// so it can be consumed by external services / dashboards. The payload is
+// aggregate alert data only (no reporter or victim details).
+Route::get('/alerts/api/active-data', [AlertsController::class, 'activeData'])
+    ->name('alerts.active-data');
+
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // The password-based login flow only exists for local development. In production,
@@ -145,8 +151,8 @@ Route::middleware('jwt.api')->group(function () {
         Route::post('/update-rule/{id}', [AlertsController::class, 'updateRule'])->name('update-rule');
         Route::delete('/delete-rule/{id}', [AlertsController::class, 'deleteRule'])->name('delete-rule');
 
-        // Alert data API (consumed client-side by alerts-active/alerts-history views)
-        Route::get('/api/active-data', [AlertsController::class, 'activeData'])->name('active-data');
+        // Alert data API (consumed client-side by alerts-active/alerts-history views).
+        // Note: 'alerts.active-data' is registered publicly above, outside this group.
         Route::get('/api/history-data', [AlertsController::class, 'historyData'])->name('history-data');
         Route::post('/api/evaluate', [AlertsController::class, 'evaluate'])->name('evaluate');
         Route::post('/api/{id}/resolve', [AlertsController::class, 'resolve'])->name('resolve');
