@@ -600,12 +600,15 @@ if (request()->query('token')) {
     <!-- Street Details Modal (San Agustin street click) -->
     <style>
         #streetModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99998; padding: 20px; align-items: center; justify-content: center; }
-        #streetModal .sm-card { position: relative; background: #fff; border-radius: 16px; width: 100%; max-width: 1040px; height: 92%; display: flex; flex-direction: column; box-shadow: 0 25px 70px rgba(0,0,0,0.35); overflow: hidden; }
-        /* Each column scrolls on its own; the body itself never scrolls */
-        #streetModal .sm-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: 16px; padding: 16px 20px 20px; overflow: hidden; }
+        #streetModal .sm-card { position: relative; background: #fff; border-radius: 16px; width: 100%; max-width: 1180px; height: 92%; display: flex; flex-direction: column; box-shadow: 0 25px 70px rgba(0,0,0,0.35); overflow: hidden; }
+        /* Full-width map on top; crimes (left) + AI (right) below, each with
+           its own scrollbar. The body itself never scrolls on desktop. */
+        #streetModal .sm-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 20px 20px; overflow: hidden; }
+        #streetModal .sm-bottom { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 16px; margin-top: 14px; }
         #streetModal .sm-col { min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; }
         @media (max-width: 900px) {
-            #streetModal .sm-body { grid-template-columns: 1fr; overflow-y: auto; }
+            #streetModal .sm-body { overflow-y: auto; display: block; }
+            #streetModal .sm-bottom { grid-template-columns: 1fr; }
             #streetModal .sm-col { overflow-y: visible; }
         }
         #streetModal .sm-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; background: #f3f4f6; color: #374151; }
@@ -634,9 +637,18 @@ if (request()->query('token')) {
                     <span id="streetModalSwatch" style="display: inline-block; width: 34px; height: 8px; border-radius: 4px; background: #64748b;"></span>
                     <h2 id="streetModalName" style="font-size: 18px; font-weight: 800; color: #111; margin: 0;">Street</h2>
                     <span style="font-size: 12px; color: #6b7280;">Barangay San Agustin, Quezon City</span>
+                </div>
+                <div id="streetModalPills" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+                    <span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>
+                </div>
+            </div>
 
-                    <!-- Street filter: a dropdown at the top — checking a street
-                         makes it active on the map, exactly like clicking it -->
+            <div class="sm-body">
+                <!-- Street filter dropdown sits ABOVE the map -->
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-shrink: 0;">
+                    <span style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase;">
+                        <i class="fas fa-map-location-dot mr-1" style="color: #274d4c;"></i>Street map — crimes plotted where they happened
+                    </span>
                     <div id="streetFilterWrap" style="position: relative; margin-left: auto;">
                         <button id="streetFilterBtn" type="button" onclick="toggleStreetFilterPanel()"
                                 style="display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: #374151; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 10px; padding: 7px 12px; cursor: pointer;">
@@ -644,7 +656,7 @@ if (request()->query('token')) {
                             <span id="streetFilterBtnLabel">Streets (1)</span>
                             <i class="fas fa-chevron-down" style="font-size: 10px; color: #9ca3af;"></i>
                         </button>
-                        <div id="streetFilterPanel">
+                        <div id="streetFilterPanel" style="left: auto; right: 0;">
                             <input type="text" id="streetFilterSearch" placeholder="Search street…" oninput="renderStreetFilterList(this.value)"
                                    style="width: 100%; box-sizing: border-box; padding: 6px 9px; margin-bottom: 6px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px;">
                             <div id="streetFilterList" style="max-height: 210px; overflow-y: auto; display: grid; gap: 1px;"></div>
@@ -654,21 +666,25 @@ if (request()->query('token')) {
                         </div>
                     </div>
                 </div>
-                <div id="streetModalPills" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
-                    <span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>
-                </div>
-            </div>
 
-            <div class="sm-body">
-                <!-- LEFT: filtered street map + AI suggestions -->
+                <!-- FULL-WIDTH map -->
+                <div id="streetModalMap" style="height: 380px; flex-shrink: 0; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;"></div>
+
+                <div class="sm-bottom">
+                <!-- BELOW-LEFT: crimes per selected street (collapsible groups, own scrollbar) -->
                 <div class="sm-col">
                     <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
-                        <i class="fas fa-map-location-dot mr-1" style="color: #274d4c;"></i>Street map — crimes plotted where they happened
+                        <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Crimes on selected street(s) <span id="streetIncCount" style="color: #274d4c;"></span>
                     </div>
-                    <div id="streetModalMap" style="height: 300px; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;"></div>
+                    <div id="streetIncidentList" style="display: grid; gap: 10px; align-content: start;">
+                        <div style="font-size: 12px; color: #9ca3af; padding: 12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes…</div>
+                    </div>
+                </div>
 
+                <!-- BELOW-RIGHT: AI suggestions -->
+                <div class="sm-col">
                     <!-- AI suggestions (manual — one Gemini call per Analyze click) -->
-                    <div style="margin-top: 14px;">
+                    <div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
                             <span style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase;">
                                 <i class="fas fa-robot mr-1" style="color: #7c3aed;"></i>AI suggestions
@@ -699,16 +715,7 @@ if (request()->query('token')) {
                         </div>
                     </div>
                 </div>
-
-                <!-- RIGHT: crimes per selected street (collapsible groups, own scrollbar) -->
-                <div class="sm-col">
-                    <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
-                        <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Crimes on selected street(s) <span id="streetIncCount" style="color: #274d4c;"></span>
-                    </div>
-                    <div id="streetIncidentList" style="display: grid; gap: 10px; align-content: start;">
-                        <div style="font-size: 12px; color: #9ca3af; padding: 12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes…</div>
-                    </div>
-                </div>
+                </div><!-- /sm-bottom -->
             </div>
         </div>
     </div>
@@ -804,12 +811,11 @@ if (request()->query('token')) {
             return statusMap[clearanceStatus] || { color: '#6b7280', text: clearanceStatus || 'Unknown', bgColor: '#f3f4f6' };
         }
 
-        // Initialize map
-        function initializeMap() {
-            console.log('Initializing map...');
-
-            // Create the map with default QC view
-            map = L.map('map', {
+        // Reusable base-map component: the SAME map setup is used by the main
+        // crime mapping view AND the street modal, so both behave identically
+        // (tiles, zoom limits, inertia) and there is one place to fix bugs.
+        function createCrimeMap(containerId, opts) {
+            const m = L.map(containerId, Object.assign({
                 center: [14.6349, 121.0446],
                 zoom: 12,
                 minZoom: 10,
@@ -821,14 +827,23 @@ if (request()->query('token')) {
                 inertiaDeceleration: 3000,
                 inertiaMaxSpeed: 1500,
                 easeLinearity: 0.25
-            });
+            }, opts || {}));
 
-            // Add base layer
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors',
                 maxZoom: 25,
                 minZoom: 10
-            }).addTo(map);
+            }).addTo(m);
+
+            return m;
+        }
+
+        // Initialize map
+        function initializeMap() {
+            console.log('Initializing map...');
+
+            // Create the map with default QC view (shared component)
+            map = createCrimeMap('map');
 
             // Boundaries get their own pane BELOW the default overlayPane (z-index 400).
             // Polygons and circle markers otherwise share one pane, so highlighting a
@@ -1064,6 +1079,7 @@ if (request()->query('token')) {
         let saStreetLayer = null;       // layer group holding all street polylines
         let saStreetsLoading = null;    // promise guard so we only build once
         let saStreetGroupsAll = null;   // name -> {casing, inner, color}, for the street modal's context view
+        let saStreetStatsAll = {};      // name -> stats, shared with the modal's hover tooltips
 
         const escStreet = s => String(s ?? '').replace(/[&<>"']/g, c =>
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1119,8 +1135,10 @@ if (request()->query('token')) {
                     g.inner.push(L.polyline(latlngs, { color: g.color, weight: 2.5, opacity: 0.6, pane: 'streetPane' }));
                 });
 
-                // The street modal redraws every street (muted) for context
+                // The street modal redraws every street (muted) for context and
+                // reuses the same per-street stats for its hover tooltips
                 saStreetGroupsAll = groups;
+                saStreetStatsAll = stats;
 
                 // Nearest point on the street's polylines to a given lat/lng —
                 // anchor of the thin pointer line drawn to each crime dot.
@@ -1295,24 +1313,14 @@ if (request()->query('token')) {
             return 'hsl(' + Math.round((h * 137.508) % 360) + ', 72%, 40%)';
         }
 
-        // Build the static context ONCE: barangay boundary, every street as a
-        // subtle marked line, and a small name label per street. The map uses
-        // the SAME tile source and zoom settings as the main crime mapping map.
+        // Build the static context ONCE: barangay boundary + every street as a
+        // subtle low-opacity gray line (NO name labels — 131 labels were
+        // unreadable; only ACTIVE streets get one). The map itself comes from
+        // createCrimeMap(), the same component the main crime mapping uses.
         function ensureStreetModalBase() {
             if (streetModalMap) return;
 
-            streetModalMap = L.map('streetModalMap', {
-                zoomControl: true,
-                scrollWheelZoom: true,
-                minZoom: 10,
-                maxZoom: 25
-            });
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors',
-                maxZoom: 25,
-                minZoom: 10
-            }).addTo(streetModalMap);
-
+            streetModalMap = createCrimeMap('streetModalMap');
             streetModalBase = L.layerGroup().addTo(streetModalMap);
 
             // Barangay San Agustin boundary — faint dashed ring for context
@@ -1330,53 +1338,80 @@ if (request()->query('token')) {
                 });
             }
 
-            // Every street: subtle line + small name label. Clicking a line
-            // toggles the street into/out of the active selection.
+            // Every street: subtle gray line. Hover behaves EXACTLY like the
+            // main mapping — the whole street highlights and the same stats
+            // tooltip appears. Clicking toggles the street in/out of the
+            // selection.
             Object.entries(saStreetGroupsAll || {}).forEach(function (entry) {
                 const name = entry[0], g = entry[1];
-                const lines = [];
-                let longest = null, longestLen = -1;
 
-                g.inner.forEach(function (src) {
-                    const pts = src.getLatLngs();
-                    const line = L.polyline(pts, Object.assign({}, MUTED_STREET_STYLE));
-                    line.on('click', function () { toggleModalStreet(name); });
-                    line.on('mouseover', function () {
-                        if (modalStreets.indexOf(name) === -1) line.setStyle({ color: '#475569', weight: 3, opacity: 0.9 });
-                    });
-                    line.on('mouseout', function () {
-                        if (modalStreets.indexOf(name) === -1) line.setStyle(MUTED_STREET_STYLE);
-                    });
-                    line.addTo(streetModalBase);
-                    lines.push(line);
-
-                    let len = 0;
-                    for (let i = 0; i < pts.length - 1; i++) len += pts[i].distanceTo(pts[i + 1]);
-                    if (len > longestLen) { longestLen = len; longest = line; }
+                const lines = g.inner.map(function (src) {
+                    return L.polyline(src.getLatLngs(), Object.assign({}, MUTED_STREET_STYLE));
                 });
 
-                let label = null;
-                if (longest) {
-                    const pts = longest.getLatLngs();
-                    label = L.tooltip({ permanent: true, direction: 'top', className: 'street-name-mini', offset: [0, -4], interactive: false })
-                        .setLatLng(pts[Math.floor(pts.length / 2)])
-                        .setContent(escStreet(name))
-                        .addTo(streetModalBase);
-                }
+                // Same grouped hover as the main map: one featureGroup per
+                // street so any segment lights up the entire street
+                const grp = L.featureGroup(lines).addTo(streetModalBase);
+                const st = saStreetStatsAll[name];
+                const tip = '<div style="font-weight:700;margin-bottom:2px;">' + escStreet(name) + '</div>' +
+                    '<div style="margin-bottom:3px;"><span style="display:inline-block;width:28px;height:5px;border-radius:3px;background:' + g.color + ';vertical-align:middle;"></span></div>' +
+                    (st
+                        ? '<div>' + st.count + ' crime' + (st.count === 1 ? '' : 's') +
+                          (st.top_category ? ' · mostly ' + escStreet(st.top_category) : '') + '</div>' +
+                          (st.peak_hours && st.peak_hours.length
+                              ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(escStreet).join(', ') + '</div>' : '')
+                        : '<div>No recorded crimes</div>') +
+                    '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> Click to select / unselect</div>';
+                grp.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
 
-                miniStreets[name] = { lines: lines, label: label, color: g.color };
+                grp.on('mouseover', function () {
+                    if (modalStreets.indexOf(name) === -1) {
+                        lines.forEach(function (l) { l.setStyle({ color: g.color, weight: 4, opacity: 0.95 }); });
+                    }
+                });
+                grp.on('mouseout', function () {
+                    if (modalStreets.indexOf(name) === -1) {
+                        lines.forEach(function (l) { l.setStyle(Object.assign({}, MUTED_STREET_STYLE)); });
+                    }
+                    grp.closeTooltip();   // never leave it hanging open
+                });
+                grp.on('click', function () {
+                    grp.closeTooltip();
+                    toggleModalStreet(name);
+                });
+
+                miniStreets[name] = { lines: lines, label: null, color: g.color };
             });
         }
 
         function styleModalStreet(name, active) {
             const ms = miniStreets[name];
             if (!ms) return;
+
             ms.lines.forEach(function (l) {
                 l.setStyle(active ? { color: ms.color, weight: 5, opacity: 1 } : Object.assign({}, MUTED_STREET_STYLE));
                 if (active && l.bringToFront) l.bringToFront();
             });
-            if (ms.label && ms.label.getElement()) {
-                ms.label.getElement().classList.toggle('snm-active', !!active);
+
+            // Name label rides the line ONLY while the street is active
+            if (active && !ms.label) {
+                let longest = null, longestLen = -1;
+                ms.lines.forEach(function (l) {
+                    const pts = l.getLatLngs();
+                    let len = 0;
+                    for (let i = 0; i < pts.length - 1; i++) len += pts[i].distanceTo(pts[i + 1]);
+                    if (len > longestLen) { longestLen = len; longest = l; }
+                });
+                if (longest) {
+                    const pts = longest.getLatLngs();
+                    ms.label = L.tooltip({ permanent: true, direction: 'top', className: 'street-name-mini snm-active', offset: [0, -6], interactive: false })
+                        .setLatLng(pts[Math.floor(pts.length / 2)])
+                        .setContent(escStreet(name))
+                        .addTo(streetModalBase);
+                }
+            } else if (!active && ms.label) {
+                streetModalBase.removeLayer(ms.label);
+                ms.label = null;
             }
         }
 
@@ -1439,6 +1474,8 @@ if (request()->query('token')) {
 
         // Toggle a street from the mini map or the filter dropdown. The FIRST
         // clicked street is locked in — selecting more never removes it.
+        // Deliberately NO re-fit here: the map keeps its current view so
+        // selecting streets never yanks the focus away.
         function toggleModalStreet(name) {
             const idx = modalStreets.indexOf(name);
             if (idx === -1) {
@@ -1452,7 +1489,6 @@ if (request()->query('token')) {
             renderCrimeAccordions();
             updateStreetModalHeader();
             renderStreetFilterList(document.getElementById('streetFilterSearch').value);
-            fitModalToActive();
         }
 
         // Auto-zoom: frame every ACTIVE street (snap, no animation)
@@ -1596,7 +1632,6 @@ if (request()->query('token')) {
             renderCrimeAccordions();
             updateStreetModalHeader();
             renderStreetFilterList(document.getElementById('streetFilterSearch').value);
-            fitModalToActive();
         }
 
         function closeStreetModal() {
