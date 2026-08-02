@@ -1501,7 +1501,7 @@ class DashboardController extends Controller
             $reports = \App\Models\SanAgustinAiReport::query()
                 ->orderByDesc('created_at')
                 ->limit(min(50, max(1, (int) $request->input('limit', 20))))
-                ->get(['id', 'batch_key', 'data_source', 'report_type', 'title', 'summary', 'period_days', 'records_used', 'saved_by', 'created_at']);
+                ->get(['id', 'batch_key', 'data_source', 'report_type', 'title', 'summary', 'scenario', 'period_days', 'records_used', 'saved_by', 'created_at']);
 
             return response()->json(['success' => true, 'reports' => $reports]);
         } catch (\Exception $e) {
@@ -1628,6 +1628,15 @@ class DashboardController extends Controller
         return $batches;
     }
 
+    /** 21 → "9:00 PM" — user-facing hours are 12-hour format */
+    private function sanAgustinHour12(int $h): string
+    {
+        $ampm = $h >= 12 ? 'PM' : 'AM';
+        $hh = $h % 12 ?: 12;
+
+        return $hh . ':00 ' . $ampm;
+    }
+
     /**
      * Fingerprint of the San Agustin incident table. Caches keyed by this
      * refresh AUTOMATICALLY the moment the data changes (e.g. a migration
@@ -1653,7 +1662,7 @@ class DashboardController extends Controller
     public function sanAgustinStreetStats()
     {
         try {
-            $cacheKey = 'sa_street_stats_v3_' . $this->sanAgustinDataFingerprint();
+            $cacheKey = 'sa_street_stats_v4_' . $this->sanAgustinDataFingerprint();
             $stats = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(10), function () {
                 $rows = \App\Models\SanAgustinIncident::query()
                     ->get(['incident_code', 'address_details', 'category_name', 'incident_date', 'incident_time', 'latitude', 'longitude']);
@@ -1697,7 +1706,7 @@ class DashboardController extends Controller
                     $out[$name] = [
                         'count'        => $s['count'],
                         'top_category' => array_key_first($s['categories']),
-                        'peak_hours'   => array_map(fn ($h) => sprintf('%02d:00', $h), $peaks),
+                        'peak_hours'   => array_map(fn ($h) => $this->sanAgustinHour12((int) $h), $peaks),
                         'incidents'    => $s['incidents'],
                     ];
                 }
@@ -1726,7 +1735,7 @@ class DashboardController extends Controller
                 return response()->json(['error' => 'Missing street name.'], 422);
             }
 
-            $cacheKey = 'sa_street_detail_v2_' . md5(mb_strtolower($street) . '|' . $this->sanAgustinDataFingerprint());
+            $cacheKey = 'sa_street_detail_v3_' . md5(mb_strtolower($street) . '|' . $this->sanAgustinDataFingerprint());
             $payload = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(10), function () use ($street) {
                 $rows = \App\Models\SanAgustinIncident::query()
                     ->orderByDesc('incident_date')
@@ -1763,7 +1772,7 @@ class DashboardController extends Controller
                         'count'        => $rows->count(),
                         'top_category' => array_key_first($categories),
                         'categories'   => $categories,
-                        'peak_hours'   => array_map(fn ($h) => sprintf('%02d:00', $h), array_slice(array_keys($hours), 0, 3)),
+                        'peak_hours'   => array_map(fn ($h) => $this->sanAgustinHour12((int) $h), array_slice(array_keys($hours), 0, 3)),
                         'unresolved'   => $rows->whereNotIn('status', ['solved', 'resolved', 'closed', 'cleared'])->count(),
                     ],
                     'incidents' => $rows->map(fn ($row) => [
