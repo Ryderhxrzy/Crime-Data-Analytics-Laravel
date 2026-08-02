@@ -217,8 +217,8 @@ class GeminiPatternAnalysisService
 
         $sorted = $wanted;
         sort($sorted);
-        $fingerprint = md5(implode('|', $sorted) . '|' . $days . '|' . $incidents->count() . '|' . ($incidents->max('date') ?? ''));
-        $cacheKey = 'gemini_street_suggest_v2_' . $fingerprint;
+        $fingerprint = md5(implode('|', $sorted) . '|' . $days . '|' . $incidents->count() . '|' . ($incidents->max('date') ?? '') . '|' . $this->tableFingerprint());
+        $cacheKey = 'gemini_street_suggest_v3_' . $fingerprint;
 
         $cached = Cache::get($cacheKey);
         if ($cached) {
@@ -282,7 +282,10 @@ class GeminiPatternAnalysisService
 
         $sorted = array_map('mb_strtolower', $streets);
         sort($sorted);
-        $cacheKey = 'street_rules_v1_' . md5(implode('|', $sorted) . '|' . $days);
+        // Data fingerprint in the key → the cache refreshes the moment the
+        // incident table changes (migrations, new records), never serving
+        // stale street counts.
+        $cacheKey = 'street_rules_v2_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($streets, $days) {
             $all = $this->loadIncidents($days);
@@ -572,6 +575,25 @@ PROMPT;
     }
 
     // ------------------------------------------------------------- data prep
+
+    /**
+     * Cheap fingerprint of the incident table (count + last write + max id).
+     * Any data change — including migrations that relocate rows without
+     * changing the row count — produces a new fingerprint, so caches keyed
+     * by it can never serve stale street data.
+     */
+    private function tableFingerprint(): string
+    {
+        try {
+            $row = SanAgustinIncident::query()
+                ->selectRaw('COUNT(*) AS c, MAX(updated_at) AS u, MAX(id) AS m')
+                ->first();
+
+            return md5(($row->c ?? 0) . '|' . ($row->u ?? '') . '|' . ($row->m ?? 0));
+        } catch (\Exception $e) {
+            return 'nofp';
+        }
+    }
 
     private function loadIncidents(int $days): Collection
     {
