@@ -1797,9 +1797,15 @@ class DashboardController extends Controller
             if (empty($streets)) {
                 return response()->json(['success' => false, 'error' => 'Missing street name.'], 422);
             }
-            $streets = array_slice(array_unique($streets), 0, 10);   // token thrift: hard cap
+            $streets = array_slice(array_unique($streets), 0, 10);   // hard cap
 
-            $result = $ai->analyzeStreets($streets, (int) $request->input('days', 365));
+            // DEFAULT: instant rule-based suggestions from the system itself
+            // (no Gemini call — immune to timeouts and token quotas). Pass
+            // ?ai=1 to use the Gemini engine as a fallback.
+            $days = (int) $request->input('days', 365);
+            $result = $request->boolean('ai')
+                ? $ai->analyzeStreets($streets, $days)
+                : $ai->suggestStreetsRuleBased($streets, $days);
 
             $status = ($result['success'] ?? false) ? 200 : 422;
 
