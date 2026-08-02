@@ -834,8 +834,12 @@
             $('savedReportsList').innerHTML = data.reports.map(r => {
                 const isRec = r.report_type === 'recommendation';
                 const isSim = r.data_source === 'simulation';
+                const isMapping = r.scenario && r.scenario.type === 'street_advice';
                 const when = new Date(r.created_at).toLocaleString();
                 return '<div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">' +
+                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ' +
+                        (isMapping ? 'bg-indigo-100 text-indigo-800' : 'bg-violet-100 text-violet-800') + '">' +
+                        (isMapping ? 'MAPPING' : 'PATTERN') + '</span>' +
                     '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ' +
                         (isSim ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800') + '">' +
                         (isSim ? 'SIM' : 'REAL') + '</span>' +
