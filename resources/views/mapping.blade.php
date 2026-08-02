@@ -605,6 +605,9 @@ if (request()->query('token')) {
         #streetModal .sm-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; background: #f3f4f6; color: #374151; }
         #streetModal .sm-inc-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
         #streetModal .sm-inc-card:hover { border-color: #94a3b8; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        /* Street name written on the highlighted line (the line covers the base map's label) */
+        .street-name-label { background: rgba(255,255,255,0.95); border: 1.5px solid #111827; color: #111827; font-weight: 800; font-size: 11px; padding: 2px 9px; border-radius: 9999px; box-shadow: 0 1px 5px rgba(0,0,0,0.3); white-space: nowrap; }
+        .street-name-label::before { display: none; }
     </style>
     <div id="streetModal" onclick="if(event.target === this) closeStreetModal()">
         <div class="sm-card">
@@ -1015,6 +1018,7 @@ if (request()->query('token')) {
 
         let saStreetLayer = null;       // layer group holding all street polylines
         let saStreetsLoading = null;    // promise guard so we only build once
+        let saStreetGroupsAll = null;   // name -> {casing, inner, color}, for the street modal's context view
 
         const escStreet = s => String(s ?? '').replace(/[&<>"']/g, c =>
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1069,6 +1073,9 @@ if (request()->query('token')) {
                     g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 5, opacity: 0.3, pane: 'streetPane' }));
                     g.inner.push(L.polyline(latlngs, { color: g.color, weight: 2.5, opacity: 0.6, pane: 'streetPane' }));
                 });
+
+                // The street modal redraws every street (muted) for context
+                saStreetGroupsAll = groups;
 
                 // Nearest point on the street's polylines to a given lat/lng —
                 // anchor of the thin pointer line drawn to each crime dot.
@@ -1255,19 +1262,76 @@ if (request()->query('token')) {
             if (streetModalLayer) { streetModalMap.removeLayer(streetModalLayer); }
             streetModalLayer = L.layerGroup().addTo(streetModalMap);
 
-            // The clicked street only — cloned polylines (the originals stay on the big map)
+            // Barangay San Agustin boundary — faint, for context only
+            const saCode = Object.keys(nameByPsgcCode || {}).find(function (c) {
+                return String(nameByPsgcCode[c] || '').trim().toLowerCase() === 'san agustin';
+            });
+            if (saCode && barangayRingsByCode[saCode]) {
+                barangayRingsByCode[saCode].forEach(function (poly) {
+                    poly.forEach(function (ring) {
+                        L.polygon(ring.map(function (c) { return [c[1], c[0]]; }), {
+                            color: '#274d4c', weight: 2, opacity: 0.75, dashArray: '6,4',
+                            fillColor: '#e8f5f3', fillOpacity: 0.10, interactive: false
+                        }).addTo(streetModalLayer);
+                    });
+                });
+            }
+
+            // Every OTHER street stays visible but muted (not highlighted).
+            // Hover shows its name; clicking one switches the modal to it.
+            if (saStreetGroupsAll) {
+                Object.entries(saStreetGroupsAll).forEach(function (entry) {
+                    const otherName = entry[0], og = entry[1];
+                    if (otherName === name) return;
+                    og.inner.forEach(function (l) {
+                        const line = L.polyline(l.getLatLngs(), { color: '#94a3b8', weight: 2, opacity: 0.65 });
+                        line.bindTooltip(escStreet(otherName), { sticky: true, direction: 'top', opacity: 0.9 });
+                        line.on('mouseover', function () { line.setStyle({ color: '#475569', weight: 3.5, opacity: 1 }); });
+                        line.on('mouseout', function () { line.setStyle({ color: '#94a3b8', weight: 2, opacity: 0.65 }); });
+                        line.on('click', function () { openStreetModal(otherName, og); });
+                        line.addTo(streetModalLayer);
+                    });
+                });
+            }
+
+            // The clicked street — the ONLY highlighted line (cloned polylines;
+            // the originals stay on the big map)
             const lines = [];
             g.inner.forEach(function (l) {
-                L.polyline(l.getLatLngs(), { color: '#111827', weight: 8, opacity: 0.35 }).addTo(streetModalLayer);
-                lines.push(L.polyline(l.getLatLngs(), { color: g.color, weight: 4.5, opacity: 1 }).addTo(streetModalLayer));
+                L.polyline(l.getLatLngs(), { color: '#111827', weight: 9, opacity: 0.4, interactive: false }).addTo(streetModalLayer);
+                lines.push(L.polyline(l.getLatLngs(), { color: g.color, weight: 5, opacity: 1, interactive: false }).addTo(streetModalLayer));
             });
 
+            // Write the street's name ON the line — the highlight covers the
+            // base map's own label, so the name has to ride on top
+            let longest = null, longestLen = -1;
+            lines.forEach(function (l) {
+                const pts = l.getLatLngs();
+                let len = 0;
+                for (let i = 0; i < pts.length - 1; i++) len += pts[i].distanceTo(pts[i + 1]);
+                if (len > longestLen) { longestLen = len; longest = l; }
+            });
+            if (longest) {
+                const pts = longest.getLatLngs();
+                L.tooltip({ permanent: true, direction: 'top', className: 'street-name-label', offset: [0, -7], interactive: false })
+                    .setLatLng(pts[Math.floor(pts.length / 2)])
+                    .setContent(escStreet(name))
+                    .addTo(streetModalLayer);
+            }
+
+            // Auto-zoom: always frame exactly the clicked street (its own bounds,
+            // not the barangay's), snapping straight there with no animation so
+            // nothing can interrupt the fit. Runs twice — the modal was hidden a
+            // moment ago, and Leaflet only measures the container reliably once
+            // the layout has fully settled.
             const bounds = L.featureGroup(lines).getBounds();
-            // The modal was hidden a moment ago, so Leaflet needs a size recalc
-            setTimeout(function () {
+            const fitToStreet = function () {
+                if (currentStreetModalName !== name) return;   // switched streets meanwhile
                 streetModalMap.invalidateSize();
-                if (bounds.isValid()) streetModalMap.fitBounds(bounds.pad(0.25), { maxZoom: 18 });
-            }, 60);
+                if (bounds.isValid()) streetModalMap.fitBounds(bounds.pad(0.2), { maxZoom: 18, animate: false });
+            };
+            setTimeout(fitToStreet, 80);
+            setTimeout(fitToStreet, 300);
 
             loadStreetDetail(name, g);
             loadStreetAi(name);
