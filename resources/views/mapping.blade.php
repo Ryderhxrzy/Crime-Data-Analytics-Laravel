@@ -600,15 +600,29 @@ if (request()->query('token')) {
     <!-- Street Details Modal (San Agustin street click) -->
     <style>
         #streetModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99998; padding: 20px; align-items: center; justify-content: center; }
-        #streetModal .sm-card { position: relative; background: #fff; border-radius: 16px; width: 100%; max-width: 1040px; max-height: 92%; display: flex; flex-direction: column; box-shadow: 0 25px 70px rgba(0,0,0,0.35); overflow: hidden; }
-        #streetModal .sm-body { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: 16px; padding: 16px 20px 20px; overflow-y: auto; }
-        @media (max-width: 900px) { #streetModal .sm-body { grid-template-columns: 1fr; } }
+        #streetModal .sm-card { position: relative; background: #fff; border-radius: 16px; width: 100%; max-width: 1040px; height: 92%; display: flex; flex-direction: column; box-shadow: 0 25px 70px rgba(0,0,0,0.35); overflow: hidden; }
+        /* Each column scrolls on its own; the body itself never scrolls */
+        #streetModal .sm-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: 16px; padding: 16px 20px 20px; overflow: hidden; }
+        #streetModal .sm-col { min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; }
+        @media (max-width: 900px) {
+            #streetModal .sm-body { grid-template-columns: 1fr; overflow-y: auto; }
+            #streetModal .sm-col { overflow-y: visible; }
+        }
         #streetModal .sm-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; background: #f3f4f6; color: #374151; }
         #streetModal .sm-inc-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
         #streetModal .sm-inc-card:hover { border-color: #94a3b8; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-        /* Street name written on the highlighted line (the line covers the base map's label) */
-        .street-name-label { background: rgba(255,255,255,0.95); border: 1.5px solid #111827; color: #111827; font-weight: 800; font-size: 11px; padding: 2px 9px; border-radius: 9999px; box-shadow: 0 1px 5px rgba(0,0,0,0.3); white-space: nowrap; }
-        .street-name-label::before { display: none; }
+        /* Collapsible per-street crime group (right column) */
+        #streetModal .sm-acc { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+        #streetModal .sm-acc-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f9fafb; border: none; cursor: pointer; font-size: 12.5px; font-weight: 800; color: #111827; text-align: left; }
+        #streetModal .sm-acc-head:hover { background: #f3f4f6; }
+        #streetModal .sm-acc-body { padding: 10px; display: grid; gap: 8px; }
+        /* Street filter dropdown (header) */
+        #streetFilterPanel { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; width: 300px; max-width: 80vw; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 12px 35px rgba(0,0,0,0.18); padding: 10px; }
+        /* Street name labels on the mini map: subtle for context streets,
+           a bold pill for the active/selected ones */
+        .street-name-mini { background: rgba(255,255,255,0.75); border: 1px solid rgba(100,116,139,0.55); color: #475569; font-weight: 600; font-size: 9px; padding: 1px 6px; border-radius: 9999px; white-space: nowrap; box-shadow: none; opacity: 0.85; }
+        .street-name-mini::before { display: none; }
+        .street-name-mini.snm-active { background: rgba(255,255,255,0.97); border: 1.5px solid #111827; color: #111827; font-weight: 800; font-size: 11px; padding: 2px 9px; box-shadow: 0 1px 5px rgba(0,0,0,0.3); opacity: 1; }
     </style>
     <div id="streetModal" onclick="if(event.target === this) closeStreetModal()">
         <div class="sm-card">
@@ -620,6 +634,25 @@ if (request()->query('token')) {
                     <span id="streetModalSwatch" style="display: inline-block; width: 34px; height: 8px; border-radius: 4px; background: #64748b;"></span>
                     <h2 id="streetModalName" style="font-size: 18px; font-weight: 800; color: #111; margin: 0;">Street</h2>
                     <span style="font-size: 12px; color: #6b7280;">Barangay San Agustin, Quezon City</span>
+
+                    <!-- Street filter: a dropdown at the top — checking a street
+                         makes it active on the map, exactly like clicking it -->
+                    <div id="streetFilterWrap" style="position: relative; margin-left: auto;">
+                        <button id="streetFilterBtn" type="button" onclick="toggleStreetFilterPanel()"
+                                style="display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: #374151; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 10px; padding: 7px 12px; cursor: pointer;">
+                            <i class="fas fa-road" style="color: #b45309;"></i>
+                            <span id="streetFilterBtnLabel">Streets (1)</span>
+                            <i class="fas fa-chevron-down" style="font-size: 10px; color: #9ca3af;"></i>
+                        </button>
+                        <div id="streetFilterPanel">
+                            <input type="text" id="streetFilterSearch" placeholder="Search street…" oninput="renderStreetFilterList(this.value)"
+                                   style="width: 100%; box-sizing: border-box; padding: 6px 9px; margin-bottom: 6px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px;">
+                            <div id="streetFilterList" style="max-height: 210px; overflow-y: auto; display: grid; gap: 1px;"></div>
+                            <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+                                <button type="button" onclick="clearModalStreets()" style="font-size: 10.5px; font-weight: 700; color: #6b7280; background: none; border: none; cursor: pointer; text-decoration: underline;">Keep first street only</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div id="streetModalPills" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
                     <span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>
@@ -628,7 +661,7 @@ if (request()->query('token')) {
 
             <div class="sm-body">
                 <!-- LEFT: filtered street map + AI suggestions -->
-                <div style="min-width: 0;">
+                <div class="sm-col">
                     <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
                         <i class="fas fa-map-location-dot mr-1" style="color: #274d4c;"></i>Street map — crimes plotted where they happened
                     </div>
@@ -646,26 +679,12 @@ if (request()->query('token')) {
                             </button>
                         </div>
 
-                        <!-- Multi-street picker: analyze the clicked street alone, or add more -->
-                        <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: #fafafa;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                                <span style="font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase;">
-                                    <i class="fas fa-road mr-1" style="color: #b45309;"></i>Streets to analyze
-                                    <span id="streetAiPickCount" style="color: #7c3aed;"></span>
-                                </span>
-                                <button type="button" onclick="clearStreetAiPicks()" style="margin-left: auto; font-size: 10px; font-weight: 700; color: #6b7280; background: none; border: none; cursor: pointer; text-decoration: underline;">Clear others</button>
-                            </div>
-                            <input type="text" id="streetAiSearch" placeholder="Search street to add…" oninput="renderStreetAiPicker(this.value)"
-                                   style="width: 100%; box-sizing: border-box; padding: 6px 9px; margin-bottom: 6px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px;">
-                            <div id="streetAiPickList" style="max-height: 110px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px;"></div>
-                        </div>
-
                         <button id="streetAiAnalyzeBtn" onclick="analyzeStreetAi()" style="width: 100%; font-size: 12.5px; font-weight: 700; color: #fff; background: #7c3aed; border: none; border-radius: 10px; padding: 9px 12px; cursor: pointer; margin-bottom: 8px;">
-                            <i class="fas fa-wand-magic-sparkles mr-1"></i>Analyze with AI
+                            <i class="fas fa-wand-magic-sparkles mr-1"></i><span id="streetAiAnalyzeLabel">Analyze with AI</span>
                         </button>
 
                         <div id="streetAiPlaceholder" style="border: 1px dashed #d1d5db; background: #f9fafb; border-radius: 10px; padding: 12px; font-size: 11.5px; color: #6b7280; text-align: center;">
-                            Select the street(s) you want, then press <span style="font-weight: 700; color: #7c3aed;">Analyze with AI</span>. Results are cached for 24 hours to save AI quota.
+                            The AI analyzes every street selected above (the ones highlighted on the map), then press <span style="font-weight: 700; color: #7c3aed;">Analyze with AI</span>. Results are cached for 24 hours to save AI quota.
                         </div>
                         <div id="streetAiLoading" style="display: none; border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 10px; padding: 14px; font-size: 12px; color: #6d28d9;">
                             <i class="fas fa-spinner fa-spin mr-1"></i>Gemini is analyzing the selected street(s)…
@@ -681,12 +700,12 @@ if (request()->query('token')) {
                     </div>
                 </div>
 
-                <!-- RIGHT: full incident details -->
-                <div style="min-width: 0;">
+                <!-- RIGHT: crimes per selected street (collapsible groups, own scrollbar) -->
+                <div class="sm-col">
                     <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
-                        <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Crimes on this street <span id="streetIncCount" style="color: #274d4c;"></span>
+                        <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Crimes on selected street(s) <span id="streetIncCount" style="color: #274d4c;"></span>
                     </div>
-                    <div id="streetIncidentList" style="display: grid; gap: 8px; align-content: start;">
+                    <div id="streetIncidentList" style="display: grid; gap: 10px; align-content: start;">
                         <div style="font-size: 12px; color: #9ca3af; padding: 12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes…</div>
                     </div>
                 </div>
@@ -1254,10 +1273,19 @@ if (request()->query('token')) {
         const SA_STREET_AI_URL = @json(route('pattern-detection.street-ai-suggest'));
         const SA_AI_SAVE_URL = @json(route('pattern-detection.ai-save'));
 
-        let streetModalMap = null;        // mini Leaflet map, created once
-        let streetModalLayer = null;      // per-open overlay (street lines + crime dots)
-        let currentStreetModalName = null;
+        let streetModalMap = null;        // mini Leaflet map, created once (same tile setup as the big map)
+        let streetModalBase = null;       // static context: boundary + every street + name labels
+        let miniStreets = {};             // street name -> {lines, label, color}
+        let streetCrimeLayers = {};       // street name -> layerGroup of its crime dots (cached)
+        let streetDetailCache = {};       // street name -> /street-detail payload (cached)
+        let modalStreets = [];            // ACTIVE selection; [0] = first-clicked street (locked in)
+        let currentStreetModalName = null;// first-clicked street
         let streetModalMarkers = {};      // incident code -> circle marker
+        let streetModalSeq = 0;           // stale-async guard
+        const accCollapsed = new Set();   // streets whose crime group is collapsed
+
+        // Every street stays marked but subtle; only selected streets highlight
+        const MUTED_STREET_STYLE = { color: '#64748b', weight: 1.5, opacity: 0.5 };
 
         // Stable colour per crime category (same golden-angle trick as streets)
         function colorForCategory(cat) {
@@ -1267,29 +1295,27 @@ if (request()->query('token')) {
             return 'hsl(' + Math.round((h * 137.508) % 360) + ', 72%, 40%)';
         }
 
-        function openStreetModal(name, g) {
-            currentStreetModalName = name;
-            streetModalMarkers = {};
+        // Build the static context ONCE: barangay boundary, every street as a
+        // subtle marked line, and a small name label per street. The map uses
+        // the SAME tile source and zoom settings as the main crime mapping map.
+        function ensureStreetModalBase() {
+            if (streetModalMap) return;
 
-            document.getElementById('streetModalName').textContent = name;
-            document.getElementById('streetModalSwatch').style.background = g.color;
-            document.getElementById('streetModalPills').innerHTML =
-                '<span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>';
-            document.getElementById('streetIncCount').textContent = '';
-            document.getElementById('streetIncidentList').innerHTML =
-                '<div style="font-size:12px;color:#9ca3af;padding:12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes…</div>';
+            streetModalMap = L.map('streetModalMap', {
+                zoomControl: true,
+                scrollWheelZoom: true,
+                minZoom: 10,
+                maxZoom: 25
+            });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 25,
+                minZoom: 10
+            }).addTo(streetModalMap);
 
-            document.getElementById('streetModal').style.display = 'flex';
+            streetModalBase = L.layerGroup().addTo(streetModalMap);
 
-            // Mini map: built once, overlays rebuilt per open
-            if (!streetModalMap) {
-                streetModalMap = L.map('streetModalMap', { zoomControl: true, attributionControl: false });
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(streetModalMap);
-            }
-            if (streetModalLayer) { streetModalMap.removeLayer(streetModalLayer); }
-            streetModalLayer = L.layerGroup().addTo(streetModalMap);
-
-            // Barangay San Agustin boundary — faint, for context only
+            // Barangay San Agustin boundary — faint dashed ring for context
             const saCode = Object.keys(nameByPsgcCode || {}).find(function (c) {
                 return String(nameByPsgcCode[c] || '').trim().toLowerCase() === 'san agustin';
             });
@@ -1298,70 +1324,279 @@ if (request()->query('token')) {
                     poly.forEach(function (ring) {
                         L.polygon(ring.map(function (c) { return [c[1], c[0]]; }), {
                             color: '#274d4c', weight: 2, opacity: 0.75, dashArray: '6,4',
-                            fillColor: '#e8f5f3', fillOpacity: 0.10, interactive: false
-                        }).addTo(streetModalLayer);
+                            fillColor: '#e8f5f3', fillOpacity: 0.08, interactive: false
+                        }).addTo(streetModalBase);
                     });
                 });
             }
 
-            // Every OTHER street stays visible but muted (not highlighted).
-            // Hover shows its name; clicking one switches the modal to it.
-            if (saStreetGroupsAll) {
-                Object.entries(saStreetGroupsAll).forEach(function (entry) {
-                    const otherName = entry[0], og = entry[1];
-                    if (otherName === name) return;
-                    og.inner.forEach(function (l) {
-                        const line = L.polyline(l.getLatLngs(), { color: '#94a3b8', weight: 2, opacity: 0.65 });
-                        line.bindTooltip(escStreet(otherName), { sticky: true, direction: 'top', opacity: 0.9 });
-                        line.on('mouseover', function () { line.setStyle({ color: '#475569', weight: 3.5, opacity: 1 }); });
-                        line.on('mouseout', function () { line.setStyle({ color: '#94a3b8', weight: 2, opacity: 0.65 }); });
-                        line.on('click', function () { openStreetModal(otherName, og); });
-                        line.addTo(streetModalLayer);
+            // Every street: subtle line + small name label. Clicking a line
+            // toggles the street into/out of the active selection.
+            Object.entries(saStreetGroupsAll || {}).forEach(function (entry) {
+                const name = entry[0], g = entry[1];
+                const lines = [];
+                let longest = null, longestLen = -1;
+
+                g.inner.forEach(function (src) {
+                    const pts = src.getLatLngs();
+                    const line = L.polyline(pts, Object.assign({}, MUTED_STREET_STYLE));
+                    line.on('click', function () { toggleModalStreet(name); });
+                    line.on('mouseover', function () {
+                        if (modalStreets.indexOf(name) === -1) line.setStyle({ color: '#475569', weight: 3, opacity: 0.9 });
                     });
+                    line.on('mouseout', function () {
+                        if (modalStreets.indexOf(name) === -1) line.setStyle(MUTED_STREET_STYLE);
+                    });
+                    line.addTo(streetModalBase);
+                    lines.push(line);
+
+                    let len = 0;
+                    for (let i = 0; i < pts.length - 1; i++) len += pts[i].distanceTo(pts[i + 1]);
+                    if (len > longestLen) { longestLen = len; longest = line; }
                 });
-            }
 
-            // The clicked street — the ONLY highlighted line (cloned polylines;
-            // the originals stay on the big map)
-            const lines = [];
-            g.inner.forEach(function (l) {
-                L.polyline(l.getLatLngs(), { color: '#111827', weight: 9, opacity: 0.4, interactive: false }).addTo(streetModalLayer);
-                lines.push(L.polyline(l.getLatLngs(), { color: g.color, weight: 5, opacity: 1, interactive: false }).addTo(streetModalLayer));
+                let label = null;
+                if (longest) {
+                    const pts = longest.getLatLngs();
+                    label = L.tooltip({ permanent: true, direction: 'top', className: 'street-name-mini', offset: [0, -4], interactive: false })
+                        .setLatLng(pts[Math.floor(pts.length / 2)])
+                        .setContent(escStreet(name))
+                        .addTo(streetModalBase);
+                }
+
+                miniStreets[name] = { lines: lines, label: label, color: g.color };
             });
+        }
 
-            // Write the street's name ON the line — the highlight covers the
-            // base map's own label, so the name has to ride on top
-            let longest = null, longestLen = -1;
-            lines.forEach(function (l) {
-                const pts = l.getLatLngs();
-                let len = 0;
-                for (let i = 0; i < pts.length - 1; i++) len += pts[i].distanceTo(pts[i + 1]);
-                if (len > longestLen) { longestLen = len; longest = l; }
+        function styleModalStreet(name, active) {
+            const ms = miniStreets[name];
+            if (!ms) return;
+            ms.lines.forEach(function (l) {
+                l.setStyle(active ? { color: ms.color, weight: 5, opacity: 1 } : Object.assign({}, MUTED_STREET_STYLE));
+                if (active && l.bringToFront) l.bringToFront();
             });
-            if (longest) {
-                const pts = longest.getLatLngs();
-                L.tooltip({ permanent: true, direction: 'top', className: 'street-name-label', offset: [0, -7], interactive: false })
-                    .setLatLng(pts[Math.floor(pts.length / 2)])
-                    .setContent(escStreet(name))
-                    .addTo(streetModalLayer);
+            if (ms.label && ms.label.getElement()) {
+                ms.label.getElement().classList.toggle('snm-active', !!active);
             }
+        }
 
-            // Auto-zoom: always frame exactly the clicked street (its own bounds,
-            // not the barangay's), snapping straight there with no animation so
-            // nothing can interrupt the fit. Runs twice — the modal was hidden a
-            // moment ago, and Leaflet only measures the container reliably once
-            // the layout has fully settled.
-            const bounds = L.featureGroup(lines).getBounds();
-            const fitToStreet = function () {
-                if (currentStreetModalName !== name) return;   // switched streets meanwhile
+        // Fetch one street's crimes (server + client cached) and build its dot layer
+        async function ensureStreetCrimes(name) {
+            if (!streetDetailCache[name]) {
+                const res = await fetch(SA_STREET_DETAIL_URL + '?street=' + encodeURIComponent(name),
+                    { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (data.error) throw new Error(data.message || data.error);
+                streetDetailCache[name] = data;
+            }
+            if (!streetCrimeLayers[name]) {
+                const layer = L.layerGroup();
+                (streetDetailCache[name].incidents || []).forEach(function (inc) {
+                    if (!isFinite(inc.lat) || !isFinite(inc.lng)) return;
+                    const c = colorForCategory(inc.category);
+                    const marker = L.circleMarker([inc.lat, inc.lng], {
+                        radius: 8, color: '#111827', weight: 1.5, fillColor: c, fillOpacity: 0.95
+                    });
+                    marker.bindPopup(
+                        '<div style="min-width:190px;">' +
+                            '<div style="font-weight:800;font-size:12px;color:' + c + ';">' + escStreet(inc.category) + '</div>' +
+                            '<div style="font-weight:700;font-size:12px;margin:2px 0;">' + escStreet(inc.title || inc.code) + '</div>' +
+                            '<div style="font-size:11px;color:#4b5563;">' + escStreet(inc.date || '') + (inc.time ? ' · ' + escStreet(inc.time) : '') + '</div>' +
+                            '<div style="font-size:11px;color:#4b5563;">Status: ' + escStreet(inc.status || '—') + '</div>' +
+                            '<div style="font-size:10px;color:#9ca3af;font-family:monospace;margin-top:2px;">' + escStreet(inc.code) + '</div>' +
+                        '</div>');
+                    marker.addTo(layer);
+                    streetModalMarkers[inc.code] = marker;
+                });
+                streetCrimeLayers[name] = layer;
+            }
+            return streetDetailCache[name];
+        }
+
+        async function activateModalStreet(name) {
+            styleModalStreet(name, true);
+            const seq = streetModalSeq;
+            try {
+                await ensureStreetCrimes(name);
+            } catch (e) {
+                console.error('Street detail failed:', e);
+            }
+            // Only mount if the street is still selected and the modal not reopened
+            if (seq !== streetModalSeq || modalStreets.indexOf(name) === -1) return;
+            if (streetCrimeLayers[name] && !streetModalMap.hasLayer(streetCrimeLayers[name])) {
+                streetCrimeLayers[name].addTo(streetModalMap);
+            }
+            renderCrimeAccordions();
+            updateStreetModalHeader();
+        }
+
+        function deactivateModalStreet(name) {
+            styleModalStreet(name, false);
+            if (streetCrimeLayers[name] && streetModalMap && streetModalMap.hasLayer(streetCrimeLayers[name])) {
+                streetModalMap.removeLayer(streetCrimeLayers[name]);
+            }
+        }
+
+        // Toggle a street from the mini map or the filter dropdown. The FIRST
+        // clicked street is locked in — selecting more never removes it.
+        function toggleModalStreet(name) {
+            const idx = modalStreets.indexOf(name);
+            if (idx === -1) {
+                modalStreets.push(name);
+                activateModalStreet(name);
+            } else {
+                if (idx === 0) return;               // the first street stays
+                modalStreets.splice(idx, 1);
+                deactivateModalStreet(name);
+            }
+            renderCrimeAccordions();
+            updateStreetModalHeader();
+            renderStreetFilterList(document.getElementById('streetFilterSearch').value);
+            fitModalToActive();
+        }
+
+        // Auto-zoom: frame every ACTIVE street (snap, no animation)
+        function fitModalToActive() {
+            if (!streetModalMap) return;
+            const bounds = L.latLngBounds([]);
+            modalStreets.forEach(function (name) {
+                const ms = miniStreets[name];
+                if (ms) ms.lines.forEach(function (l) { bounds.extend(l.getBounds()); });
+            });
+            if (bounds.isValid()) {
                 streetModalMap.invalidateSize();
-                if (bounds.isValid()) streetModalMap.fitBounds(bounds.pad(0.2), { maxZoom: 18, animate: false });
-            };
-            setTimeout(fitToStreet, 80);
-            setTimeout(fitToStreet, 300);
+                streetModalMap.fitBounds(bounds.pad(0.2), { maxZoom: 18, animate: false });
+            }
+        }
 
-            loadStreetDetail(name, g);
-            resetStreetAiSection(name);   // AI runs ONLY when Analyze is pressed
+        function openStreetModal(name, g) {
+            streetModalSeq++;
+            currentStreetModalName = name;
+
+            document.getElementById('streetModal').style.display = 'flex';
+            ensureStreetModalBase();
+
+            // Reset the selection: mute everything, then activate only the
+            // clicked street (more can be added via map clicks or the filter)
+            modalStreets.slice().forEach(function (n) { deactivateModalStreet(n); });
+            modalStreets = [name];
+            accCollapsed.clear();
+
+            document.getElementById('streetModalSwatch').style.background =
+                (miniStreets[name] || g || {}).color || '#64748b';
+            document.getElementById('streetModalPills').innerHTML =
+                '<span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>';
+            document.getElementById('streetIncCount').textContent = '';
+            document.getElementById('streetIncidentList').innerHTML =
+                '<div style="font-size:12px;color:#9ca3af;padding:12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes…</div>';
+            document.getElementById('streetFilterSearch').value = '';
+            document.getElementById('streetFilterPanel').style.display = 'none';
+
+            updateStreetModalHeader();
+            renderStreetFilterList('');
+            activateModalStreet(name);
+
+            // Auto-zoom to the clicked street; double pass because the modal
+            // was hidden a moment ago and the container needs to settle
+            setTimeout(fitModalToActive, 80);
+            setTimeout(fitModalToActive, 300);
+
+            resetStreetAiSection();   // AI runs ONLY when Analyze is pressed
+        }
+
+        // ---------- header: title, aggregate pills, filter button ----------
+        function updateStreetModalHeader() {
+            const first = modalStreets[0] || '';
+            document.getElementById('streetModalName').textContent =
+                modalStreets.length > 1 ? first + ' +' + (modalStreets.length - 1) + ' more' : first;
+            document.getElementById('streetFilterBtnLabel').textContent = 'Streets (' + modalStreets.length + ')';
+            document.getElementById('streetAiAnalyzeLabel').textContent =
+                'Analyze with AI (' + modalStreets.length + ' street' + (modalStreets.length === 1 ? '' : 's') + ')';
+
+            // Aggregate the pills over every active street whose data is in
+            let total = 0, unresolved = 0, loaded = 0;
+            const cats = {};
+            modalStreets.forEach(function (n) {
+                const d = streetDetailCache[n];
+                if (!d) return;
+                loaded++;
+                total += (d.summary && d.summary.count) || 0;
+                unresolved += (d.summary && d.summary.unresolved) || 0;
+                Object.entries((d.summary && d.summary.categories) || {}).forEach(function (e) {
+                    cats[e[0]] = (cats[e[0]] || 0) + e[1];
+                });
+            });
+            const top = Object.keys(cats).sort(function (a, b) { return cats[b] - cats[a]; })[0];
+
+            const pills = [];
+            pills.push('<span class="sm-pill"><i class="fas fa-triangle-exclamation" style="color:#b45309;"></i>' +
+                total + ' crime' + (total === 1 ? '' : 's') + '</span>');
+            if (top) {
+                pills.push('<span class="sm-pill"><span style="width:9px;height:9px;border-radius:50%;background:' +
+                    colorForCategory(top) + ';display:inline-block;"></span>Mostly ' + escStreet(top) + '</span>');
+            }
+            if (unresolved > 0) {
+                pills.push('<span class="sm-pill" style="background:#fef2f2;color:#b91c1c;"><i class="fas fa-folder-open"></i>' +
+                    unresolved + ' unresolved</span>');
+            }
+            if (loaded < modalStreets.length) {
+                pills.push('<span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>');
+            }
+            document.getElementById('streetModalPills').innerHTML = pills.join('');
+        }
+
+        // ---------- street filter dropdown (top of the modal) ----------
+        function toggleStreetFilterPanel() {
+            const p = document.getElementById('streetFilterPanel');
+            const show = p.style.display !== 'block';
+            p.style.display = show ? 'block' : 'none';
+            if (show) {
+                renderStreetFilterList(document.getElementById('streetFilterSearch').value);
+                document.getElementById('streetFilterSearch').focus();
+            }
+        }
+        document.addEventListener('click', function (e) {
+            const wrap = document.getElementById('streetFilterWrap');
+            if (wrap && !wrap.contains(e.target)) {
+                document.getElementById('streetFilterPanel').style.display = 'none';
+            }
+        });
+
+        function renderStreetFilterList(filter) {
+            const q = String(filter || '').toLowerCase().trim();
+            const names = Object.keys(saStreetGroupsAll || {}).sort(function (a, b) { return a.localeCompare(b); });
+            const rows = [];
+
+            names.forEach(function (n) {
+                const first = n === modalStreets[0];
+                const checked = modalStreets.indexOf(n) !== -1;
+                if (!checked && q && !n.toLowerCase().includes(q)) return;
+                const row = '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#374151;cursor:pointer;padding:3px 2px;' + (first ? 'font-weight:700;' : '') + '">' +
+                    '<input type="checkbox" class="street-filter-cb" value="' + escStreet(n) + '"' +
+                        (checked ? ' checked' : '') + (first ? ' disabled' : '') + '>' +
+                    '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escStreet(n) + '">' + escStreet(n) +
+                        (first ? ' <span style="color:#7c3aed;font-size:9px;">(clicked street)</span>' : '') + '</span>' +
+                '</label>';
+                if (checked) rows.unshift(row); else rows.push(row);
+            });
+
+            document.getElementById('streetFilterList').innerHTML =
+                rows.join('') || '<div style="font-size:11px;color:#9ca3af;padding:4px 0;">No matching streets.</div>';
+        }
+
+        document.getElementById('streetFilterList').addEventListener('change', function (e) {
+            const cb = e.target;
+            if (!cb.classList || !cb.classList.contains('street-filter-cb')) return;
+            toggleModalStreet(cb.value);
+        });
+
+        function clearModalStreets() {
+            modalStreets.slice(1).forEach(function (n) { deactivateModalStreet(n); });
+            modalStreets = modalStreets.slice(0, 1);
+            renderCrimeAccordions();
+            updateStreetModalHeader();
+            renderStreetFilterList(document.getElementById('streetFilterSearch').value);
+            fitModalToActive();
         }
 
         function closeStreetModal() {
@@ -1371,124 +1606,98 @@ if (request()->query('token')) {
             if (e.key === 'Escape') closeStreetModal();
         });
 
-        async function loadStreetDetail(name, g) {
-            try {
-                const res = await fetch(SA_STREET_DETAIL_URL + '?street=' + encodeURIComponent(name),
-                    { headers: { 'Accept': 'application/json' } });
-                const data = await res.json();
-                if (data.error) throw new Error(data.message || data.error);
-                if (currentStreetModalName !== name) return;   // user opened another street meanwhile
-
-                renderStreetSummary(data.summary || {});
-                renderStreetIncidents(data.incidents || [], g);
-            } catch (e) {
-                console.error('Street detail failed:', e);
-                document.getElementById('streetIncidentList').innerHTML =
-                    '<div style="font-size:12px;color:#b91c1c;padding:12px;">Could not load crimes for this street.</div>';
-            }
+        // ---------- right column: crimes grouped per street (collapsible) ----------
+        function crimeCardHtml(inc) {
+            const c = colorForCategory(inc.category);
+            const meta = [];
+            if (inc.victim_count > 0) meta.push(inc.victim_count + ' victim' + (inc.victim_count === 1 ? '' : 's'));
+            if (inc.suspect_count > 0) meta.push(inc.suspect_count + ' suspect' + (inc.suspect_count === 1 ? '' : 's'));
+            if (inc.weather) meta.push(escStreet(inc.weather));
+            return '<div class="sm-inc-card" data-code="' + escStreet(inc.code) + '">' +
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                    '<span style="font-size:10px;font-weight:800;color:#fff;background:' + c + ';padding:2px 8px;border-radius:9999px;">' + escStreet(inc.category) + '</span>' +
+                    '<span style="font-size:10px;color:#9ca3af;font-family:monospace;">' + escStreet(inc.code) + '</span>' +
+                    '<span style="margin-left:auto;font-size:10px;font-weight:700;color:' +
+                        (['solved','resolved','closed','cleared'].indexOf(String(inc.status || '').toLowerCase()) >= 0 ? '#15803d' : '#b45309') + ';">' +
+                        escStreet(String(inc.status || '—').toUpperCase()) + '</span>' +
+                '</div>' +
+                '<div style="font-size:13px;font-weight:700;color:#111;margin-top:6px;">' + escStreet(inc.title || 'Crime') + '</div>' +
+                '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><i class="fas fa-calendar mr-1"></i>' +
+                    escStreet(inc.date || '—') + (inc.time ? ' · <i class="fas fa-clock mr-1"></i>' + escStreet(inc.time) : '') + '</div>' +
+                (inc.description ? '<div style="font-size:11.5px;color:#4b5563;margin-top:6px;line-height:1.45;">' + escStreet(inc.description) + '</div>' : '') +
+                (inc.modus_operandi ? '<div style="font-size:11px;color:#6b7280;margin-top:4px;"><span style="font-weight:700;">Modus:</span> ' + escStreet(inc.modus_operandi) + '</div>' : '') +
+                (meta.length ? '<div style="font-size:11px;color:#6b7280;margin-top:4px;">' + meta.join(' · ') + '</div>' : '') +
+                (inc.clearance_status ? '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><span style="font-weight:700;">Clearance:</span> ' +
+                    escStreet(inc.clearance_status) + (inc.clearance_date ? ' (' + escStreet(inc.clearance_date) + ')' : '') + '</div>' : '') +
+                (inc.assigned_officer ? '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><span style="font-weight:700;">Officer:</span> ' + escStreet(inc.assigned_officer) + '</div>' : '') +
+                '<div style="font-size:10.5px;color:#9ca3af;margin-top:4px;"><i class="fas fa-location-dot mr-1"></i>' + escStreet(inc.address || '') + '</div>' +
+            '</div>';
         }
 
-        function renderStreetSummary(s) {
-            const pills = [];
-            pills.push('<span class="sm-pill"><i class="fas fa-triangle-exclamation" style="color:#b45309;"></i>' +
-                (s.count || 0) + ' crime' + (s.count === 1 ? '' : 's') + '</span>');
-            if (s.top_category) {
-                pills.push('<span class="sm-pill"><span style="width:9px;height:9px;border-radius:50%;background:' +
-                    colorForCategory(s.top_category) + ';display:inline-block;"></span>Mostly ' + escStreet(s.top_category) + '</span>');
-            }
-            if (s.peak_hours && s.peak_hours.length) {
-                pills.push('<span class="sm-pill"><i class="fas fa-clock" style="color:#6d28d9;"></i>Peak: ' +
-                    s.peak_hours.map(escStreet).join(', ') + '</span>');
-            }
-            if (s.unresolved > 0) {
-                pills.push('<span class="sm-pill" style="background:#fef2f2;color:#b91c1c;"><i class="fas fa-folder-open"></i>' +
-                    s.unresolved + ' unresolved</span>');
-            }
-            document.getElementById('streetModalPills').innerHTML = pills.join('');
-        }
+        // One collapsible group per selected street, newest selection last
+        function renderCrimeAccordions() {
+            let grand = 0;
+            const html = modalStreets.map(function (n) {
+                const ms = miniStreets[n] || { color: '#64748b' };
+                const d = streetDetailCache[n];
+                const collapsed = accCollapsed.has(n);
 
-        function renderStreetIncidents(incidents, g) {
-            document.getElementById('streetIncCount').textContent = '(' + incidents.length + ')';
+                let countChip, bodyHtml;
+                if (!d) {
+                    countChip = '<i class="fas fa-spinner fa-spin" style="color:#9ca3af;"></i>';
+                    bodyHtml = '<div style="font-size:12px;color:#9ca3af;">Loading crimes…</div>';
+                } else {
+                    const incs = d.incidents || [];
+                    grand += incs.length;
+                    countChip = '<span style="font-size:10px;font-weight:800;background:' + ms.color + ';color:#fff;border-radius:9999px;padding:2px 8px;">' + incs.length + '</span>';
+                    bodyHtml = incs.length
+                        ? incs.map(crimeCardHtml).join('')
+                        : '<div style="font-size:12px;color:#9ca3af;">No recorded crimes on this street.</div>';
+                }
 
-            if (!incidents.length) {
-                document.getElementById('streetIncidentList').innerHTML =
-                    '<div style="font-size:12px;color:#9ca3af;padding:12px;">No recorded crimes on this street.</div>';
-                return;
-            }
-
-            // Crime dots on the mini map — the circle sits exactly where the
-            // incident happened, coloured by its category
-            incidents.forEach(function (inc) {
-                if (!isFinite(inc.lat) || !isFinite(inc.lng)) return;
-                const c = colorForCategory(inc.category);
-                const marker = L.circleMarker([inc.lat, inc.lng], {
-                    radius: 8, color: '#111827', weight: 1.5, fillColor: c, fillOpacity: 0.95
-                }).addTo(streetModalLayer);
-                marker.bindPopup(
-                    '<div style="min-width:190px;">' +
-                        '<div style="font-weight:800;font-size:12px;color:' + c + ';">' + escStreet(inc.category) + '</div>' +
-                        '<div style="font-weight:700;font-size:12px;margin:2px 0;">' + escStreet(inc.title || inc.code) + '</div>' +
-                        '<div style="font-size:11px;color:#4b5563;">' + escStreet(inc.date || '') + (inc.time ? ' · ' + escStreet(inc.time) : '') + '</div>' +
-                        '<div style="font-size:11px;color:#4b5563;">Status: ' + escStreet(inc.status || '—') + '</div>' +
-                        '<div style="font-size:10px;color:#9ca3af;font-family:monospace;margin-top:2px;">' + escStreet(inc.code) + '</div>' +
-                    '</div>');
-                streetModalMarkers[inc.code] = marker;
-            });
-
-            // Full-detail cards; clicking one flies the mini map to its dot
-            document.getElementById('streetIncidentList').innerHTML = incidents.map(function (inc) {
-                const c = colorForCategory(inc.category);
-                const meta = [];
-                if (inc.victim_count > 0) meta.push(inc.victim_count + ' victim' + (inc.victim_count === 1 ? '' : 's'));
-                if (inc.suspect_count > 0) meta.push(inc.suspect_count + ' suspect' + (inc.suspect_count === 1 ? '' : 's'));
-                if (inc.weather) meta.push(escStreet(inc.weather));
-                return '<div class="sm-inc-card" data-code="' + escStreet(inc.code) + '">' +
-                    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
-                        '<span style="font-size:10px;font-weight:800;color:#fff;background:' + c + ';padding:2px 8px;border-radius:9999px;">' + escStreet(inc.category) + '</span>' +
-                        '<span style="font-size:10px;color:#9ca3af;font-family:monospace;">' + escStreet(inc.code) + '</span>' +
-                        '<span style="margin-left:auto;font-size:10px;font-weight:700;color:' +
-                            (['solved','resolved','closed','cleared'].indexOf(String(inc.status || '').toLowerCase()) >= 0 ? '#15803d' : '#b45309') + ';">' +
-                            escStreet(String(inc.status || '—').toUpperCase()) + '</span>' +
-                    '</div>' +
-                    '<div style="font-size:13px;font-weight:700;color:#111;margin-top:6px;">' + escStreet(inc.title || 'Crime') + '</div>' +
-                    '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><i class="fas fa-calendar mr-1"></i>' +
-                        escStreet(inc.date || '—') + (inc.time ? ' · <i class="fas fa-clock mr-1"></i>' + escStreet(inc.time) : '') + '</div>' +
-                    (inc.description ? '<div style="font-size:11.5px;color:#4b5563;margin-top:6px;line-height:1.45;">' + escStreet(inc.description) + '</div>' : '') +
-                    (inc.modus_operandi ? '<div style="font-size:11px;color:#6b7280;margin-top:4px;"><span style="font-weight:700;">Modus:</span> ' + escStreet(inc.modus_operandi) + '</div>' : '') +
-                    (meta.length ? '<div style="font-size:11px;color:#6b7280;margin-top:4px;">' + meta.join(' · ') + '</div>' : '') +
-                    (inc.clearance_status ? '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><span style="font-weight:700;">Clearance:</span> ' +
-                        escStreet(inc.clearance_status) + (inc.clearance_date ? ' (' + escStreet(inc.clearance_date) + ')' : '') + '</div>' : '') +
-                    (inc.assigned_officer ? '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><span style="font-weight:700;">Officer:</span> ' + escStreet(inc.assigned_officer) + '</div>' : '') +
-                    '<div style="font-size:10.5px;color:#9ca3af;margin-top:4px;"><i class="fas fa-location-dot mr-1"></i>' + escStreet(inc.address || '') + '</div>' +
+                return '<div class="sm-acc">' +
+                    '<button type="button" class="sm-acc-head" data-street="' + escStreet(n) + '">' +
+                        '<span style="width:14px;height:5px;border-radius:3px;background:' + ms.color + ';flex-shrink:0;"></span>' +
+                        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escStreet(n) + '</span>' +
+                        countChip +
+                        '<i class="fas fa-chevron-' + (collapsed ? 'down' : 'up') + '" style="font-size:10px;color:#9ca3af;"></i>' +
+                    '</button>' +
+                    (collapsed ? '' : '<div class="sm-acc-body">' + bodyHtml + '</div>') +
                 '</div>';
             }).join('');
 
-            document.getElementById('streetIncidentList').querySelectorAll('.sm-inc-card').forEach(function (card) {
-                card.addEventListener('click', function () {
-                    const marker = streetModalMarkers[card.dataset.code];
-                    if (marker) {
-                        streetModalMap.setView(marker.getLatLng(), Math.max(streetModalMap.getZoom(), 18));
-                        marker.openPopup();
-                    }
-                });
-            });
+            document.getElementById('streetIncCount').textContent = '(' + grand + ')';
+            document.getElementById('streetIncidentList').innerHTML =
+                html || '<div style="font-size:12px;color:#9ca3af;padding:12px;">No street selected.</div>';
         }
 
-        // ---------- street AI: manual, multi-street, token-thrifty ----------
-        const streetAiPicks = new Set();   // streets selected for combined analysis
+        // One delegated listener covers accordion headers AND crime cards
+        document.getElementById('streetIncidentList').addEventListener('click', function (e) {
+            const head = e.target.closest('.sm-acc-head');
+            if (head) {
+                const n = head.dataset.street;
+                if (accCollapsed.has(n)) accCollapsed.delete(n); else accCollapsed.add(n);
+                renderCrimeAccordions();
+                return;
+            }
+            const card = e.target.closest('.sm-inc-card');
+            if (card) {
+                const marker = streetModalMarkers[card.dataset.code];
+                if (marker) {
+                    streetModalMap.setView(marker.getLatLng(), Math.max(streetModalMap.getZoom(), 18));
+                    marker.openPopup();
+                }
+            }
+        });
+
+        // ---------- street AI: manual, analyzes the modal's selected streets ----------
         let latestStreetAi = null;         // last successful result, for Save
         let streetAiSeq = 0;               // stale-response guard
 
-        // Fresh state each time the modal opens: only the clicked street is
-        // selected, and nothing has been analyzed yet
-        function resetStreetAiSection(name) {
-            streetAiPicks.clear();
-            streetAiPicks.add(name);
+        // Fresh AI state each time the modal opens: nothing analyzed yet
+        function resetStreetAiSection() {
             latestStreetAi = null;
             streetAiSeq++;
-
-            document.getElementById('streetAiSearch').value = '';
-            renderStreetAiPicker('');
 
             document.getElementById('streetAiPlaceholder').style.display = 'block';
             document.getElementById('streetAiLoading').style.display = 'none';
@@ -1502,48 +1711,6 @@ if (request()->query('token')) {
             save.innerHTML = '<i class="fas fa-floppy-disk mr-1"></i>Save';
         }
 
-        function updateStreetAiPickCount() {
-            const n = streetAiPicks.size;
-            document.getElementById('streetAiPickCount').textContent = '(' + n + ' selected)';
-        }
-
-        // Checklist of every street; the clicked one is pinned on top and locked
-        // so there is always at least one street to analyze
-        function renderStreetAiPicker(filter) {
-            const q = String(filter || '').toLowerCase().trim();
-            const names = Object.keys(saStreetGroupsAll || {}).sort(function (a, b) { return a.localeCompare(b); });
-            const rows = [];
-
-            names.forEach(function (n) {
-                const isCurrent = n === currentStreetModalName;
-                if (!isCurrent && q && !n.toLowerCase().includes(q)) return;
-                const row = '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#374151;cursor:pointer;padding:2px 0;' + (isCurrent ? 'font-weight:700;' : '') + '">' +
-                    '<input type="checkbox" class="street-ai-cb" value="' + escStreet(n) + '"' +
-                        (streetAiPicks.has(n) ? ' checked' : '') + (isCurrent ? ' disabled' : '') + '>' +
-                    '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escStreet(n) + '">' + escStreet(n) +
-                        (isCurrent ? ' <span style="color:#7c3aed;font-size:9px;">(this street)</span>' : '') + '</span>' +
-                '</label>';
-                if (isCurrent) rows.unshift(row); else rows.push(row);
-            });
-
-            document.getElementById('streetAiPickList').innerHTML =
-                rows.join('') || '<div style="font-size:11px;color:#9ca3af;padding:4px 0;grid-column:1/-1;">No matching streets.</div>';
-            updateStreetAiPickCount();
-        }
-
-        document.getElementById('streetAiPickList').addEventListener('change', function (e) {
-            const cb = e.target;
-            if (!cb.classList || !cb.classList.contains('street-ai-cb')) return;
-            if (cb.checked) streetAiPicks.add(cb.value); else streetAiPicks.delete(cb.value);
-            updateStreetAiPickCount();
-        });
-
-        function clearStreetAiPicks() {
-            streetAiPicks.clear();
-            if (currentStreetModalName) streetAiPicks.add(currentStreetModalName);
-            renderStreetAiPicker(document.getElementById('streetAiSearch').value);
-        }
-
         async function analyzeStreetAi() {
             const seq = ++streetAiSeq;
             const loading = document.getElementById('streetAiLoading');
@@ -1552,7 +1719,8 @@ if (request()->query('token')) {
             const risk = document.getElementById('streetAiRisk');
             const analyzeBtn = document.getElementById('streetAiAnalyzeBtn');
 
-            const picked = Array.from(streetAiPicks);
+            // Analyze exactly what is selected in the modal (map + filter)
+            const picked = modalStreets.slice(0, 10);
             if (!picked.length && currentStreetModalName) picked.push(currentStreetModalName);
             if (!picked.length) return;
 
