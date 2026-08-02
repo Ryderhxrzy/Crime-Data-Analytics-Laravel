@@ -1358,6 +1358,13 @@ class DashboardController extends Controller
             $analysis = $request->input('analysis', []);
             $forecast = $analysis['forecast'] ?? null;
 
+            // Street AI reports (from the crime mapping street modal) have
+            // risk_level + suggestions instead of a forecast — saved through
+            // their own branch into the same table.
+            if (!$forecast && !empty($analysis['risk_level'])) {
+                return $this->saveStreetAiReport($meta, $analysis);
+            }
+
             if (!$forecast || !isset($forecast['direction'])) {
                 return response()->json(['success' => false, 'error' => 'No AI analysis to save. Run the analysis first.'], 422);
             }
@@ -1415,6 +1422,74 @@ class DashboardController extends Controller
 
             return response()->json(['success' => false, 'error' => 'Error saving AI report: '.$e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Persist a street AI report (crime mapping street modal): the risk/summary
+     * becomes one 'analysis' row and every suggestion its own 'recommendation'
+     * row, sharing a batch_key — the same layout pattern-detection saves use,
+     * so the saved-reports pages render them with no changes.
+     */
+    private function saveStreetAiReport(array $meta, array $analysis)
+    {
+        $authData = $this->getAuthUser();
+        $savedBy = $authData['userEmail'] ?? null;
+
+        $streets = array_values(array_filter(array_map('strval', (array) ($meta['streets'] ?? []))));
+        if (empty($streets) && !empty($meta['street'])) {
+            $streets = [(string) $meta['street']];
+        }
+        $label = $streets ? implode(', ', $streets) : 'San Agustin';
+
+        $batchKey = (string) \Illuminate\Support\Str::uuid();
+        $shared = [
+            'batch_key'    => $batchKey,
+            'barangay_name'=> 'San Agustin',
+            'data_source'  => 'real',
+            'scenario'     => ['type' => 'street_advice', 'streets' => $streets],
+            'period_days'  => (int) ($meta['period_days'] ?? 0),
+            'period_start' => $meta['period_start'] ?? null,
+            'period_end'   => $meta['period_end'] ?? null,
+            'records_used' => (int) ($meta['records_used'] ?? 0),
+            'model'        => $meta['model'] ?? null,
+            'saved_by'     => $savedBy,
+        ];
+
+        $risk = strtoupper((string) ($analysis['risk_level'] ?? 'low'));
+        \App\Models\SanAgustinAiReport::create($shared + [
+            'report_type' => 'analysis',
+            'title'       => mb_substr('Street AI advice: ' . $label . ' — ' . $risk . ' RISK', 0, 255),
+            'summary'     => $analysis['summary'] ?? null,
+            'payload'     => [
+                'risk_level'   => $analysis['risk_level'] ?? null,
+                'streets'      => $streets,
+                'key_findings' => [],
+            ],
+        ]);
+
+        $saved = 1;
+        foreach ((array) ($analysis['suggestions'] ?? []) as $rec) {
+            if (empty($rec['action'])) {
+                continue;
+            }
+
+            // street + time_window double as 'location' so these rows render
+            // exactly like pattern-detection recommendations everywhere
+            $location = trim(implode(', ', array_filter([
+                (string) ($rec['street'] ?? $label),
+                (string) ($rec['time_window'] ?? ''),
+            ])));
+
+            \App\Models\SanAgustinAiReport::create($shared + [
+                'report_type' => 'recommendation',
+                'title'       => mb_substr((string) $rec['action'], 0, 255),
+                'summary'     => trim($location !== '' ? $location . ' — ' . ($rec['rationale'] ?? '') : ($rec['rationale'] ?? '')) ?: null,
+                'payload'     => $rec + ['location' => $location],
+            ]);
+            $saved++;
+        }
+
+        return response()->json(['success' => true, 'batch_key' => $batchKey, 'saved_rows' => $saved]);
     }
 
     /**
@@ -1711,12 +1786,20 @@ class DashboardController extends Controller
     public function sanAgustinStreetAiSuggest(Request $request, \App\Services\GeminiPatternAnalysisService $ai)
     {
         try {
-            $street = trim((string) $request->input('street', ''));
-            if ($street === '') {
+            // Accepts one street (?street=) or several (?streets[]=) analyzed together
+            $streets = array_values(array_filter(array_map(
+                fn ($s) => trim((string) $s),
+                (array) $request->input('streets', [])
+            )));
+            if (empty($streets) && $request->filled('street')) {
+                $streets = [trim((string) $request->input('street'))];
+            }
+            if (empty($streets)) {
                 return response()->json(['success' => false, 'error' => 'Missing street name.'], 422);
             }
+            $streets = array_slice(array_unique($streets), 0, 10);   // token thrift: hard cap
 
-            $result = $ai->analyzeStreet($street, (int) $request->input('days', 365));
+            $result = $ai->analyzeStreets($streets, (int) $request->input('days', 365));
 
             $status = ($result['success'] ?? false) ? 200 : 422;
 
