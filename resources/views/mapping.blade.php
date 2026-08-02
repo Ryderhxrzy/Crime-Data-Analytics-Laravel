@@ -1351,8 +1351,22 @@ if (request()->query('token')) {
         let streetModalSeq = 0;           // stale-async guard
         const accCollapsed = new Set();   // streets whose crime group is collapsed
 
-        // Every street stays marked but subtle; only selected streets highlight
-        const MUTED_STREET_STYLE = { color: '#64748b', weight: 1.5, opacity: 0.5 };
+        // Every street stays marked but subtle — in its own crime-level colour
+        // at low opacity, so the color coding reads even before selecting.
+        // Only selected streets render at full strength.
+        function mutedStyleFor(color) {
+            return { color: color || '#64748b', weight: 1.8, opacity: 0.35 };
+        }
+
+        // "21:35" -> "9:35 PM" — every displayed time is 12-hour format
+        function fmt12h(t) {
+            const m = /^(\d{1,2}):(\d{2})/.exec(String(t || ''));
+            if (!m) return String(t || '');
+            let h = parseInt(m[1], 10);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return h + ':' + m[2] + ' ' + ampm;
+        }
 
         // Stable colour per crime category (same golden-angle trick as streets)
         function colorForCategory(cat) {
@@ -1396,7 +1410,7 @@ if (request()->query('token')) {
                 const name = entry[0], g = entry[1];
 
                 const lines = g.inner.map(function (src) {
-                    return L.polyline(src.getLatLngs(), Object.assign({}, MUTED_STREET_STYLE));
+                    return L.polyline(src.getLatLngs(), mutedStyleFor(g.color));
                 });
 
                 // Same grouped hover as the main map: one featureGroup per
@@ -1423,7 +1437,7 @@ if (request()->query('token')) {
                 });
                 grp.on('mouseout', function () {
                     if (modalStreets.indexOf(name) === -1) {
-                        lines.forEach(function (l) { l.setStyle(Object.assign({}, MUTED_STREET_STYLE)); });
+                        lines.forEach(function (l) { l.setStyle(mutedStyleFor(g.color)); });
                     }
                     grp.closeTooltip();   // never leave it hanging open
                 });
@@ -1441,7 +1455,7 @@ if (request()->query('token')) {
             if (!ms) return;
 
             ms.lines.forEach(function (l) {
-                l.setStyle(active ? { color: ms.color, weight: 5, opacity: 1 } : Object.assign({}, MUTED_STREET_STYLE));
+                l.setStyle(active ? { color: ms.color, weight: 5, opacity: 1 } : mutedStyleFor(ms.color));
                 if (active && l.bringToFront) l.bringToFront();
             });
 
@@ -1488,7 +1502,7 @@ if (request()->query('token')) {
                         '<div style="min-width:190px;">' +
                             '<div style="font-weight:800;font-size:12px;color:' + c + ';">' + escStreet(inc.category) + '</div>' +
                             '<div style="font-weight:700;font-size:12px;margin:2px 0;">' + escStreet(inc.title || inc.code) + '</div>' +
-                            '<div style="font-size:11px;color:#4b5563;">' + escStreet(inc.date || '') + (inc.time ? ' · ' + escStreet(inc.time) : '') + '</div>' +
+                            '<div style="font-size:11px;color:#4b5563;">' + escStreet(inc.date || '') + (inc.time ? ' · ' + escStreet(fmt12h(inc.time)) : '') + '</div>' +
                             '<div style="font-size:11px;color:#4b5563;">Status: ' + escStreet(inc.status || '—') + '</div>' +
                             '<div style="font-size:10px;color:#9ca3af;font-family:monospace;margin-top:2px;">' + escStreet(inc.code) + '</div>' +
                         '</div>');
@@ -1744,7 +1758,7 @@ if (request()->query('token')) {
                 '</div>' +
                 '<div style="font-size:13px;font-weight:700;color:#111;margin-top:6px;">' + escStreet(inc.title || 'Crime') + '</div>' +
                 '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><i class="fas fa-calendar mr-1"></i>' +
-                    escStreet(inc.date || '—') + (inc.time ? ' · <i class="fas fa-clock mr-1"></i>' + escStreet(inc.time) : '') + '</div>' +
+                    escStreet(inc.date || '—') + (inc.time ? ' · <i class="fas fa-clock mr-1"></i>' + escStreet(fmt12h(inc.time)) : '') + '</div>' +
                 (inc.description ? '<div style="font-size:11.5px;color:#4b5563;margin-top:6px;line-height:1.45;">' + escStreet(inc.description) + '</div>' : '') +
                 (inc.modus_operandi ? '<div style="font-size:11px;color:#6b7280;margin-top:4px;"><span style="font-weight:700;">Modus:</span> ' + escStreet(inc.modus_operandi) + '</div>' : '') +
                 (meta.length ? '<div style="font-size:11px;color:#6b7280;margin-top:4px;">' + meta.join(' · ') + '</div>' : '') +
@@ -1902,6 +1916,7 @@ if (request()->query('token')) {
                 };
                 const suggCard = function (s, showStreet) {
                     const imp = s.expected_impact || {};
+                    const d = s.details || {};
                     const pct = Number(imp.estimated_change_percent);
                     const pr = String(s.priority || 'low').toLowerCase();
                     return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;">' +
@@ -1912,10 +1927,18 @@ if (request()->query('token')) {
                         (showStreet && s.street ? '<div style="font-size:11px;color:#b45309;font-weight:600;margin-top:3px;"><i class="fas fa-road mr-1"></i>' + escStreet(s.street) + '</div>' : '') +
                         (s.time_window ? '<div style="font-size:11px;color:#6d28d9;font-weight:600;margin-top:3px;"><i class="fas fa-clock mr-1"></i>' + escStreet(s.time_window) + '</div>' : '') +
                         (s.rationale ? '<div style="font-size:11.5px;color:#4b5563;margin-top:4px;line-height:1.45;">' + escStreet(s.rationale) + '</div>' : '') +
-                        (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:5px;">' +
+                        (d.coverage ? '<div style="font-size:11px;color:#374151;margin-top:5px;"><i class="fas fa-location-crosshairs mr-1" style="color:#7c3aed;"></i>' + escStreet(d.coverage) + '</div>' : '') +
+                        (d.steps && d.steps.length ? '<div style="margin-top:6px;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">' +
+                            '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">How to implement</div>' +
+                            d.steps.map(function (st, i2) {
+                                return '<div style="display:flex;gap:6px;font-size:11px;color:#4b5563;line-height:1.5;margin-top:2px;">' +
+                                    '<span style="flex-shrink:0;font-weight:800;color:#7c3aed;">' + (i2 + 1) + '.</span><span>' + escStreet(st) + '</span></div>';
+                            }).join('') + '</div>' : '') +
+                        (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:6px;">' +
                             '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
                             'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer crimes' : 'stable') +
                             (imp.explanation ? ' — <span style="font-weight:400;color:#6b7280;">' + escStreet(imp.explanation) + '</span>' : '') + '</div>' : '') +
+                        (d.kpi ? '<div style="font-size:11px;color:#15803d;font-weight:600;margin-top:3px;"><i class="fas fa-bullseye mr-1"></i>' + escStreet(d.kpi) + '</div>' : '') +
                     '</div>';
                 };
 
