@@ -606,10 +606,23 @@ if (request()->query('token')) {
         #streetModal .sm-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 20px 20px; overflow: hidden; }
         #streetModal .sm-bottom { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 16px; margin-top: 14px; }
         #streetModal .sm-col { min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; }
+        /* Enlarged suggestions: full-width panel + bigger text for readability */
+        #streetModal #streetAiCol.sm-ai-big { grid-column: 1 / -1; }
+        #streetModal .sm-ai-big #streetAiSummary { font-size: 14px !important; line-height: 1.55 !important; }
+        #streetModal .sm-ai-big #streetAiSuggestions,
+        #streetModal .sm-ai-big #streetAiSuggestions * { font-size: 13.5px !important; line-height: 1.55 !important; }
+        /* Fullscreen mode (expand button) */
+        #streetModal.sm-nopad { padding: 0; }
+        #streetModal .sm-card.sm-full { max-width: 100%; width: 100%; height: 100%; border-radius: 0; }
+        #streetModal .sm-card.sm-full #streetModalMap { height: 45vh; }
+        /* Small screens: the whole modal body scrolls as one column */
         @media (max-width: 900px) {
-            #streetModal .sm-body { overflow-y: auto; display: block; }
+            #streetModal { padding: 10px; }
+            #streetModal .sm-card { height: 96%; }
+            #streetModal .sm-body { overflow-y: auto; display: block; -webkit-overflow-scrolling: touch; }
             #streetModal .sm-bottom { grid-template-columns: 1fr; }
             #streetModal .sm-col { overflow-y: visible; }
+            #streetModal .sm-card:not(.sm-full) #streetModalMap { height: 260px !important; }
         }
         #streetModal .sm-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; background: #f3f4f6; color: #374151; }
         #streetModal .sm-inc-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
@@ -630,6 +643,7 @@ if (request()->query('token')) {
     <div id="streetModal" onclick="if(event.target === this) closeStreetModal()">
         <div class="sm-card">
             <button onclick="closeStreetModal()" style="position: absolute; top: 14px; right: 14px; background: none; border: none; font-size: 20px; color: #999; cursor: pointer; z-index: 10; width: 32px; height: 32px;" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#999'"><i class="fas fa-times"></i></button>
+            <button onclick="toggleStreetModalFullscreen()" title="Toggle fullscreen" style="position: absolute; top: 14px; right: 50px; background: none; border: none; font-size: 16px; color: #999; cursor: pointer; z-index: 10; width: 32px; height: 32px;" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#999'"><i id="streetModalFsIcon" class="fas fa-expand"></i></button>
 
             <!-- Header -->
             <div style="padding: 18px 20px 12px; border-bottom: 1px solid #e5e7eb;">
@@ -682,7 +696,7 @@ if (request()->query('token')) {
                 </div>
 
                 <!-- BELOW-RIGHT: AI suggestions -->
-                <div class="sm-col">
+                <div class="sm-col" id="streetAiCol">
                     <!-- AI suggestions (manual — one Gemini call per Analyze click) -->
                     <div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
@@ -690,7 +704,11 @@ if (request()->query('token')) {
                                 <i class="fas fa-shield-halved mr-1" style="color: #7c3aed;"></i>Prevention suggestions
                             </span>
                             <span id="streetAiRisk" style="display: none; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;"></span>
-                            <button id="streetAiSaveBtn" onclick="saveStreetAi()" style="display: none; margin-left: auto; font-size: 11px; font-weight: 700; color: #fff; background: #7c3aed; border: none; border-radius: 8px; padding: 5px 12px; cursor: pointer;">
+                            <button id="streetAiZoomBtn" type="button" onclick="toggleStreetAiSize()" title="Enlarge suggestions for readability"
+                                    style="margin-left: auto; font-size: 11px; font-weight: 700; color: #7c3aed; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 5px 10px; cursor: pointer;">
+                                <i class="fas fa-magnifying-glass-plus"></i>
+                            </button>
+                            <button id="streetAiSaveBtn" onclick="saveStreetAi()" style="display: none; font-size: 11px; font-weight: 700; color: #fff; background: #7c3aed; border: none; border-radius: 8px; padding: 5px 12px; cursor: pointer;">
                                 <i class="fas fa-floppy-disk mr-1"></i>Save
                             </button>
                         </div>
@@ -1638,6 +1656,34 @@ if (request()->query('token')) {
         function closeStreetModal() {
             const m = document.getElementById('streetModal');
             if (m) m.style.display = 'none';
+        }
+
+        // Enlarge/shrink the suggestions panel: full-width + bigger text so
+        // it stays readable on small screens
+        function toggleStreetAiSize() {
+            const col = document.getElementById('streetAiCol');
+            if (!col) return;
+            const big = col.classList.toggle('sm-ai-big');
+            const icon = document.querySelector('#streetAiZoomBtn i');
+            if (icon) icon.className = 'fas ' + (big ? 'fa-magnifying-glass-minus' : 'fa-magnifying-glass-plus');
+        }
+
+        // Expand/compress the modal to fill the screen. The map needs a size
+        // recalc after the container changes, or tiles render half-blank.
+        function toggleStreetModalFullscreen() {
+            const modal = document.getElementById('streetModal');
+            const card = modal ? modal.querySelector('.sm-card') : null;
+            if (!modal || !card) return;
+
+            const full = card.classList.toggle('sm-full');
+            modal.classList.toggle('sm-nopad', full);
+
+            const icon = document.getElementById('streetModalFsIcon');
+            if (icon) icon.className = 'fas ' + (full ? 'fa-compress' : 'fa-expand');
+
+            if (streetModalMap) {
+                setTimeout(function () { streetModalMap.invalidateSize(); }, 60);
+            }
         }
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') closeStreetModal();
