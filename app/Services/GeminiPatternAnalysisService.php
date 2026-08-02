@@ -285,7 +285,7 @@ class GeminiPatternAnalysisService
         // Data fingerprint in the key → the cache refreshes the moment the
         // incident table changes (migrations, new records), never serving
         // stale street counts.
-        $cacheKey = 'street_rules_v3_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
+        $cacheKey = 'street_rules_v4_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($streets, $days) {
             // ALL records, no date cutoff — the street modal lists every crime
@@ -363,7 +363,7 @@ class GeminiPatternAnalysisService
         if ($total === 0) {
             return [
                 'street' => $street, 'risk_level' => 'low', 'total' => 0,
-                'top_categories' => [], 'peak_hours' => [],
+                'top_categories' => [], 'peak_hours' => [], 'categories' => [],
                 'summary' => 'No crimes are recorded on ' . $street . ' — the street is cleared.',
                 'suggestions' => [[
                     'action'      => 'Maintain routine patrol pass-through',
@@ -391,10 +391,6 @@ class GeminiPatternAnalysisService
         $hours = $inc->whereNotNull('hour')->countBy('hour')->sortDesc();
         $peakHour = $hours->keys()->first();
         $peaks = $hours->take(2)->keys()->map(fn ($h) => $this->hour12((int) $h))->values()->all();
-        $window = $peakHour !== null
-            ? $this->hour12((int) $peakHour) . ' - ' . $this->hour12(((int) $peakHour + 3) % 24)
-            : '6:00 PM - 11:00 PM';
-        $night = $peakHour !== null && ($peakHour >= 18 || $peakHour <= 4);
 
         $peakDay = $inc->countBy('dow')->sortDesc()->keys()->first();
         $recent = $inc->filter(fn ($i) => $i['date'] >= $midpoint)->count();
@@ -413,6 +409,33 @@ class GeminiPatternAnalysisService
             . '. The count is ' . ($rising ? 'RISING' : 'steady or falling')
             . ' versus the earlier half of the period.';
 
+        // EVERY crime type on the street gets its own block + suggestion, so
+        // the per-type counts always add up to the street total (the merged
+        // top-3 rationale used to leave types unaccounted — user caught it).
+        $categories = [];
+        $suggestions = [];
+        foreach ($cats as $cat => $n) {
+            $catInc = $inc->filter(fn ($i) => $i['category'] === $cat);
+            $catHours = $catInc->whereNotNull('hour')->countBy('hour')->sortDesc();
+            $catPeak = $catHours->keys()->first();
+            $catWindow = $catPeak !== null
+                ? $this->hour12((int) $catPeak) . ' - ' . $this->hour12(((int) $catPeak + 3) % 24)
+                : '6:00 PM - 11:00 PM';
+            $catNight = $catPeak !== null && ($catPeak >= 18 || $catPeak <= 4);
+            $share = (int) round($n / max(1, $total) * 100);
+
+            $sugg = $this->interventionForCategory((string) $cat, (int) $n, $share, $catWindow, $catNight, $street, $peakDay, $total);
+
+            $categories[] = [
+                'category'   => (string) $cat,
+                'count'      => (int) $n,
+                'share'      => $share,
+                'peak_hours' => $catHours->take(2)->keys()->map(fn ($h) => $this->hour12((int) $h))->values()->all(),
+                'suggestion' => $sugg,
+            ];
+            $suggestions[] = $sugg + ['category' => (string) $cat];
+        }
+
         return [
             'street'         => $street,
             'risk_level'     => $risk,
@@ -420,7 +443,8 @@ class GeminiPatternAnalysisService
             'top_categories' => $cats->take(3)->keys()->values()->all(),
             'peak_hours'     => $peaks,
             'summary'        => $summary,
-            'suggestions'    => $this->interventionsForCategories($cats, $window, $night, $street, $risk, $total, $peakDay),
+            'categories'     => $categories,
+            'suggestions'    => $suggestions,
         ];
     }
 
@@ -463,99 +487,78 @@ class GeminiPatternAnalysisService
     ];
 
     /**
-     * Category → intervention playbook (same fixed menu as pattern detection,
-     * effect sizes from published crime-prevention research). Max 3 per street,
-     * each with concrete steps, coverage guidance and a measurable target.
+     * ONE tailored intervention per crime type (fixed menu shared with pattern
+     * detection, research effect sizes), with steps, coverage and a target.
      */
-    private function interventionsForCategories(Collection $cats, string $window, bool $night, string $street, string $risk, int $total, ?string $peakDay): array
+    private function interventionForCategory(string $cat, int $n, int $share, string $window, bool $night, string $street, ?string $peakDay, int $total): array
     {
-        $picks = [];   // action => ['pct', 'explanation', 'because' => [], 'cases' => n]
+        $c = mb_strtolower($cat);
 
-        $add = function (string $action, int $pct, string $explanation, string $because, int $cases) use (&$picks) {
-            if (! isset($picks[$action])) {
-                $picks[$action] = ['pct' => $pct, 'explanation' => $explanation, 'because' => [], 'cases' => 0];
-            }
-            $picks[$action]['because'][] = $because;
-            $picks[$action]['cases'] += $cases;
-        };
-
-        foreach ($cats->take(3)->keys() as $cat) {
-            $c = mb_strtolower((string) $cat);
-            $n = (int) $cats[$cat];
-            $share = (int) round($n / max(1, $total) * 100);
-            $because = $n . ' ' . $cat . ' case' . ($n === 1 ? '' : 's') . ' (' . $share . '% of this street\'s crimes)';
-
-            if (str_contains($c, 'vehicle') || str_contains($c, 'carnap')) {
-                $add('Set up checkpoint', -13, 'Access control and checkpoints cut vehicle crime by ~13% (research).', $because, $n);
-                $add('Install CCTV', -13, 'Cameras on entry/exit points deter and trace vehicle theft.', $because, $n);
-            } elseif (str_contains($c, 'theft')) {
-                $add('Deploy roving tanod patrol (ronda)', -20, 'Hot-spot patrols cut street crime by ~15-25% (research).', $because, $n);
-                $add('Install CCTV', -13, 'CCTV reduces area crime by ~13% and helps identify suspects.', $because, $n);
-            } elseif (str_contains($c, 'robbery') || str_contains($c, 'holdap')) {
-                $add('Deploy roving tanod patrol (ronda)', -22, 'Visible patrols deter robbery during its peak hours.', $because, $n);
-                $add('Install streetlights', -20, 'Improved lighting cuts night street crime by ~20% (research).', $because, $n);
-            } elseif (str_contains($c, 'burglary') || str_contains($c, 'akyat')) {
-                $add('Organize community watch', -16, 'Neighborhood watch reduces burglary by ~16% (research).', $because, $n);
-                $add('Run crime-awareness drive', -10, 'Target-hardening advice (locks, lighting, timers) lowers break-ins.', $because, $n);
-            } elseif (str_contains($c, 'assault') || str_contains($c, 'injur') || str_contains($c, 'homicide') || str_contains($c, 'murder')) {
-                $add('Deploy roving tanod patrol (ronda)', -18, 'Patrol presence at peak hours interrupts violent confrontations.', $because, $n);
-                if ($night) {
-                    $add('Install streetlights', -20, 'Improved lighting cuts night street crime by ~20% (research).', $because, $n);
-                }
-            } elseif (str_contains($c, 'sexual') || str_contains($c, 'rape')) {
-                $add('Install streetlights', -20, 'Lighting removes the dark segments where offenders strike.', $because, $n);
-                $add('Deploy roving tanod patrol (ronda)', -18, 'Patrol presence protects the peak-hour window.', $because, $n);
-            } elseif (str_contains($c, 'fraud') || str_contains($c, 'estafa') || str_contains($c, 'scam')) {
-                $add('Run crime-awareness drive', -10, 'Scam-awareness campaigns reduce fraud victimization.', $because, $n);
-            } elseif (str_contains($c, 'domestic') || str_contains($c, 'vawc')) {
-                $add('Run crime-awareness drive', -10, 'VAWC awareness plus barangay protection-order info reaches victims early.', $because, $n);
-                $add('Organize community watch', -16, 'Trained neighbors spot and report abuse earlier.', $because, $n);
-            } elseif (str_contains($c, 'drug')) {
-                $add('Set up checkpoint', -13, 'Checkpoints disrupt the transport of illegal drugs.', $because, $n);
-                $add('Deploy roving tanod patrol (ronda)', -18, 'Patrols displace open drug activity.', $because, $n);
-            } else {
-                $add('Deploy roving tanod patrol (ronda)', -15, 'Hot-spot patrols reduce most street crime types.', $because, $n);
-            }
+        if (str_contains($c, 'vehicle') || str_contains($c, 'carnap')) {
+            $action = 'Set up checkpoint';
+            $pct = -13;
+            $explanation = 'Access control and checkpoints cut vehicle crime by ~13% (research).';
+        } elseif (str_contains($c, 'theft')) {
+            $action = 'Deploy roving tanod patrol (ronda)';
+            $pct = -20;
+            $explanation = 'Hot-spot patrols cut street crime by ~15-25% (research).';
+        } elseif (str_contains($c, 'robbery') || str_contains($c, 'holdap')) {
+            $action = $night ? 'Install streetlights' : 'Deploy roving tanod patrol (ronda)';
+            $pct = $night ? -20 : -22;
+            $explanation = $night
+                ? 'Improved lighting cuts night street crime by ~20% (research).'
+                : 'Visible patrols deter robbery during its peak hours.';
+        } elseif (str_contains($c, 'burglary') || str_contains($c, 'akyat')) {
+            $action = 'Organize community watch';
+            $pct = -16;
+            $explanation = 'Neighborhood watch reduces burglary by ~16% (research).';
+        } elseif (str_contains($c, 'assault') || str_contains($c, 'injur') || str_contains($c, 'homicide') || str_contains($c, 'murder')) {
+            $action = 'Deploy roving tanod patrol (ronda)';
+            $pct = -18;
+            $explanation = 'Patrol presence at peak hours interrupts violent confrontations.';
+        } elseif (str_contains($c, 'sexual') || str_contains($c, 'rape')) {
+            $action = 'Install streetlights';
+            $pct = -20;
+            $explanation = 'Lighting removes the dark segments where offenders strike.';
+        } elseif (str_contains($c, 'fraud') || str_contains($c, 'estafa') || str_contains($c, 'scam')) {
+            $action = 'Run crime-awareness drive';
+            $pct = -10;
+            $explanation = 'Scam-awareness campaigns reduce fraud victimization.';
+        } elseif (str_contains($c, 'domestic') || str_contains($c, 'vawc')) {
+            $action = 'Run crime-awareness drive';
+            $pct = -10;
+            $explanation = 'VAWC awareness plus barangay protection-order info reaches victims early.';
+        } elseif (str_contains($c, 'drug')) {
+            $action = 'Set up checkpoint';
+            $pct = -13;
+            $explanation = 'Checkpoints disrupt the transport of illegal drugs.';
+        } else {
+            $action = 'Deploy roving tanod patrol (ronda)';
+            $pct = -15;
+            $explanation = 'Hot-spot patrols reduce most street crime types.';
         }
 
-        if ($night) {
-            $add('Install streetlights', -20, 'Improved lighting cuts night crime by ~20% (research).', 'crimes here peak at night', 0);
-        }
+        $prevented = max(1, (int) round($n * abs($pct) / 100));
 
-        $out = [];
-        $i = 0;
-        $prioForFirst = $risk === 'high' ? 'high' : ($risk === 'medium' ? 'medium' : 'low');
-        foreach ($picks as $action => $p) {
-            if ($i >= 3) {
-                break;
-            }
-
-            // Rough but concrete target: effect size applied to the cases this
-            // action addresses on this street
-            $prevented = max(1, (int) round(max($p['cases'], 1) * abs($p['pct']) / 100));
-
-            $out[] = [
-                'action'      => $action,
-                'time_window' => $window,
-                'rationale'   => 'Driven by ' . implode(', ', array_unique($p['because'])) . ' on ' . $street . '.',
-                'details'     => [
-                    'coverage' => 'Cover ' . $street . ' during ' . $window
-                        . ($peakDay ? ', with extra attention on ' . $peakDay . 's (its busiest day)' : '') . '.',
-                    'steps'    => self::ACTION_STEPS[$action] ?? [],
-                    'kpi'      => 'Target: roughly ' . $prevented . ' fewer case' . ($prevented === 1 ? '' : 's')
-                        . ' on this street over the same period if sustained.',
-                ],
-                'expected_impact' => [
-                    'direction' => 'decrease',
-                    'estimated_change_percent' => $p['pct'],
-                    'explanation' => $p['explanation'],
-                ],
-                'priority' => $i === 0 ? $prioForFirst : ($i === 1 ? 'medium' : 'low'),
-            ];
-            $i++;
-        }
-
-        return $out;
+        return [
+            'action'      => $action,
+            'time_window' => $window,
+            'rationale'   => $n . ' of the ' . $total . ' crimes here (' . $share . '%) are ' . $cat
+                . ($window ? ', concentrated around ' . $window : '') . ' on ' . $street . '.',
+            'details'     => [
+                'coverage' => 'Cover ' . $street . ' during ' . $window
+                    . ($peakDay ? ', with extra attention on ' . $peakDay . 's (its busiest day)' : '') . '.',
+                'steps'    => self::ACTION_STEPS[$action] ?? [],
+                'kpi'      => 'Target: roughly ' . $prevented . ' fewer ' . $cat . ' case' . ($prevented === 1 ? '' : 's')
+                    . ' on this street over the same period if sustained.',
+            ],
+            'expected_impact' => [
+                'direction' => 'decrease',
+                'estimated_change_percent' => $pct,
+                'explanation' => $explanation,
+            ],
+            'priority' => $share >= 40 ? 'high' : ($share >= 20 ? 'medium' : 'low'),
+        ];
     }
 
     /**
