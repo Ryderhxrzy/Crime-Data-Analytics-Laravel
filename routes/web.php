@@ -91,8 +91,10 @@ Route::middleware('jwt.api')->group(function () {
         ->name('pattern-detection.street-stats');
     Route::get('/pattern-detection/street-detail', [DashboardController::class, 'sanAgustinStreetDetail'])
         ->name('pattern-detection.street-detail');
+    // Default engine is the instant rule-based one, so the throttle is roomy;
+    // the Gemini fallback (?ai=1) stays inside it too.
     Route::get('/pattern-detection/street-ai-suggest', [DashboardController::class, 'sanAgustinStreetAiSuggest'])
-        ->middleware('throttle:10,1')
+        ->middleware('throttle:30,1')
         ->name('pattern-detection.street-ai-suggest');
     Route::post('/pattern-detection/ai-save', [DashboardController::class, 'saveAiAnalysis'])
         ->name('pattern-detection.ai-save');
