@@ -1629,13 +1629,32 @@ class DashboardController extends Controller
     }
 
     /**
+     * Fingerprint of the San Agustin incident table. Caches keyed by this
+     * refresh AUTOMATICALLY the moment the data changes (e.g. a migration
+     * relocates rows) — a plain TTL kept serving stale hover counts.
+     */
+    private function sanAgustinDataFingerprint(): string
+    {
+        try {
+            $row = \App\Models\SanAgustinIncident::query()
+                ->selectRaw('COUNT(*) AS c, MAX(updated_at) AS u, MAX(id) AS m')
+                ->first();
+
+            return md5(($row->c ?? 0) . '|' . ($row->u ?? '') . '|' . ($row->m ?? 0));
+        } catch (\Exception $e) {
+            return 'nofp';
+        }
+    }
+
+    /**
      * Per-street incident stats for the San Agustin street map
      * (hover tooltips: count, dominant crime, peak hours).
      */
     public function sanAgustinStreetStats()
     {
         try {
-            $stats = \Illuminate\Support\Facades\Cache::remember('sa_street_stats_v2', now()->addMinutes(10), function () {
+            $cacheKey = 'sa_street_stats_v3_' . $this->sanAgustinDataFingerprint();
+            $stats = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(10), function () {
                 $rows = \App\Models\SanAgustinIncident::query()
                     ->get(['incident_code', 'address_details', 'category_name', 'incident_date', 'incident_time', 'latitude', 'longitude']);
 
@@ -1707,7 +1726,7 @@ class DashboardController extends Controller
                 return response()->json(['error' => 'Missing street name.'], 422);
             }
 
-            $cacheKey = 'sa_street_detail_v1_' . md5(mb_strtolower($street));
+            $cacheKey = 'sa_street_detail_v2_' . md5(mb_strtolower($street) . '|' . $this->sanAgustinDataFingerprint());
             $payload = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(10), function () use ($street) {
                 $rows = \App\Models\SanAgustinIncident::query()
                     ->orderByDesc('incident_date')
