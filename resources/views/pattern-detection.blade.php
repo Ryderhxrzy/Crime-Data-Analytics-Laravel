@@ -9,7 +9,7 @@
     <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
         <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Pattern Detection</h1>
         <p class="text-gray-600 mt-1 text-sm lg:text-base">
-            Analyze recorded incidents (real data), or run a what-if <span class="font-semibold text-amber-700">simulation</span> to model how crime could rise or be prevented.
+            Analyze recorded crimes (real data), or run a what-if <span class="font-semibold text-amber-700">simulation</span> to model how crime could rise or be prevented.
         </p>
 
         <!-- Mode tabs: real data vs simulation are fully separate views -->
@@ -32,7 +32,7 @@
         <div class="mb-4 pb-4 border-b border-gray-200 flex items-center gap-2">
             <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-100 text-blue-700"><i class="fas fa-database text-sm"></i></span>
             <h3 class="text-sm font-bold text-gray-900">Real Data Analysis</h3>
-            <span class="text-xs text-gray-400">— recorded incidents only</span>
+            <span class="text-xs text-gray-400">— recorded crimes only</span>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -71,18 +71,18 @@
                 </button>
             </div>
         </div>
-        <p class="text-xs text-gray-500 mb-4">Gemini analyzes recorded San Agustin incidents, forecasts whether crime will rise or fall, and suggests interventions with their projected effect.</p>
+        <p class="text-xs text-gray-500 mb-4">Gemini analyzes recorded San Agustin crimes, forecasts whether crime will rise or fall, and suggests interventions with their projected effect.</p>
 
         <!-- placeholder -->
         <div id="aiPlaceholder" class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
             <i class="fas fa-wand-magic-sparkles text-violet-400 text-xl mb-2 block"></i>
-            Click <span class="font-semibold text-blue-700">Analyze Real Data</span> to generate the AI forecast and recommendations from recorded incidents.
+            Click <span class="font-semibold text-blue-700">Analyze Real Data</span> to generate the AI forecast and recommendations from recorded crimes.
         </div>
 
         <!-- loading -->
         <div id="aiLoading" class="hidden rounded-lg bg-violet-50 border border-violet-200 p-6 text-center">
             <i class="fas fa-spinner fa-spin text-2xl text-violet-600 mb-2"></i>
-            <div class="text-sm font-semibold text-violet-900">Gemini is analyzing San Agustin incidents&hellip;</div>
+            <div class="text-sm font-semibold text-violet-900">Gemini is analyzing San Agustin crimes&hellip;</div>
         </div>
 
         <!-- error -->
@@ -133,7 +133,7 @@
     <!-- Loading -->
     <div id="loadingState" class="hidden bg-white rounded-xl border border-gray-200 p-12 text-center">
         <i class="fas fa-spinner fa-spin text-3xl text-alertara-700 mb-3"></i>
-        <div class="text-sm font-semibold text-gray-900">Analyzing incident patterns&hellip;</div>
+        <div class="text-sm font-semibold text-gray-900">Analyzing crime patterns&hellip;</div>
     </div>
 
     <!-- Error -->
@@ -229,7 +229,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Repeat clusters -->
             <div class="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 class="text-lg font-bold text-gray-900 mb-2"><i class="fas fa-layer-group mr-2 text-alertara-600"></i>Repeat / Cluster Incidents</h2>
+                <h2 class="text-lg font-bold text-gray-900 mb-2"><i class="fas fa-layer-group mr-2 text-alertara-600"></i>Repeat / Cluster Crimes</h2>
                 <p id="clusterRule" class="text-xs text-gray-500 mb-4"></p>
                 <div id="clusterList" class="space-y-3 max-h-96 overflow-y-auto"></div>
             </div>
@@ -937,7 +937,7 @@
         $('preventionResultText').textContent =
             pr.active.join(', ') + ' cut the surge by ~' + pr.percent + '% — about ' +
             pr.prevented.toLocaleString() + ' of ' + pr.target.toLocaleString() +
-            ' simulated incidents prevented on the targeted area.';
+            ' simulated crimes prevented on the targeted area.';
         box.classList.remove('hidden');
     }
 
@@ -1033,7 +1033,7 @@
                 beginAtZero: true,
                 grid: { color: GRID, drawBorder: false },
                 ticks: { color: TICK, font: { size: 10 }, precision: 0 },
-                title: { display: true, text: 'Incidents', color: TICK, font: { size: 10 } }
+                title: { display: true, text: 'Crimes', color: TICK, font: { size: 10 } }
             }
         }
     });
@@ -1043,7 +1043,7 @@
         const hasSim = series.some(s => (s.simulated || 0) > 0);
 
         const real = {
-            label: hasSim ? 'Real' : 'Incidents',
+            label: hasSim ? 'Real' : 'Crimes',
             data: series.map(s => (s.real !== undefined ? s.real : s.count)),
             backgroundColor: type === 'line' ? 'rgba(42,120,214,0.12)' : SERIES_REAL,
             borderColor: SERIES_REAL,
@@ -1108,7 +1108,7 @@
         el.innerHTML =
             '<span class="inline-flex items-center gap-1.5 mr-4">' +
                 '<span style="width:10px;height:10px;border-radius:2px;background:' + SERIES_REAL + '" class="inline-block"></span>' +
-                '<span class="text-[11px] text-gray-600">' + (hasSim ? 'Real' : 'Incidents') + '</span>' +
+                '<span class="text-[11px] text-gray-600">' + (hasSim ? 'Real' : 'Crimes') + '</span>' +
             '</span>' +
             (hasSim ?
             '<span class="inline-flex items-center gap-1.5">' +
@@ -1145,12 +1145,12 @@
             '<div class="bg-gray-50 border border-gray-200 rounded-lg p-3">' +
                 '<div class="text-[10px] font-bold text-gray-400 uppercase">Peak Hour</div>' +
                 '<div class="text-lg font-bold text-gray-900">' + (tp.peak_hour_label || '—') + '</div>' +
-                '<div class="text-[11px] text-gray-500">' + tp.peak_hour_count + ' incidents</div>' +
+                '<div class="text-[11px] text-gray-500">' + tp.peak_hour_count + ' crimes</div>' +
             '</div>' +
             '<div class="bg-gray-50 border border-gray-200 rounded-lg p-3">' +
                 '<div class="text-[10px] font-bold text-gray-400 uppercase">Peak Day</div>' +
                 '<div class="text-lg font-bold text-gray-900">' + esc(tp.peak_day || '—') + '</div>' +
-                '<div class="text-[11px] text-gray-500">' + tp.peak_day_count + ' incidents</div>' +
+                '<div class="text-[11px] text-gray-500">' + tp.peak_day_count + ' crimes</div>' +
             '</div>' +
             '<div class="bg-gray-50 border border-gray-200 rounded-lg p-3 col-span-2">' +
                 '<div class="text-[10px] font-bold text-gray-400 uppercase">Weekday vs Weekend</div>' +
@@ -1172,7 +1172,7 @@
 
     function renderHotspots(hotspots) {
         if (!hotspots.length) {
-            $('hotspotList').innerHTML = '<p class="text-sm text-gray-500">No location clusters found — incidents are too scattered, or there are too few records.</p>';
+            $('hotspotList').innerHTML = '<p class="text-sm text-gray-500">No location clusters found — crimes are too scattered, or there are too few records.</p>';
             return;
         }
 
@@ -1183,7 +1183,7 @@
                     '<div class="text-sm font-semibold text-gray-900">' + esc(h.dominant_category) +
                         (h.simulated_count > 0 ? ' <span class="text-amber-700 text-xs font-normal">(' + h.simulated_count + ' sim)</span>' : '') +
                     '</div>' +
-                    '<div class="text-xs text-gray-500 mt-0.5">' + h.count + ' incidents · ' + h.share_percent + '% of all · ~' + h.radius_meters + 'm radius</div>' +
+                    '<div class="text-xs text-gray-500 mt-0.5">' + h.count + ' crimes · ' + h.share_percent + '% of all · ~' + h.radius_meters + 'm radius</div>' +
                     '<div class="text-[11px] text-gray-400 font-mono mt-0.5">' + h.latitude + ', ' + h.longitude + '</div>' +
                 '</div>' +
             '</div>').join('');
@@ -1191,8 +1191,8 @@
 
     function renderClusters(clusters) {
         $('clusterRule').textContent = clusters.length
-            ? 'Incidents within ' + clusters[0].radius_meters + 'm of each other and inside a ' + clusters[0].window_hours + '-hour window.'
-            : 'Incidents within 250m of each other and inside a 72-hour window.';
+            ? 'Crimes within ' + clusters[0].radius_meters + 'm of each other and inside a ' + clusters[0].window_hours + '-hour window.'
+            : 'Crimes within 250m of each other and inside a 72-hour window.';
 
         if (!clusters.length) {
             $('clusterList').innerHTML = '<p class="text-sm text-gray-500">No repeat clusters detected in this period.</p>';
@@ -1202,7 +1202,7 @@
         $('clusterList').innerHTML = clusters.map(c =>
             '<div class="p-3 rounded-lg border border-gray-200">' +
                 '<div class="flex justify-between items-start mb-2">' +
-                    '<div class="text-sm font-bold text-gray-900">' + c.incident_count + ' incidents in ' +
+                    '<div class="text-sm font-bold text-gray-900">' + c.incident_count + ' crimes in ' +
                         (c.span_days === 0 ? 'the same day' : c.span_days + ' day(s)') + '</div>' +
                     (c.simulated_count > 0 ? '<span class="px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold">' + c.simulated_count + ' SIM</span>' : '') +
                 '</div>' +
@@ -1222,7 +1222,7 @@
     function renderAnomalies(a) {
         $('anomalyRule').textContent = a.note
             ? a.note
-            : 'Days beyond 2 standard deviations from the period mean of ' + a.mean + ' incidents/day (threshold ' + a.threshold + ').';
+            : 'Days beyond 2 standard deviations from the period mean of ' + a.mean + ' crimes/day (threshold ' + a.threshold + ').';
 
         if (!a.detected.length) {
             $('anomalyList').innerHTML = '<p class="text-sm text-gray-500">No statistical outliers detected in this period.</p>';

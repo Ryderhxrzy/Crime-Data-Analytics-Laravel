@@ -108,7 +108,7 @@ if (request()->query('token')) {
             <div class="bg-white border border-gray-200 rounded-lg p-6" style="position: relative; z-index: 1;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h2 class="text-lg font-bold text-gray-900">
-                        <i class="fas fa-map mr-2 text-alertara-600"></i>Crime Incident Map
+                        <i class="fas fa-map mr-2 text-alertara-600"></i>Crime Map
                     </h2>
                     <button id="mapFullscreenBtn" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm" title="Toggle Fullscreen Map">
                         <i class="fas fa-expand"></i>
@@ -224,7 +224,7 @@ if (request()->query('token')) {
                                 <div id="statTotalCrime" class="text-2xl font-bold">0</div>
                             </div>
                             <div class="bg-gradient-to-br from-amber-600 to-amber-500 text-white p-4 rounded-lg shadow-sm">
-                                <div class="text-xs opacity-90 mb-1">Incidents</div>
+                                <div class="text-xs opacity-90 mb-1">Crimes</div>
                                 <div id="statTotalIncident" class="text-2xl font-bold">0</div>
                             </div>
                             <div class="bg-gradient-to-br from-green-600 to-green-500 text-white p-4 rounded-lg shadow-sm">
@@ -245,9 +245,9 @@ if (request()->query('token')) {
                         <div id="incidentsPanel" style="background: rgba(255, 255, 255, 0.98); border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; flex-grow: 1;">
                             <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
                                 <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0 0 10px;">
-                                    <i class="fas fa-list mr-2" style="color: #274d4c;"></i>Crime Incidents
+                                    <i class="fas fa-list mr-2" style="color: #274d4c;"></i>Crimes
                                 </h3>
-                                <input type="text" id="incidentSearch" placeholder="Search incidents..." style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; box-sizing: border-box;">
+                                <input type="text" id="incidentSearch" placeholder="Search crimes..." style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; box-sizing: border-box;">
                             </div>
                             <div id="incidentList" style="overflow-y: auto; flex-grow: 1; max-height: 350px;">
                                 <!-- Skeleton loading -->
@@ -390,35 +390,35 @@ if (request()->query('token')) {
                             <div style="width: 20px; height: 20px; border-radius: 4px; background: #3b82f6;"></div>
                             <div style="font-size: 11px; color: #555;">
                                 <div style="font-weight: 600;">Low density</div>
-                                <div style="font-size: 10px; color: #999;">1-5 incidents</div>
+                                <div style="font-size: 10px; color: #999;">1-5 crimes</div>
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <div style="width: 20px; height: 20px; border-radius: 4px; background: #2ecc71;"></div>
                             <div style="font-size: 11px; color: #555;">
                                 <div style="font-weight: 600;">Low-Medium</div>
-                                <div style="font-size: 10px; color: #999;">6-15 incidents</div>
+                                <div style="font-size: 10px; color: #999;">6-15 crimes</div>
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <div style="width: 20px; height: 20px; border-radius: 4px; background: #f39c12;"></div>
                             <div style="font-size: 11px; color: #555;">
                                 <div style="font-weight: 600;">Medium density</div>
-                                <div style="font-size: 10px; color: #999;">16-30 incidents</div>
+                                <div style="font-size: 10px; color: #999;">16-30 crimes</div>
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <div style="width: 20px; height: 20px; border-radius: 4px; background: #e74c3c;"></div>
                             <div style="font-size: 11px; color: #555;">
                                 <div style="font-weight: 600;">High density</div>
-                                <div style="font-size: 10px; color: #999;">31-50 incidents</div>
+                                <div style="font-size: 10px; color: #999;">31-50 crimes</div>
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px; grid-column: 1 / -1;">
                             <div style="width: 20px; height: 20px; border-radius: 4px; background: #c0392b;"></div>
                             <div style="font-size: 11px; color: #555;">
                                 <div style="font-weight: 600;">Critical hotspot</div>
-                                <div style="font-size: 10px; color: #999;">50+ incidents</div>
+                                <div style="font-size: 10px; color: #999;">50+ crimes</div>
                             </div>
                         </div>
                     </div>
@@ -465,21 +465,21 @@ if (request()->query('token')) {
                                 <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #16a34a 0%, #16a34add 100%); border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>
                                 <div style="font-size: 11px; color: #555;">
                                     <div style="font-weight: 600;">Green</div>
-                                    <div style="font-size: 10px; color: #999;">1-10 incidents</div>
+                                    <div style="font-size: 10px; color: #999;">1-10 crimes</div>
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #eab308 0%, #eab308dd 100%); border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>
                                 <div style="font-size: 11px; color: #555;">
                                     <div style="font-weight: 600;">Yellow</div>
-                                    <div style="font-size: 10px; color: #999;">11-30 incidents</div>
+                                    <div style="font-size: 10px; color: #999;">11-30 crimes</div>
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #dc2626 0%, #dc2626dd 100%); border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>
                                 <div style="font-size: 11px; color: #555;">
                                     <div style="font-weight: 600;">Red</div>
-                                    <div style="font-size: 10px; color: #999;">31+ incidents</div>
+                                    <div style="font-size: 10px; color: #999;">31+ crimes</div>
                                 </div>
                             </div>
                         </div>
@@ -626,7 +626,7 @@ if (request()->query('token')) {
                 <!-- LEFT: filtered street map + AI suggestions -->
                 <div style="min-width: 0;">
                     <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
-                        <i class="fas fa-map-location-dot mr-1" style="color: #274d4c;"></i>Street map — incidents plotted where they happened
+                        <i class="fas fa-map-location-dot mr-1" style="color: #274d4c;"></i>Street map — crimes plotted where they happened
                     </div>
                     <div id="streetModalMap" style="height: 300px; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;"></div>
 
@@ -655,10 +655,10 @@ if (request()->query('token')) {
                 <!-- RIGHT: full incident details -->
                 <div style="min-width: 0;">
                     <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
-                        <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Incidents on this street <span id="streetIncCount" style="color: #274d4c;"></span>
+                        <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Crimes on this street <span id="streetIncCount" style="color: #274d4c;"></span>
                     </div>
                     <div id="streetIncidentList" style="display: grid; gap: 8px; align-content: start;">
-                        <div style="font-size: 12px; color: #9ca3af; padding: 12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading incidents…</div>
+                        <div style="font-size: 12px; color: #9ca3af; padding: 12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes…</div>
                     </div>
                 </div>
             </div>
@@ -1099,11 +1099,11 @@ if (request()->query('token')) {
                         // hovered line is easy to match by eye
                         '<div style="margin-bottom:3px;"><span style="display:inline-block;width:28px;height:5px;border-radius:3px;background:' + g.color + ';vertical-align:middle;"></span></div>' +
                         (st
-                            ? '<div>' + st.count + ' incident' + (st.count === 1 ? '' : 's') +
+                            ? '<div>' + st.count + ' crime' + (st.count === 1 ? '' : 's') +
                               (st.top_category ? ' · mostly ' + escStreet(st.top_category) : '') + '</div>' +
                               (st.peak_hours && st.peak_hours.length
                                   ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(escStreet).join(', ') + '</div>' : '')
-                            : '<div>No recorded incidents</div>') +
+                            : '<div>No recorded crimes</div>') +
                         '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> Click for full details &amp; AI advice</div>';
 
                     // No bringToFront() here on purpose: raising the SVG path
@@ -1243,7 +1243,7 @@ if (request()->query('token')) {
                 '<span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>';
             document.getElementById('streetIncCount').textContent = '';
             document.getElementById('streetIncidentList').innerHTML =
-                '<div style="font-size:12px;color:#9ca3af;padding:12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading incidents…</div>';
+                '<div style="font-size:12px;color:#9ca3af;padding:12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes…</div>';
 
             document.getElementById('streetModal').style.display = 'flex';
 
@@ -1293,14 +1293,14 @@ if (request()->query('token')) {
             } catch (e) {
                 console.error('Street detail failed:', e);
                 document.getElementById('streetIncidentList').innerHTML =
-                    '<div style="font-size:12px;color:#b91c1c;padding:12px;">Could not load incidents for this street.</div>';
+                    '<div style="font-size:12px;color:#b91c1c;padding:12px;">Could not load crimes for this street.</div>';
             }
         }
 
         function renderStreetSummary(s) {
             const pills = [];
             pills.push('<span class="sm-pill"><i class="fas fa-triangle-exclamation" style="color:#b45309;"></i>' +
-                (s.count || 0) + ' incident' + (s.count === 1 ? '' : 's') + '</span>');
+                (s.count || 0) + ' crime' + (s.count === 1 ? '' : 's') + '</span>');
             if (s.top_category) {
                 pills.push('<span class="sm-pill"><span style="width:9px;height:9px;border-radius:50%;background:' +
                     colorForCategory(s.top_category) + ';display:inline-block;"></span>Mostly ' + escStreet(s.top_category) + '</span>');
@@ -1321,7 +1321,7 @@ if (request()->query('token')) {
 
             if (!incidents.length) {
                 document.getElementById('streetIncidentList').innerHTML =
-                    '<div style="font-size:12px;color:#9ca3af;padding:12px;">No recorded incidents on this street.</div>';
+                    '<div style="font-size:12px;color:#9ca3af;padding:12px;">No recorded crimes on this street.</div>';
                 return;
             }
 
@@ -1359,7 +1359,7 @@ if (request()->query('token')) {
                             (['solved','resolved','closed','cleared'].indexOf(String(inc.status || '').toLowerCase()) >= 0 ? '#15803d' : '#b45309') + ';">' +
                             escStreet(String(inc.status || '—').toUpperCase()) + '</span>' +
                     '</div>' +
-                    '<div style="font-size:13px;font-weight:700;color:#111;margin-top:6px;">' + escStreet(inc.title || 'Incident') + '</div>' +
+                    '<div style="font-size:13px;font-weight:700;color:#111;margin-top:6px;">' + escStreet(inc.title || 'Crime') + '</div>' +
                     '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><i class="fas fa-calendar mr-1"></i>' +
                         escStreet(inc.date || '—') + (inc.time ? ' · <i class="fas fa-clock mr-1"></i>' + escStreet(inc.time) : '') + '</div>' +
                     (inc.description ? '<div style="font-size:11.5px;color:#4b5563;margin-top:6px;line-height:1.45;">' + escStreet(inc.description) + '</div>' : '') +
@@ -1431,7 +1431,7 @@ if (request()->query('token')) {
                         (s.rationale ? '<div style="font-size:11.5px;color:#4b5563;margin-top:4px;line-height:1.45;">' + escStreet(s.rationale) + '</div>' : '') +
                         (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:5px;">' +
                             '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
-                            'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer incidents' : 'stable') +
+                            'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer crimes' : 'stable') +
                             (imp.explanation ? ' — <span style="font-weight:400;color:#6b7280;">' + escStreet(imp.explanation) + '</span>' : '') + '</div>' : '') +
                     '</div>';
                 }).join('') || '<div style="font-size:12px;color:#9ca3af;">No suggestions returned.</div>';
@@ -1864,7 +1864,7 @@ if (request()->query('token')) {
                 }
             } catch (error) {
                 console.error('Error loading crime data:', error);
-                document.getElementById('incidentListContent').innerHTML = '<div style="text-align: center; padding: 20px; color: #e74c3c; font-size: 12px;">Error loading incidents. Please try again.</div>';
+                document.getElementById('incidentListContent').innerHTML = '<div style="text-align: center; padding: 20px; color: #e74c3c; font-size: 12px;">Error loading crimes. Please try again.</div>';
                 document.getElementById('incidentSkeletonLoader').style.display = 'none';
                 document.getElementById('incidentListContent').style.display = 'block';
             } finally {
@@ -1912,7 +1912,7 @@ if (request()->query('token')) {
             if (data.length === 0) {
                 skeletonLoader.style.display = 'none';
                 listContent.style.display = 'block';
-                listContent.innerHTML = '<div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">No incidents found</div>';
+                listContent.innerHTML = '<div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">No crimes found</div>';
                 return;
             }
 
@@ -1930,7 +1930,7 @@ if (request()->query('token')) {
             if (filteredData.length === 0) {
                 skeletonLoader.style.display = 'none';
                 listContent.style.display = 'block';
-                listContent.innerHTML = '<div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">No matching incidents found</div>';
+                listContent.innerHTML = '<div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">No matching crimes found</div>';
                 return;
             }
 
@@ -1961,7 +1961,7 @@ if (request()->query('token')) {
                 const borderColor = isSelected ? '#274d4c' : '#e5e7eb';
 
                 // Highlight matching text if search query exists
-                let highlightedTitle = incident.incident_title || 'Crime Incident';
+                let highlightedTitle = incident.incident_title || 'Crime';
                 let highlightedCategory = incident.category_name || 'Unknown';
 
                 if (searchQuery.trim()) {
@@ -2159,7 +2159,7 @@ if (request()->query('token')) {
                 // Fetch incident details from API
                 const response = await fetch(`/api/crime-incident/${incidentId}`);
                 if (!response.ok) {
-                    throw new Error('Failed to load incident details');
+                    throw new Error('Failed to load crime details');
                 }
                 const incident = await response.json();
 
@@ -2183,7 +2183,7 @@ if (request()->query('token')) {
                     </span>
                 `;
 
-                document.getElementById('modalTitle').textContent = incident.incident_title || 'Crime Incident';
+                document.getElementById('modalTitle').textContent = incident.incident_title || 'Crime';
                 document.getElementById('modalDate').textContent = incident.incident_date || '—';
                 document.getElementById('modalTime').textContent = incident.incident_time || '—';
                 document.getElementById('modalLocation').textContent = incident.location || '—';
@@ -2211,7 +2211,7 @@ if (request()->query('token')) {
             } catch (error) {
                 console.error('Error opening incident modal:', error);
                 document.getElementById('incidentModal').style.display = 'none';
-                alert('Failed to load incident details');
+                alert('Failed to load crime details');
             }
         }
 
@@ -2339,7 +2339,7 @@ if (request()->query('token')) {
                     </div>
 
                     <div style="margin-bottom: 14px; padding: 12px; background: linear-gradient(135deg, #274d4c 0%, #3a6b69 100%); border-radius: 6px; color: white;">
-                        <div style="font-size: 11px; opacity: 0.9;">Total Incidents</div>
+                        <div style="font-size: 11px; opacity: 0.9;">Total Crimes</div>
                         <div style="font-size: 24px; font-weight: bold;">${incidents.length}</div>
                     </div>
 
@@ -2356,7 +2356,7 @@ if (request()->query('token')) {
 
                     <div style="border-top: 1px solid #e5e7eb; padding-top: 12px;">
                         <h5 style="font-size: 11px; font-weight: 700; color: #111; margin: 0 0 8px; text-transform: uppercase;">Top Crime Types</h5>
-                        ${crimeTypeHtml || '<p style="font-size: 11px; color: #999;">No incidents in this area</p>'}
+                        ${crimeTypeHtml || '<p style="font-size: 11px; color: #999;">No crimes in this area</p>'}
                     </div>
                 </div>
             `;
@@ -3084,7 +3084,7 @@ if (request()->query('token')) {
                                     <i class="fas fa-map-pin mr-2" style="color: #274d4c;"></i><span class="barangay-name">${group.name}</span>
                                 </div>
                                 <div style="font-size: 11px; color: #666; margin-top: 4px;">
-                                    <i class="fas fa-list mr-1" style="color: #666;"></i>${group.count} incident${group.count !== 1 ? 's' : ''}
+                                    <i class="fas fa-list mr-1" style="color: #666;"></i>${group.count} crime${group.count !== 1 ? 's' : ''}
                                 </div>
                             </div>
                             <div style="background: #274d4c; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; flex-shrink: 0;">${group.count}</div>
@@ -3277,7 +3277,7 @@ if (request()->query('token')) {
                 headerDiv.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0 0 10px;">
-                            <i class="fas fa-building mr-2" style="color: #274d4c;"></i>Incidents in ${clusterName}
+                            <i class="fas fa-building mr-2" style="color: #274d4c;"></i>Crimes in ${clusterName}
                         </h3>
                         <button id="resetClusterView" style="
                             padding: 6px 10px;
@@ -3293,7 +3293,7 @@ if (request()->query('token')) {
                             <i class="fas fa-arrow-left mr-1"></i>Back
                         </button>
                     </div>
-                    <input type="text" id="incidentSearch" placeholder="Search incidents..." style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; box-sizing: border-box;">
+                    <input type="text" id="incidentSearch" placeholder="Search crimes..." style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; box-sizing: border-box;">
                 `;
 
                 // Add reset button handler
@@ -3376,22 +3376,22 @@ if (request()->query('token')) {
                 
                 switch(action) {
                     case 'created':
-                        title = 'New Crime Incident Reported';
+                        title = 'New Crime Reported';
                         break;
                     case 'updated':
-                        title = 'Crime Incident Updated';
+                        title = 'Crime Updated';
                         break;
                     case 'deleted':
-                        title = 'Crime Incident Deleted';
+                        title = 'Crime Deleted';
                         break;
                     default:
-                        title = 'Crime Incident Notification';
+                        title = 'Crime Notification';
                 }
                 
                 // Use the NotificationManager class
                 if (typeof window.NotificationManager !== 'undefined') {
                     window.NotificationManager.showIncidentNotification(title, {
-                        incident_title: incident.incident_title || 'Unknown Incident',
+                        incident_title: incident.incident_title || 'Unknown Crime',
                         category_name: incident.category_name || 'Unknown Category',
                         location: incident.location || incident.barangay_name || 'Unknown Location',
                         id: incident.id,
@@ -3650,17 +3650,17 @@ if (request()->query('token')) {
                     // Show a sample notification
                     const sampleNotifications = [
                         {
-                            title: 'New Crime Incident Reported',
+                            title: 'New Crime Reported',
                             body: 'Test: A new crime incident has been reported in Quezon City',
                             icon: '/images/alertara.png'
                         },
                         {
-                            title: 'Crime Incident Updated',
+                            title: 'Crime Updated',
                             body: 'Test: An existing crime incident has been updated',
                             icon: '/images/alertara.png'
                         },
                         {
-                            title: 'Crime Incident Deleted',
+                            title: 'Crime Deleted',
                             body: 'Test: A crime incident has been removed from the system',
                             icon: '/images/alertara.png'
                         },
