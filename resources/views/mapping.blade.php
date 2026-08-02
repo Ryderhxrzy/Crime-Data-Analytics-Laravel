@@ -606,6 +606,20 @@ if (request()->query('token')) {
         #streetModal .sm-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 20px 20px; overflow: hidden; }
         #streetModal .sm-bottom { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 16px; margin-top: 14px; }
         #streetModal .sm-col { min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; }
+        /* Pop-out windows: any modal section can detach into its own draggable,
+           resizable "browser-like" window (fullscreen on small screens) */
+        .sm-popout { display: none; position: fixed; z-index: 100010; width: min(760px, 92vw); height: min(72vh, 660px); background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; box-shadow: 0 25px 70px rgba(0,0,0,0.5); flex-direction: column; overflow: hidden; resize: both; }
+        .sm-popout-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #111827; color: #fff; font-size: 12px; font-weight: 700; cursor: move; user-select: none; touch-action: none; flex-shrink: 0; }
+        .sm-popout-dock { margin-left: auto; background: rgba(255,255,255,0.15); color: #fff; border: none; border-radius: 8px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .sm-popout-dock:hover { background: rgba(255,255,255,0.3); }
+        .sm-popout-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }
+        .sm-popout-body #secMap { height: 100%; display: flex; flex-direction: column; }
+        .sm-popout-body #streetModalMap { flex: 1 1 auto; height: auto !important; min-height: 260px; }
+        .sm-pop-btn { font-size: 10px; font-weight: 700; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 9px; cursor: pointer; }
+        .sm-pop-btn:hover { color: #111827; background: #f1f5f9; }
+        @media (max-width: 900px) {
+            .sm-popout { inset: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0; resize: none; }
+        }
         /* Enlarged suggestions: full-width panel + bigger text for readability */
         #streetModal #streetAiCol.sm-ai-big { grid-column: 1 / -1; }
         #streetModal .sm-ai-big #streetAiSummary { font-size: 14px !important; line-height: 1.55 !important; }
@@ -658,12 +672,17 @@ if (request()->query('token')) {
             </div>
 
             <div class="sm-body">
+                <!-- MAP SECTION (can pop out into its own window) -->
+                <div id="secMap" style="display: flex; flex-direction: column; flex-shrink: 0; min-height: 0;">
                 <!-- Street filter dropdown sits ABOVE the map -->
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-shrink: 0;">
                     <span style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase;">
                         <i class="fas fa-map-location-dot mr-1" style="color: #274d4c;"></i>Street map — crimes plotted where they happened
                     </span>
-                    <div id="streetFilterWrap" style="position: relative; margin-left: auto;">
+                    <button type="button" class="sm-pop-btn" onclick="popOutSection('map')" title="Open the map in a separate window" style="margin-left: auto;">
+                        <i class="fas fa-up-right-from-square"></i>
+                    </button>
+                    <div id="streetFilterWrap" style="position: relative;">
                         <button id="streetFilterBtn" type="button" onclick="toggleStreetFilterPanel()"
                                 style="display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: #374151; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 10px; padding: 7px 12px; cursor: pointer;">
                             <i class="fas fa-road" style="color: #b45309;"></i>
@@ -683,12 +702,18 @@ if (request()->query('token')) {
 
                 <!-- FULL-WIDTH map -->
                 <div id="streetModalMap" style="height: 380px; flex-shrink: 0; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;"></div>
+                </div><!-- /secMap -->
 
                 <div class="sm-bottom">
                 <!-- BELOW-LEFT: crimes per selected street (collapsible groups, own scrollbar) -->
-                <div class="sm-col">
-                    <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
-                        <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Crimes on selected street(s) <span id="streetIncCount" style="color: #274d4c;"></span>
+                <div class="sm-col" id="secCrimes">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                        <span style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase;">
+                            <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Crimes on selected street(s) <span id="streetIncCount" style="color: #274d4c;"></span>
+                        </span>
+                        <button type="button" class="sm-pop-btn" onclick="popOutSection('crimes')" title="Open the crime list in a separate window" style="margin-left: auto;">
+                            <i class="fas fa-up-right-from-square"></i>
+                        </button>
                     </div>
                     <div id="streetIncidentList" style="display: grid; gap: 10px; align-content: start;">
                         <div style="font-size: 12px; color: #9ca3af; padding: 12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes…</div>
@@ -704,8 +729,11 @@ if (request()->query('token')) {
                                 <i class="fas fa-shield-halved mr-1" style="color: #7c3aed;"></i>Prevention suggestions
                             </span>
                             <span id="streetAiRisk" style="display: none; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;"></span>
+                            <button type="button" class="sm-pop-btn" onclick="popOutSection('sugg')" title="Open the suggestions in a separate window" style="margin-left: auto;">
+                                <i class="fas fa-up-right-from-square"></i>
+                            </button>
                             <button id="streetAiZoomBtn" type="button" onclick="toggleStreetAiSize()" title="Enlarge suggestions for readability"
-                                    style="margin-left: auto; font-size: 11px; font-weight: 700; color: #7c3aed; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 5px 10px; cursor: pointer;">
+                                    style="font-size: 11px; font-weight: 700; color: #7c3aed; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 5px 10px; cursor: pointer;">
                                 <i class="fas fa-magnifying-glass-plus"></i>
                             </button>
                             <button id="streetAiSaveBtn" onclick="saveStreetAi()" style="display: none; font-size: 11px; font-weight: 700; color: #fff; background: #7c3aed; border: none; border-radius: 8px; padding: 5px 12px; cursor: pointer;">
@@ -1706,8 +1734,102 @@ if (request()->query('token')) {
         }
 
         function closeStreetModal() {
+            dockAllSections();   // pull every popped-out section back first
             const m = document.getElementById('streetModal');
             if (m) m.style.display = 'none';
+        }
+
+        // ------------------------------------------------------------------
+        // Section pop-outs: the map, the crime list and the suggestions can
+        // each detach into their own draggable, resizable window — like
+        // separate browser windows. On small screens the window goes
+        // fullscreen, which also frees the page from the map's touch-trap.
+        // ------------------------------------------------------------------
+        const POPOUT_META = {
+            map:    { section: 'secMap',      title: 'Street map',                    icon: 'fa-map-location-dot' },
+            crimes: { section: 'secCrimes',   title: 'Crimes on selected street(s)',  icon: 'fa-list-ul' },
+            sugg:   { section: 'streetAiCol', title: 'Prevention suggestions',        icon: 'fa-shield-halved' }
+        };
+        const activePopouts = {};   // key -> {win, ph, sec}
+
+        function createPopoutWindow(key) {
+            const meta = POPOUT_META[key];
+            const win = document.createElement('div');
+            win.id = 'popout-' + key;
+            win.className = 'sm-popout';
+            win.innerHTML =
+                '<div class="sm-popout-head">' +
+                    '<i class="fas ' + meta.icon + '"></i><span>' + meta.title + '</span>' +
+                    '<button type="button" class="sm-popout-dock"><i class="fas fa-window-minimize mr-1"></i>Return to modal</button>' +
+                '</div>' +
+                '<div class="sm-popout-body"></div>';
+            document.body.appendChild(win);
+
+            win.querySelector('.sm-popout-dock').addEventListener('click', function () { dockSection(key); });
+
+            // Drag by the header (desktop; fullscreen on mobile so no-op there)
+            const head = win.querySelector('.sm-popout-head');
+            let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+            head.addEventListener('pointerdown', function (e) {
+                if (e.target.closest('button')) return;
+                dragging = true;
+                sx = e.clientX; sy = e.clientY;
+                const r = win.getBoundingClientRect();
+                ox = r.left; oy = r.top;
+                head.setPointerCapture(e.pointerId);
+            });
+            head.addEventListener('pointermove', function (e) {
+                if (!dragging) return;
+                win.style.left = Math.max(0, Math.min(window.innerWidth - 90, ox + e.clientX - sx)) + 'px';
+                win.style.top = Math.max(0, Math.min(window.innerHeight - 44, oy + e.clientY - sy)) + 'px';
+            });
+            head.addEventListener('pointerup', function () { dragging = false; });
+
+            // Resizing the window must redraw the map inside it
+            if (window.ResizeObserver) {
+                new ResizeObserver(function () {
+                    if (key === 'map' && streetModalMap && activePopouts[key]) streetModalMap.invalidateSize();
+                }).observe(win);
+            }
+
+            const off = { map: 36, crimes: 72, sugg: 108 }[key] || 36;
+            win.style.left = off + 'px';
+            win.style.top = off + 'px';
+
+            return win;
+        }
+
+        function popOutSection(key) {
+            const meta = POPOUT_META[key];
+            const sec = meta ? document.getElementById(meta.section) : null;
+            if (!sec || activePopouts[key]) return;
+
+            const win = document.getElementById('popout-' + key) || createPopoutWindow(key);
+
+            // Leave an invisible placeholder so docking puts the section back
+            // in exactly the same spot
+            const ph = document.createElement('div');
+            ph.style.display = 'none';
+            sec.parentNode.insertBefore(ph, sec);
+            win.querySelector('.sm-popout-body').appendChild(sec);
+            win.style.display = 'flex';
+            activePopouts[key] = { win: win, ph: ph, sec: sec };
+
+            if (key === 'map' && streetModalMap) setTimeout(function () { streetModalMap.invalidateSize(); }, 60);
+        }
+
+        function dockSection(key) {
+            const p = activePopouts[key];
+            if (!p) return;
+            p.ph.parentNode.insertBefore(p.sec, p.ph);
+            p.ph.remove();
+            p.win.style.display = 'none';
+            delete activePopouts[key];
+            if (key === 'map' && streetModalMap) setTimeout(function () { streetModalMap.invalidateSize(); }, 60);
+        }
+
+        function dockAllSections() {
+            Object.keys(activePopouts).forEach(dockSection);
         }
 
         // Enlarge/shrink the suggestions panel: full-width + bigger text so
@@ -1948,16 +2070,41 @@ if (request()->query('token')) {
                 if (a.streets && a.streets.length) {
                     out = a.streets.map(function (sec) {
                         const sLvl = String(sec.risk_level || 'low').toLowerCase();
+
+                        // One block PER CRIME TYPE — the counts add up to the
+                        // street total, and each type carries its own tailored
+                        // suggestion + a toggle listing that type's crimes
+                        let body;
+                        if (sec.categories && sec.categories.length) {
+                            body = sec.categories.map(function (cb) {
+                                const cc = colorForCategory(cb.category);
+                                return '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">' +
+                                    '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fafafa;flex-wrap:wrap;">' +
+                                        '<span style="font-size:10px;font-weight:800;color:#fff;background:' + cc + ';padding:2px 8px;border-radius:9999px;">' + escStreet(cb.category) + '</span>' +
+                                        '<span style="font-size:11px;font-weight:700;color:#374151;">' + cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)</span>' +
+                                        (cb.peak_hours && cb.peak_hours.length ? '<span style="font-size:10.5px;color:#6d28d9;font-weight:600;"><i class="fas fa-clock mr-1"></i>' + cb.peak_hours.map(escStreet).join(', ') + '</span>' : '') +
+                                        '<button type="button" class="cat-crimes-toggle" data-street="' + escStreet(sec.street) + '" data-cat="' + escStreet(cb.category) + '"' +
+                                            ' style="margin-left:auto;font-size:10px;font-weight:700;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:3px 9px;cursor:pointer;">' +
+                                            '<i class="fas fa-list mr-1"></i>View crimes</button>' +
+                                    '</div>' +
+                                    '<div class="cat-crimes-list" style="display:none;padding:8px 10px;border-bottom:1px solid #f3f4f6;background:#fcfcfd;"></div>' +
+                                    '<div style="padding:8px 10px;">' + suggCard(cb.suggestion || {}) + '</div>' +
+                                '</div>';
+                            }).join('');
+                        } else {
+                            body = (sec.suggestions || []).map(function (s) { return suggCard(s); }).join('')
+                                || '<div style="font-size:11px;color:#9ca3af;">No suggestions.</div>';
+                        }
+
                         return '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;background:#fcfcfd;">' +
                             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">' +
                                 '<span style="width:14px;height:5px;border-radius:3px;background:' + ((miniStreets[sec.street] || {}).color || '#64748b') + ';flex-shrink:0;"></span>' +
                                 '<span style="font-size:12.5px;font-weight:800;color:#111;">' + escStreet(sec.street) + '</span>' +
                                 '<span style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9999px;' + (RISK_CHIP[sLvl] || '') + '">' + sLvl.toUpperCase() + ' RISK</span>' +
+                                (typeof sec.total === 'number' ? '<span style="font-size:10.5px;color:#6b7280;font-weight:700;">' + sec.total + ' total crime' + (sec.total === 1 ? '' : 's') + '</span>' : '') +
                             '</div>' +
                             (sec.summary ? '<div style="font-size:11.5px;color:#4b5563;margin-bottom:8px;">' + escStreet(sec.summary) + '</div>' : '') +
-                            '<div style="display:grid;gap:8px;">' +
-                                ((sec.suggestions || []).map(suggCard).join('') || '<div style="font-size:11px;color:#9ca3af;">No suggestions.</div>') +
-                            '</div>' +
+                            '<div style="display:grid;gap:8px;">' + body + '</div>' +
                         '</div>';
                     }).join('');
                 } else {
@@ -1983,6 +2130,40 @@ if (request()->query('token')) {
                 analyzeBtn.style.opacity = '1';
             }
         }
+
+        // "View crimes" toggle inside a crime-type block: lists that type's
+        // actual crimes (from the already-fetched street detail cache)
+        document.getElementById('streetAiSuggestions').addEventListener('click', function (e) {
+            const btn = e.target.closest('.cat-crimes-toggle');
+            if (!btn) return;
+            const block = btn.closest('div').parentNode;
+            const list = block ? block.querySelector('.cat-crimes-list') : null;
+            if (!list) return;
+
+            if (list.style.display !== 'none') {
+                list.style.display = 'none';
+                btn.innerHTML = '<i class="fas fa-list mr-1"></i>View crimes';
+                return;
+            }
+
+            const d = streetDetailCache[btn.dataset.street];
+            const incs = ((d && d.incidents) || []).filter(function (i) { return i.category === btn.dataset.cat; });
+            list.innerHTML = incs.length
+                ? '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">' +
+                      escStreet(btn.dataset.cat) + ' crimes on ' + escStreet(btn.dataset.street) + '</div>' +
+                  incs.map(function (i) {
+                    const done = ['solved', 'resolved', 'closed', 'cleared'].indexOf(String(i.status || '').toLowerCase()) >= 0;
+                    return '<div style="display:flex;gap:8px;align-items:baseline;font-size:11px;color:#4b5563;padding:2.5px 0;flex-wrap:wrap;border-top:1px dashed #f3f4f6;">' +
+                        '<span style="font-family:monospace;color:#9ca3af;">' + escStreet(i.code) + '</span>' +
+                        '<span style="font-weight:600;color:#111827;">' + escStreet(i.title || 'Crime') + '</span>' +
+                        '<span>' + escStreet(i.date || '') + (i.time ? ' · ' + escStreet(fmt12h(i.time)) : '') + '</span>' +
+                        '<span style="margin-left:auto;font-weight:700;color:' + (done ? '#15803d' : '#b45309') + ';">' + escStreet(String(i.status || '').toUpperCase()) + '</span>' +
+                    '</div>';
+                }).join('')
+                : '<div style="font-size:11px;color:#9ca3af;">Crime list not loaded yet — this street\'s details are still loading.</div>';
+            list.style.display = 'block';
+            btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>Hide crimes';
+        });
 
         // Save the street AI report to the database — same endpoint and row
         // layout as the pattern-detection Save button
