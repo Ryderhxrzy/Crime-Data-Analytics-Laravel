@@ -26,6 +26,14 @@ class GeminiPatternAnalysisService
     /** Hard cap on generated tokens (thinking included) — keeps every call cheap */
     private const MAX_OUTPUT_TOKENS = 4096;
 
+    /**
+     * Street suggestions are deliberately small (3 suggestions, terse fields)
+     * and cached for a whole day — users click street after street on the map,
+     * so this is the endpoint most likely to burn the free-tier quota.
+     */
+    private const STREET_MAX_OUTPUT_TOKENS = 1024;
+    private const STREET_CACHE_HOURS = 24;
+
     public function analyze(int $days = 180): array
     {
         $days = max(30, min(730, $days));
@@ -148,39 +156,54 @@ class GeminiPatternAnalysisService
     }
 
     /**
-     * AI suggestions for ONE street: what should the barangay do on this
-     * street, given its incident profile. Output shape:
-     *   { risk_level, summary, suggestions: [{action, time_window, rationale,
+     * AI suggestions for one OR MORE streets analyzed together: what should
+     * the barangay do there, given the combined crime profile. Output shape:
+     *   { risk_level, summary, suggestions: [{action, street, time_window, rationale,
      *     expected_impact{direction, estimated_change_percent, explanation}, priority}] }
      */
-    public function analyzeStreet(string $street, int $days = 365): array
+    public function analyzeStreets(array $streets, int $days = 365): array
     {
         $days = max(30, min(730, $days));
 
+        $streets = array_values(array_unique(array_filter(array_map(
+            fn ($s) => trim((string) $s),
+            $streets
+        ))));
+        if (empty($streets)) {
+            return ['success' => false, 'error' => 'No street selected.'];
+        }
+
+        $wanted = array_map('mb_strtolower', $streets);
         $incidents = $this->loadIncidents($days)
-            ->filter(fn ($i) => $i['street'] !== null && mb_strtolower($i['street']) === mb_strtolower($street))
+            ->filter(fn ($i) => $i['street'] !== null && in_array(mb_strtolower($i['street']), $wanted, true))
             ->values();
 
+        $label = implode(', ', $streets);
+
         if ($incidents->isEmpty()) {
-            // No history on this street — a sane static answer, no API call.
+            // No history on these streets — a sane static answer, no API call.
             return [
                 'success' => true,
                 'meta' => [
                     'barangay'     => 'San Agustin',
-                    'street'       => $street,
+                    'street'       => $label,
+                    'streets'      => $streets,
                     'model'        => null,
                     'period_days'  => $days,
+                    'period_start' => now()->subDays($days)->toDateString(),
+                    'period_end'   => now()->toDateString(),
                     'records_used' => 0,
                     'generated_at' => now()->toIso8601String(),
                     'from_cache'   => false,
                 ],
                 'analysis' => [
                     'risk_level' => 'low',
-                    'summary'    => 'No crimes were recorded on ' . $street . ' in the selected period. Keep routine barangay patrol coverage and encourage residents to report suspicious activity.',
+                    'summary'    => 'No crimes were recorded on ' . $label . ' in the selected period. Keep routine barangay patrol coverage and encourage residents to report suspicious activity.',
                     'suggestions' => [[
                         'action'      => 'Maintain routine patrol pass-through',
+                        'street'      => $label,
                         'time_window' => '18:00-23:00',
-                        'rationale'   => 'The street has no recorded crimes; an occasional evening pass keeps it that way.',
+                        'rationale'   => 'No recorded crimes here; an occasional evening pass keeps it that way.',
                         'expected_impact' => [
                             'direction' => 'stable',
                             'estimated_change_percent' => 0,
@@ -192,8 +215,10 @@ class GeminiPatternAnalysisService
             ];
         }
 
-        $fingerprint = md5(mb_strtolower($street) . '|' . $days . '|' . $incidents->count() . '|' . ($incidents->max('date') ?? ''));
-        $cacheKey = 'gemini_street_suggest_v1_' . $fingerprint;
+        $sorted = $wanted;
+        sort($sorted);
+        $fingerprint = md5(implode('|', $sorted) . '|' . $days . '|' . $incidents->count() . '|' . ($incidents->max('date') ?? ''));
+        $cacheKey = 'gemini_street_suggest_v2_' . $fingerprint;
 
         $cached = Cache::get($cacheKey);
         if ($cached) {
@@ -201,7 +226,11 @@ class GeminiPatternAnalysisService
             return $cached;
         }
 
-        $aiResult = $this->callGemini($this->buildStreetPrompt($street, $incidents, $days), 'risk_level');
+        $aiResult = $this->callGemini(
+            $this->buildStreetPrompt($streets, $incidents, $days),
+            'risk_level',
+            self::STREET_MAX_OUTPUT_TOKENS
+        );
 
         if (isset($aiResult['error'])) {
             return ['success' => false, 'error' => $aiResult['error']];
@@ -211,9 +240,12 @@ class GeminiPatternAnalysisService
             'success' => true,
             'meta' => [
                 'barangay'     => 'San Agustin',
-                'street'       => $street,
+                'street'       => $label,
+                'streets'      => $streets,
                 'model'        => config('services.gemini.model'),
                 'period_days'  => $days,
+                'period_start' => now()->subDays($days)->toDateString(),
+                'period_end'   => now()->toDateString(),
                 'records_used' => $incidents->count(),
                 'generated_at' => now()->toIso8601String(),
                 'from_cache'   => false,
@@ -221,69 +253,61 @@ class GeminiPatternAnalysisService
             'analysis' => $aiResult,
         ];
 
-        Cache::put($cacheKey, $result, now()->addHours(self::CACHE_HOURS));
+        Cache::put($cacheKey, $result, now()->addHours(self::STREET_CACHE_HOURS));
 
         return $result;
     }
 
-    /** Compact single-street aggregates + prompt for street-level suggestions */
-    private function buildStreetPrompt(string $street, Collection $incidents, int $days): string
+    /**
+     * Compact street prompt, built for MINIMUM token spend: top-N aggregates
+     * only (no full 24h/monthly tables), single-line JSON, a fixed intervention
+     * menu (same interventions as the pattern-detection page), and exactly 3
+     * terse suggestions out. Works for one street or several together.
+     */
+    private function buildStreetPrompt(array $streets, Collection $incidents, int $days): string
     {
-        $hours = [];
-        foreach ($incidents as $i) {
-            if ($i['hour'] !== null) {
-                $h = sprintf('%02d:00', $i['hour']);
-                $hours[$h] = ($hours[$h] ?? 0) + 1;
-            }
-        }
-        ksort($hours);
+        // Trend signal without the full monthly table: first half vs second half
+        $half = (int) floor($days / 2);
+        $midpoint = now()->subDays($half)->toDateString();
+        $recent = $incidents->filter(fn ($i) => $i['date'] >= $midpoint)->count();
 
         $aggregates = [
-            'street'          => $street . ', Barangay San Agustin, Quezon City',
-            'period_days'     => $days,
-            'total_incidents' => $incidents->count(),
-            'by_category'     => $incidents->countBy('category')->sortDesc()->all(),
-            'by_hour'         => $hours,
-            'by_day_of_week'  => $incidents->countBy('dow')->all(),
-            'monthly_counts'  => $incidents->countBy('month')->sortKeys()->all(),
-            'unresolved_count'=> $incidents->whereNotIn('status', ['solved', 'resolved', 'closed', 'cleared'])->count(),
+            'streets'     => implode(', ', $streets),
+            'days'        => $days,
+            'total'       => $incidents->count(),
+            'top_crimes'  => $incidents->countBy('category')->sortDesc()->take(4)->all(),
+            'peak_hours'  => $incidents->whereNotNull('hour')->countBy('hour')->sortDesc()->take(3)
+                ->mapWithKeys(fn ($c, $h) => [sprintf('%02d:00', $h) => $c])->all(),
+            'peak_days'   => $incidents->countBy('dow')->sortDesc()->take(2)->all(),
+            'earlier_half'=> $incidents->count() - $recent,
+            'recent_half' => $recent,
+            'unresolved'  => $incidents->whereNotIn('status', ['solved', 'resolved', 'closed', 'cleared'])->count(),
         ];
 
-        $data = json_encode($aggregates, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        // With several streets selected, one compact per-street line lets the
+        // AI aim each suggestion at the street that needs it most.
+        if (count($streets) > 1) {
+            $perStreet = [];
+            foreach ($incidents->groupBy('street')->sortByDesc(fn ($g) => $g->count()) as $name => $group) {
+                $perStreet[$name] = $group->count() . 'x, top: ' . $group->countBy('category')->sortDesc()->keys()->first();
+            }
+            $aggregates['per_street'] = $perStreet;
+        }
+
+        $data = json_encode($aggregates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         return <<<PROMPT
-You are a crime-prevention adviser for the barangay peace and order committee of Barangay San Agustin, Quezon City, Philippines. Below is the aggregated incident history of ONE specific street.
-
-STREET DATA (aggregated):
+Crime-prevention adviser for Barangay San Agustin, Quezon City. Aggregated crime data for the selected street(s):
 {$data}
 
-Advise the barangay on what to do on THIS street. Respond with ONLY a valid JSON object in exactly this shape:
-
-{
-  "risk_level": "low" | "medium" | "high",
-  "summary": "<2-3 sentences: this street's crime profile — dominant crimes, when they happen, and whether it is getting better or worse>",
-  "suggestions": [
-    {
-      "action": "<specific intervention, e.g. Install streetlights, Deploy roving tanod patrol, Install CCTV, Community watch, Anti-theft awareness drive>",
-      "time_window": "<exact hours it should cover based on by_hour, e.g. '21:00-02:00'>",
-      "rationale": "<1-2 sentences: why this fits this street's dominant crime and peak hours>",
-      "expected_impact": {
-        "direction": "decrease" | "stable",
-        "estimated_change_percent": <signed number, e.g. -20>,
-        "explanation": "<1 sentence grounded in crime-prevention evidence>"
-      },
-      "priority": "high" | "medium" | "low"
-    },
-    "... 3 to 5 suggestions total, different intervention types"
-  ]
-}
+Respond with ONLY this JSON (no markdown):
+{"risk_level":"low|medium|high","summary":"<max 2 short sentences: dominant crimes, peak time, trend>","suggestions":[{"action":"<from the menu>","street":"<which selected street(s) it targets>","time_window":"<peak hours, e.g. 21:00-02:00>","rationale":"<1 short sentence>","expected_impact":{"direction":"decrease|stable","estimated_change_percent":<number>,"explanation":"<1 short sentence>"},"priority":"high|medium|low"}]}
 
 Rules:
-- risk_level must reflect the street's incident volume and trend (monthly_counts).
-- Be precise about TIMING: name the exact peak hours from by_hour in every time_window.
-- estimated_change_percent must be realistic per published research effect sizes (street lighting ≈ -20%, CCTV ≈ -13%, hot-spot patrols ≈ -15 to -25%, community watch ≈ -16%).
-- In every text field, refer to the records as "crimes", never "incidents".
-- Keep every text field concise. Output JSON only, no markdown.
+- Exactly 3 suggestions, each a DIFFERENT action from this menu ONLY: Install streetlights, Deploy roving tanod patrol (ronda), Install CCTV, Organize community watch, Set up checkpoint, Run crime-awareness drive.
+- risk_level from total + trend (recent_half vs earlier_half). time_window from peak_hours. If per_street is given, target each suggestion at the street(s) that need it most.
+- estimated_change_percent per research: lighting -20, CCTV -13, patrol -15 to -25, community watch -16, checkpoint -13.
+- Say "crimes", never "incidents". Be terse.
 PROMPT;
     }
 
@@ -442,7 +466,7 @@ PROMPT;
 
     // ------------------------------------------------------------ Gemini call
 
-    private function callGemini(string $prompt, string $requiredKey = 'forecast'): array
+    private function callGemini(string $prompt, string $requiredKey = 'forecast', ?int $maxOutputTokens = null): array
     {
         $apiKey = config('services.gemini.key');
         if (!$apiKey) {
@@ -458,7 +482,7 @@ PROMPT;
             ],
             'generationConfig' => [
                 'temperature'      => 0.3,
-                'maxOutputTokens'  => self::MAX_OUTPUT_TOKENS,
+                'maxOutputTokens'  => $maxOutputTokens ?? self::MAX_OUTPUT_TOKENS,
                 'responseMimeType' => 'application/json',
                 // Flash models spend "thinking" tokens by default; the LOW
                 // level keeps each call cheap for the free-tier quota.
