@@ -1620,6 +1620,115 @@ class DashboardController extends Controller
     }
 
     /**
+     * Full incident details for ONE San Agustin street (street map modal).
+     * Streets are matched the same way as sanAgustinStreetStats: the part of
+     * address_details before the first comma must equal the street name.
+     */
+    public function sanAgustinStreetDetail(Request $request)
+    {
+        try {
+            $street = trim((string) $request->input('street', ''));
+            if ($street === '') {
+                return response()->json(['error' => 'Missing street name.'], 422);
+            }
+
+            $cacheKey = 'sa_street_detail_v1_' . md5(mb_strtolower($street));
+            $payload = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(10), function () use ($street) {
+                $rows = \App\Models\SanAgustinIncident::query()
+                    ->orderByDesc('incident_date')
+                    ->orderByDesc('incident_time')
+                    ->get([
+                        'incident_code', 'record_type', 'category_name', 'incident_title',
+                        'incident_description', 'incident_date', 'incident_time',
+                        'latitude', 'longitude', 'address_details', 'victim_count',
+                        'suspect_count', 'status', 'clearance_status', 'clearance_date',
+                        'modus_operandi', 'weather_condition', 'assigned_officer',
+                    ])
+                    ->filter(function ($row) use ($street) {
+                        $first = trim(explode(',', (string) $row->address_details)[0] ?? '');
+                        return mb_strtolower($first) === mb_strtolower($street);
+                    })
+                    ->values();
+
+                $categories = [];
+                $hours = [];
+                foreach ($rows as $row) {
+                    $cat = $row->category_name ?: 'Uncategorized';
+                    $categories[$cat] = ($categories[$cat] ?? 0) + 1;
+                    if ($row->incident_time && preg_match('/^(\d{1,2}):/', (string) $row->incident_time, $m)) {
+                        $h = (int) $m[1];
+                        $hours[$h] = ($hours[$h] ?? 0) + 1;
+                    }
+                }
+                arsort($categories);
+                arsort($hours);
+
+                return [
+                    'street' => $street,
+                    'summary' => [
+                        'count'        => $rows->count(),
+                        'top_category' => array_key_first($categories),
+                        'categories'   => $categories,
+                        'peak_hours'   => array_map(fn ($h) => sprintf('%02d:00', $h), array_slice(array_keys($hours), 0, 3)),
+                        'unresolved'   => $rows->whereNotIn('status', ['solved', 'resolved', 'closed', 'cleared'])->count(),
+                    ],
+                    'incidents' => $rows->map(fn ($row) => [
+                        'code'             => $row->incident_code,
+                        'record_type'      => $row->record_type,
+                        'category'         => $row->category_name ?: 'Uncategorized',
+                        'title'            => $row->incident_title,
+                        'description'      => $row->incident_description,
+                        'date'             => $row->incident_date?->toDateString(),
+                        'time'             => $row->incident_time ? substr((string) $row->incident_time, 0, 5) : null,
+                        'lat'              => (float) $row->latitude,
+                        'lng'              => (float) $row->longitude,
+                        'address'          => $row->address_details,
+                        'victim_count'     => (int) $row->victim_count,
+                        'suspect_count'    => (int) $row->suspect_count,
+                        'status'           => $row->status,
+                        'clearance_status' => $row->clearance_status,
+                        'clearance_date'   => $row->clearance_date?->toDateString(),
+                        'modus_operandi'   => $row->modus_operandi,
+                        'weather'          => $row->weather_condition,
+                        'assigned_officer' => $row->assigned_officer,
+                    ])->values(),
+                ];
+            });
+
+            return response()->json($payload, 200, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in sanAgustinStreetDetail: ' . $e->getMessage());
+
+            return response()->json(['error' => 'Error loading street detail', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * AI (Gemini) suggestions for ONE San Agustin street — what the barangay
+     * should do on that street, grounded in its incident profile. Cached in
+     * the service so repeat opens of the same street spend no API quota.
+     */
+    public function sanAgustinStreetAiSuggest(Request $request, \App\Services\GeminiPatternAnalysisService $ai)
+    {
+        try {
+            $street = trim((string) $request->input('street', ''));
+            if ($street === '') {
+                return response()->json(['success' => false, 'error' => 'Missing street name.'], 422);
+            }
+
+            $result = $ai->analyzeStreet($street, (int) $request->input('days', 365));
+
+            $status = ($result['success'] ?? false) ? 200 : 422;
+
+            return response()->json($result, $status, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in sanAgustinStreetAiSuggest: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'error' => 'Error running street AI suggestions: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get hotspot data with analytics for Crime Hotspot Analysis page (with Redis caching)
      */
     public function getHotspotData(Request $request, \App\Services\HotspotAnalyticsService $analytics)
