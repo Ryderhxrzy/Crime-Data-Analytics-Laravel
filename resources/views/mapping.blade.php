@@ -687,7 +687,7 @@ if (request()->query('token')) {
                     <div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
                             <span style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase;">
-                                <i class="fas fa-robot mr-1" style="color: #7c3aed;"></i>AI suggestions
+                                <i class="fas fa-shield-halved mr-1" style="color: #7c3aed;"></i>Prevention suggestions
                             </span>
                             <span id="streetAiRisk" style="display: none; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;"></span>
                             <button id="streetAiSaveBtn" onclick="saveStreetAi()" style="display: none; margin-left: auto; font-size: 11px; font-weight: 700; color: #fff; background: #7c3aed; border: none; border-radius: 8px; padding: 5px 12px; cursor: pointer;">
@@ -696,14 +696,14 @@ if (request()->query('token')) {
                         </div>
 
                         <button id="streetAiAnalyzeBtn" onclick="analyzeStreetAi()" style="width: 100%; font-size: 12.5px; font-weight: 700; color: #fff; background: #7c3aed; border: none; border-radius: 10px; padding: 9px 12px; cursor: pointer; margin-bottom: 8px;">
-                            <i class="fas fa-wand-magic-sparkles mr-1"></i><span id="streetAiAnalyzeLabel">Analyze with AI</span>
+                            <i class="fas fa-wand-magic-sparkles mr-1"></i><span id="streetAiAnalyzeLabel">Generate suggestions</span>
                         </button>
 
                         <div id="streetAiPlaceholder" style="border: 1px dashed #d1d5db; background: #f9fafb; border-radius: 10px; padding: 12px; font-size: 11.5px; color: #6b7280; text-align: center;">
-                            The AI analyzes every street selected above (the ones highlighted on the map), then press <span style="font-weight: 700; color: #7c3aed;">Analyze with AI</span>. Results are cached for 24 hours to save AI quota.
+                            The system reviews the crimes on every selected street and suggests what to do per street, based on the crime categories most frequently committed there. Press <span style="font-weight: 700; color: #7c3aed;">Generate suggestions</span> — instant, no AI quota used.
                         </div>
                         <div id="streetAiLoading" style="display: none; border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 10px; padding: 14px; font-size: 12px; color: #6d28d9;">
-                            <i class="fas fa-spinner fa-spin mr-1"></i>Gemini is analyzing the selected street(s)…
+                            <i class="fas fa-spinner fa-spin mr-1"></i>Analyzing the crimes on the selected street(s)…
                         </div>
                         <div id="streetAiError" style="display: none; border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px; padding: 12px; font-size: 12px; color: #b91c1c;">
                             <span id="streetAiErrorMsg"></span>
@@ -1547,7 +1547,7 @@ if (request()->query('token')) {
                 modalStreets.length > 1 ? first + ' +' + (modalStreets.length - 1) + ' more' : first;
             document.getElementById('streetFilterBtnLabel').textContent = 'Streets (' + modalStreets.length + ')';
             document.getElementById('streetAiAnalyzeLabel').textContent =
-                'Analyze with AI (' + modalStreets.length + ' street' + (modalStreets.length === 1 ? '' : 's') + ')';
+                'Generate suggestions (' + modalStreets.length + ' street' + (modalStreets.length === 1 ? '' : 's') + ')';
 
             // Aggregate the pills over every active street whose data is in
             let total = 0, unresolved = 0, loaded = 0;
@@ -1593,8 +1593,9 @@ if (request()->query('token')) {
         }
         document.addEventListener('click', function (e) {
             const wrap = document.getElementById('streetFilterWrap');
-            if (wrap && !wrap.contains(e.target)) {
-                document.getElementById('streetFilterPanel').style.display = 'none';
+            const panel = document.getElementById('streetFilterPanel');
+            if (wrap && panel && !wrap.contains(e.target)) {
+                panel.style.display = 'none';
             }
         });
 
@@ -1635,7 +1636,8 @@ if (request()->query('token')) {
         }
 
         function closeStreetModal() {
-            document.getElementById('streetModal').style.display = 'none';
+            const m = document.getElementById('streetModal');
+            if (m) m.style.display = 'none';
         }
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') closeStreetModal();
@@ -1773,20 +1775,32 @@ if (request()->query('token')) {
                 picked.forEach(function (s) { params.append('streets[]', s); });
                 const res = await fetch(SA_STREET_AI_URL + '?' + params,
                     { headers: { 'Accept': 'application/json' } });
-                const data = await res.json();
+
+                // Gateway timeouts / proxy errors answer with an HTML page, not
+                // JSON — surface a readable error instead of a parse crash
+                let data;
+                try {
+                    data = JSON.parse(await res.text());
+                } catch (parseErr) {
+                    throw new Error(res.status === 504
+                        ? 'The server took too long to respond. Press Retry.'
+                        : 'Server error (HTTP ' + res.status + '). Press Retry.');
+                }
                 if (!data.success) throw new Error(data.error || (res.status === 429
-                    ? 'Too many AI requests — wait a minute and press Retry.' : 'HTTP ' + res.status));
+                    ? 'Too many requests — wait a minute and press Retry.' : 'HTTP ' + res.status));
                 if (seq !== streetAiSeq) return;   // user switched streets meanwhile
 
                 latestStreetAi = data;
                 const a = data.analysis || {};
-                const lvl = String(a.risk_level || 'low').toLowerCase();
-                const riskStyle = {
+
+                const RISK_CHIP = {
                     high:   'background:#fee2e2;color:#b91c1c;',
                     medium: 'background:#fef3c7;color:#b45309;',
                     low:    'background:#dcfce7;color:#15803d;'
-                }[lvl] || 'background:#f3f4f6;color:#374151;';
-                risk.style.cssText = 'display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9999px;' + riskStyle;
+                };
+                const lvl = String(a.risk_level || 'low').toLowerCase();
+                risk.style.cssText = 'display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9999px;' +
+                    (RISK_CHIP[lvl] || 'background:#f3f4f6;color:#374151;');
                 risk.textContent = lvl.toUpperCase() + ' RISK';
 
                 document.getElementById('streetAiSummary').textContent = a.summary || '';
@@ -1796,7 +1810,7 @@ if (request()->query('token')) {
                     medium: 'background:#fef3c7;color:#b45309;',
                     low:    'background:#f3f4f6;color:#374151;'
                 };
-                document.getElementById('streetAiSuggestions').innerHTML = (a.suggestions || []).map(function (s) {
+                const suggCard = function (s, showStreet) {
                     const imp = s.expected_impact || {};
                     const pct = Number(imp.estimated_change_percent);
                     const pr = String(s.priority || 'low').toLowerCase();
@@ -1805,7 +1819,7 @@ if (request()->query('token')) {
                             '<div style="font-size:12.5px;font-weight:700;color:#111;flex:1;"><i class="fas fa-shield-halved mr-1" style="color:#7c3aed;"></i>' + escStreet(s.action) + '</div>' +
                             '<span style="flex-shrink:0;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9999px;' + (prioStyle[pr] || prioStyle.low) + '">' + pr.toUpperCase() + '</span>' +
                         '</div>' +
-                        (s.street ? '<div style="font-size:11px;color:#b45309;font-weight:600;margin-top:3px;"><i class="fas fa-road mr-1"></i>' + escStreet(s.street) + '</div>' : '') +
+                        (showStreet && s.street ? '<div style="font-size:11px;color:#b45309;font-weight:600;margin-top:3px;"><i class="fas fa-road mr-1"></i>' + escStreet(s.street) + '</div>' : '') +
                         (s.time_window ? '<div style="font-size:11px;color:#6d28d9;font-weight:600;margin-top:3px;"><i class="fas fa-clock mr-1"></i>' + escStreet(s.time_window) + '</div>' : '') +
                         (s.rationale ? '<div style="font-size:11.5px;color:#4b5563;margin-top:4px;line-height:1.45;">' + escStreet(s.rationale) + '</div>' : '') +
                         (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:5px;">' +
@@ -1813,7 +1827,32 @@ if (request()->query('token')) {
                             'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer crimes' : 'stable') +
                             (imp.explanation ? ' — <span style="font-weight:400;color:#6b7280;">' + escStreet(imp.explanation) + '</span>' : '') + '</div>' : '') +
                     '</div>';
-                }).join('') || '<div style="font-size:12px;color:#9ca3af;">No suggestions returned.</div>';
+                };
+
+                // Rule-engine responses carry one SECTION PER STREET; render
+                // each street separately with its own risk chip and summary
+                let out;
+                if (a.streets && a.streets.length) {
+                    out = a.streets.map(function (sec) {
+                        const sLvl = String(sec.risk_level || 'low').toLowerCase();
+                        return '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;background:#fcfcfd;">' +
+                            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">' +
+                                '<span style="width:14px;height:5px;border-radius:3px;background:' + ((miniStreets[sec.street] || {}).color || '#64748b') + ';flex-shrink:0;"></span>' +
+                                '<span style="font-size:12.5px;font-weight:800;color:#111;">' + escStreet(sec.street) + '</span>' +
+                                '<span style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9999px;' + (RISK_CHIP[sLvl] || '') + '">' + sLvl.toUpperCase() + ' RISK</span>' +
+                            '</div>' +
+                            (sec.summary ? '<div style="font-size:11.5px;color:#4b5563;margin-bottom:8px;">' + escStreet(sec.summary) + '</div>' : '') +
+                            '<div style="display:grid;gap:8px;">' +
+                                ((sec.suggestions || []).map(suggCard).join('') || '<div style="font-size:11px;color:#9ca3af;">No suggestions.</div>') +
+                            '</div>' +
+                        '</div>';
+                    }).join('');
+                } else {
+                    // AI-engine (fallback) shape: one flat list, street shown per card
+                    out = (a.suggestions || []).map(function (s) { return suggCard(s, true); }).join('');
+                }
+                document.getElementById('streetAiSuggestions').innerHTML =
+                    out || '<div style="font-size:12px;color:#9ca3af;">No suggestions returned.</div>';
 
                 loading.style.display = 'none';
                 risk.style.display = 'inline-block';
