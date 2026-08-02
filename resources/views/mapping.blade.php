@@ -10,6 +10,7 @@ if (request()->query('token')) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Crime Mapping - Crime Management System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="{{ asset('js/tailwind-config.js') }}"></script>
@@ -633,20 +634,45 @@ if (request()->query('token')) {
                     </div>
                     <div id="streetModalMap" style="height: 300px; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;"></div>
 
-                    <!-- AI suggestions -->
+                    <!-- AI suggestions (manual — one Gemini call per Analyze click) -->
                     <div style="margin-top: 14px;">
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
                             <span style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase;">
-                                <i class="fas fa-robot mr-1" style="color: #7c3aed;"></i>AI suggestions for this street
+                                <i class="fas fa-robot mr-1" style="color: #7c3aed;"></i>AI suggestions
                             </span>
                             <span id="streetAiRisk" style="display: none; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;"></span>
+                            <button id="streetAiSaveBtn" onclick="saveStreetAi()" style="display: none; margin-left: auto; font-size: 11px; font-weight: 700; color: #fff; background: #7c3aed; border: none; border-radius: 8px; padding: 5px 12px; cursor: pointer;">
+                                <i class="fas fa-floppy-disk mr-1"></i>Save
+                            </button>
                         </div>
-                        <div id="streetAiLoading" style="border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 10px; padding: 14px; font-size: 12px; color: #6d28d9;">
-                            <i class="fas fa-spinner fa-spin mr-1"></i>Gemini is analyzing this street…
+
+                        <!-- Multi-street picker: analyze the clicked street alone, or add more -->
+                        <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: #fafafa;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <span style="font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase;">
+                                    <i class="fas fa-road mr-1" style="color: #b45309;"></i>Streets to analyze
+                                    <span id="streetAiPickCount" style="color: #7c3aed;"></span>
+                                </span>
+                                <button type="button" onclick="clearStreetAiPicks()" style="margin-left: auto; font-size: 10px; font-weight: 700; color: #6b7280; background: none; border: none; cursor: pointer; text-decoration: underline;">Clear others</button>
+                            </div>
+                            <input type="text" id="streetAiSearch" placeholder="Search street to add…" oninput="renderStreetAiPicker(this.value)"
+                                   style="width: 100%; box-sizing: border-box; padding: 6px 9px; margin-bottom: 6px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px;">
+                            <div id="streetAiPickList" style="max-height: 110px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px;"></div>
+                        </div>
+
+                        <button id="streetAiAnalyzeBtn" onclick="analyzeStreetAi()" style="width: 100%; font-size: 12.5px; font-weight: 700; color: #fff; background: #7c3aed; border: none; border-radius: 10px; padding: 9px 12px; cursor: pointer; margin-bottom: 8px;">
+                            <i class="fas fa-wand-magic-sparkles mr-1"></i>Analyze with AI
+                        </button>
+
+                        <div id="streetAiPlaceholder" style="border: 1px dashed #d1d5db; background: #f9fafb; border-radius: 10px; padding: 12px; font-size: 11.5px; color: #6b7280; text-align: center;">
+                            Select the street(s) you want, then press <span style="font-weight: 700; color: #7c3aed;">Analyze with AI</span>. Results are cached for 24 hours to save AI quota.
+                        </div>
+                        <div id="streetAiLoading" style="display: none; border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 10px; padding: 14px; font-size: 12px; color: #6d28d9;">
+                            <i class="fas fa-spinner fa-spin mr-1"></i>Gemini is analyzing the selected street(s)…
                         </div>
                         <div id="streetAiError" style="display: none; border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px; padding: 12px; font-size: 12px; color: #b91c1c;">
                             <span id="streetAiErrorMsg"></span>
-                            <button onclick="loadStreetAi(currentStreetModalName)" style="margin-left: 8px; font-weight: 700; color: #7c3aed; background: none; border: none; cursor: pointer; text-decoration: underline;">Retry</button>
+                            <button onclick="analyzeStreetAi()" style="margin-left: 8px; font-weight: 700; color: #7c3aed; background: none; border: none; cursor: pointer; text-decoration: underline;">Retry</button>
                         </div>
                         <div id="streetAiResults" style="display: none;">
                             <p id="streetAiSummary" style="font-size: 12.5px; color: #374151; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; margin: 0 0 8px;"></p>
@@ -1226,6 +1252,7 @@ if (request()->query('token')) {
         // ------------------------------------------------------------------
         const SA_STREET_DETAIL_URL = @json(route('pattern-detection.street-detail'));
         const SA_STREET_AI_URL = @json(route('pattern-detection.street-ai-suggest'));
+        const SA_AI_SAVE_URL = @json(route('pattern-detection.ai-save'));
 
         let streetModalMap = null;        // mini Leaflet map, created once
         let streetModalLayer = null;      // per-open overlay (street lines + crime dots)
@@ -1334,7 +1361,7 @@ if (request()->query('token')) {
             setTimeout(fitToStreet, 300);
 
             loadStreetDetail(name, g);
-            loadStreetAi(name);
+            resetStreetAiSection(name);   // AI runs ONLY when Analyze is pressed
         }
 
         function closeStreetModal() {
@@ -1447,24 +1474,108 @@ if (request()->query('token')) {
             });
         }
 
-        async function loadStreetAi(name) {
+        // ---------- street AI: manual, multi-street, token-thrifty ----------
+        const streetAiPicks = new Set();   // streets selected for combined analysis
+        let latestStreetAi = null;         // last successful result, for Save
+        let streetAiSeq = 0;               // stale-response guard
+
+        // Fresh state each time the modal opens: only the clicked street is
+        // selected, and nothing has been analyzed yet
+        function resetStreetAiSection(name) {
+            streetAiPicks.clear();
+            streetAiPicks.add(name);
+            latestStreetAi = null;
+            streetAiSeq++;
+
+            document.getElementById('streetAiSearch').value = '';
+            renderStreetAiPicker('');
+
+            document.getElementById('streetAiPlaceholder').style.display = 'block';
+            document.getElementById('streetAiLoading').style.display = 'none';
+            document.getElementById('streetAiError').style.display = 'none';
+            document.getElementById('streetAiResults').style.display = 'none';
+            document.getElementById('streetAiRisk').style.display = 'none';
+            const save = document.getElementById('streetAiSaveBtn');
+            save.style.display = 'none';
+            save.disabled = false;
+            save.style.background = '#7c3aed';
+            save.innerHTML = '<i class="fas fa-floppy-disk mr-1"></i>Save';
+        }
+
+        function updateStreetAiPickCount() {
+            const n = streetAiPicks.size;
+            document.getElementById('streetAiPickCount').textContent = '(' + n + ' selected)';
+        }
+
+        // Checklist of every street; the clicked one is pinned on top and locked
+        // so there is always at least one street to analyze
+        function renderStreetAiPicker(filter) {
+            const q = String(filter || '').toLowerCase().trim();
+            const names = Object.keys(saStreetGroupsAll || {}).sort(function (a, b) { return a.localeCompare(b); });
+            const rows = [];
+
+            names.forEach(function (n) {
+                const isCurrent = n === currentStreetModalName;
+                if (!isCurrent && q && !n.toLowerCase().includes(q)) return;
+                const row = '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#374151;cursor:pointer;padding:2px 0;' + (isCurrent ? 'font-weight:700;' : '') + '">' +
+                    '<input type="checkbox" class="street-ai-cb" value="' + escStreet(n) + '"' +
+                        (streetAiPicks.has(n) ? ' checked' : '') + (isCurrent ? ' disabled' : '') + '>' +
+                    '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escStreet(n) + '">' + escStreet(n) +
+                        (isCurrent ? ' <span style="color:#7c3aed;font-size:9px;">(this street)</span>' : '') + '</span>' +
+                '</label>';
+                if (isCurrent) rows.unshift(row); else rows.push(row);
+            });
+
+            document.getElementById('streetAiPickList').innerHTML =
+                rows.join('') || '<div style="font-size:11px;color:#9ca3af;padding:4px 0;grid-column:1/-1;">No matching streets.</div>';
+            updateStreetAiPickCount();
+        }
+
+        document.getElementById('streetAiPickList').addEventListener('change', function (e) {
+            const cb = e.target;
+            if (!cb.classList || !cb.classList.contains('street-ai-cb')) return;
+            if (cb.checked) streetAiPicks.add(cb.value); else streetAiPicks.delete(cb.value);
+            updateStreetAiPickCount();
+        });
+
+        function clearStreetAiPicks() {
+            streetAiPicks.clear();
+            if (currentStreetModalName) streetAiPicks.add(currentStreetModalName);
+            renderStreetAiPicker(document.getElementById('streetAiSearch').value);
+        }
+
+        async function analyzeStreetAi() {
+            const seq = ++streetAiSeq;
             const loading = document.getElementById('streetAiLoading');
             const errBox = document.getElementById('streetAiError');
             const results = document.getElementById('streetAiResults');
             const risk = document.getElementById('streetAiRisk');
+            const analyzeBtn = document.getElementById('streetAiAnalyzeBtn');
+
+            const picked = Array.from(streetAiPicks);
+            if (!picked.length && currentStreetModalName) picked.push(currentStreetModalName);
+            if (!picked.length) return;
+
+            document.getElementById('streetAiPlaceholder').style.display = 'none';
+            document.getElementById('streetAiSaveBtn').style.display = 'none';
             loading.style.display = 'block';
             errBox.style.display = 'none';
             results.style.display = 'none';
             risk.style.display = 'none';
+            analyzeBtn.disabled = true;
+            analyzeBtn.style.opacity = '0.6';
 
             try {
-                const res = await fetch(SA_STREET_AI_URL + '?street=' + encodeURIComponent(name),
+                const params = new URLSearchParams();
+                picked.forEach(function (s) { params.append('streets[]', s); });
+                const res = await fetch(SA_STREET_AI_URL + '?' + params,
                     { headers: { 'Accept': 'application/json' } });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || (res.status === 429
                     ? 'Too many AI requests — wait a minute and press Retry.' : 'HTTP ' + res.status));
-                if (currentStreetModalName !== name) return;
+                if (seq !== streetAiSeq) return;   // user switched streets meanwhile
 
+                latestStreetAi = data;
                 const a = data.analysis || {};
                 const lvl = String(a.risk_level || 'low').toLowerCase();
                 const riskStyle = {
@@ -1491,6 +1602,7 @@ if (request()->query('token')) {
                             '<div style="font-size:12.5px;font-weight:700;color:#111;flex:1;"><i class="fas fa-shield-halved mr-1" style="color:#7c3aed;"></i>' + escStreet(s.action) + '</div>' +
                             '<span style="flex-shrink:0;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9999px;' + (prioStyle[pr] || prioStyle.low) + '">' + pr.toUpperCase() + '</span>' +
                         '</div>' +
+                        (s.street ? '<div style="font-size:11px;color:#b45309;font-weight:600;margin-top:3px;"><i class="fas fa-road mr-1"></i>' + escStreet(s.street) + '</div>' : '') +
                         (s.time_window ? '<div style="font-size:11px;color:#6d28d9;font-weight:600;margin-top:3px;"><i class="fas fa-clock mr-1"></i>' + escStreet(s.time_window) + '</div>' : '') +
                         (s.rationale ? '<div style="font-size:11.5px;color:#4b5563;margin-top:4px;line-height:1.45;">' + escStreet(s.rationale) + '</div>' : '') +
                         (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:5px;">' +
@@ -1503,11 +1615,52 @@ if (request()->query('token')) {
                 loading.style.display = 'none';
                 risk.style.display = 'inline-block';
                 results.style.display = 'block';
+                document.getElementById('streetAiSaveBtn').style.display = 'inline-block';
             } catch (e) {
                 console.error('Street AI failed:', e);
-                loading.style.display = 'none';
-                document.getElementById('streetAiErrorMsg').textContent = e.message;
-                errBox.style.display = 'block';
+                if (seq === streetAiSeq) {
+                    loading.style.display = 'none';
+                    document.getElementById('streetAiErrorMsg').textContent = e.message;
+                    errBox.style.display = 'block';
+                }
+            } finally {
+                analyzeBtn.disabled = false;
+                analyzeBtn.style.opacity = '1';
+            }
+        }
+
+        // Save the street AI report to the database — same endpoint and row
+        // layout as the pattern-detection Save button
+        async function saveStreetAi() {
+            if (!latestStreetAi) return;
+            const btn = document.getElementById('streetAiSaveBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving…';
+
+            try {
+                const res = await fetch(SA_AI_SAVE_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify({
+                        meta: latestStreetAi.meta,
+                        analysis: latestStreetAi.analysis,
+                        data_source: 'real'
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
+
+                btn.style.background = '#16a34a';
+                btn.innerHTML = '<i class="fas fa-circle-check mr-1"></i>Saved (' + data.saved_rows + ' rows)';
+            } catch (e) {
+                console.error('Street AI save failed:', e);
+                btn.disabled = false;
+                btn.style.background = '#dc2626';
+                btn.innerHTML = '<i class="fas fa-triangle-exclamation mr-1"></i>Save failed — retry';
             }
         }
 
