@@ -596,6 +596,75 @@ if (request()->query('token')) {
         </div>
     </div>
 
+    <!-- Street Details Modal (San Agustin street click) -->
+    <style>
+        #streetModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99998; padding: 20px; align-items: center; justify-content: center; }
+        #streetModal .sm-card { position: relative; background: #fff; border-radius: 16px; width: 100%; max-width: 1040px; max-height: 92%; display: flex; flex-direction: column; box-shadow: 0 25px 70px rgba(0,0,0,0.35); overflow: hidden; }
+        #streetModal .sm-body { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: 16px; padding: 16px 20px 20px; overflow-y: auto; }
+        @media (max-width: 900px) { #streetModal .sm-body { grid-template-columns: 1fr; } }
+        #streetModal .sm-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; background: #f3f4f6; color: #374151; }
+        #streetModal .sm-inc-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
+        #streetModal .sm-inc-card:hover { border-color: #94a3b8; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    </style>
+    <div id="streetModal" onclick="if(event.target === this) closeStreetModal()">
+        <div class="sm-card">
+            <button onclick="closeStreetModal()" style="position: absolute; top: 14px; right: 14px; background: none; border: none; font-size: 20px; color: #999; cursor: pointer; z-index: 10; width: 32px; height: 32px;" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#999'"><i class="fas fa-times"></i></button>
+
+            <!-- Header -->
+            <div style="padding: 18px 20px 12px; border-bottom: 1px solid #e5e7eb;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span id="streetModalSwatch" style="display: inline-block; width: 34px; height: 8px; border-radius: 4px; background: #64748b;"></span>
+                    <h2 id="streetModalName" style="font-size: 18px; font-weight: 800; color: #111; margin: 0;">Street</h2>
+                    <span style="font-size: 12px; color: #6b7280;">Barangay San Agustin, Quezon City</span>
+                </div>
+                <div id="streetModalPills" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+                    <span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>
+                </div>
+            </div>
+
+            <div class="sm-body">
+                <!-- LEFT: filtered street map + AI suggestions -->
+                <div style="min-width: 0;">
+                    <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
+                        <i class="fas fa-map-location-dot mr-1" style="color: #274d4c;"></i>Street map — incidents plotted where they happened
+                    </div>
+                    <div id="streetModalMap" style="height: 300px; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;"></div>
+
+                    <!-- AI suggestions -->
+                    <div style="margin-top: 14px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                            <span style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase;">
+                                <i class="fas fa-robot mr-1" style="color: #7c3aed;"></i>AI suggestions for this street
+                            </span>
+                            <span id="streetAiRisk" style="display: none; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;"></span>
+                        </div>
+                        <div id="streetAiLoading" style="border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 10px; padding: 14px; font-size: 12px; color: #6d28d9;">
+                            <i class="fas fa-spinner fa-spin mr-1"></i>Gemini is analyzing this street…
+                        </div>
+                        <div id="streetAiError" style="display: none; border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px; padding: 12px; font-size: 12px; color: #b91c1c;">
+                            <span id="streetAiErrorMsg"></span>
+                            <button onclick="loadStreetAi(currentStreetModalName)" style="margin-left: 8px; font-weight: 700; color: #7c3aed; background: none; border: none; cursor: pointer; text-decoration: underline;">Retry</button>
+                        </div>
+                        <div id="streetAiResults" style="display: none;">
+                            <p id="streetAiSummary" style="font-size: 12.5px; color: #374151; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; margin: 0 0 8px;"></p>
+                            <div id="streetAiSuggestions" style="display: grid; gap: 8px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: full incident details -->
+                <div style="min-width: 0;">
+                    <div style="font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 6px;">
+                        <i class="fas fa-list-ul mr-1" style="color: #274d4c;"></i>Incidents on this street <span id="streetIncCount" style="color: #274d4c;"></span>
+                    </div>
+                    <div id="streetIncidentList" style="display: grid; gap: 8px; align-content: start;">
+                        <div style="font-size: 12px; color: #9ca3af; padding: 12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading incidents…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // State variables
         let heatmapLayer = null;
@@ -1034,7 +1103,8 @@ if (request()->query('token')) {
                               (st.top_category ? ' · mostly ' + escStreet(st.top_category) : '') + '</div>' +
                               (st.peak_hours && st.peak_hours.length
                                   ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(escStreet).join(', ') + '</div>' : '')
-                            : '<div>No recorded incidents</div>');
+                            : '<div>No recorded incidents</div>') +
+                        '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> Click for full details &amp; AI advice</div>';
 
                     // No bringToFront() here on purpose: raising the SVG path
                     // while the cursor sits on it re-appends the element, the
@@ -1105,6 +1175,14 @@ if (request()->query('token')) {
                         hideConnectors();
                         streetGroup.closeTooltip();   // never leave it hanging open
                     });
+                    // Click opens the street modal: filtered mini-map, full
+                    // incident details, and AI suggestions for this street
+                    streetGroup.on('click', () => {
+                        highlight(false);
+                        hideConnectors();
+                        streetGroup.closeTooltip();
+                        openStreetModal(name, g);
+                    });
                 });
 
                 return saStreetLayer;
@@ -1131,6 +1209,241 @@ if (request()->query('token')) {
                 });
             } else if (saStreetLayer && map.hasLayer(saStreetLayer)) {
                 map.removeLayer(saStreetLayer);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // San Agustin street modal — opened by clicking a street. Shows the
+        // street alone on a filtered mini-map with a dot where each crime
+        // happened, the full details of every incident, and AI suggestions.
+        // ------------------------------------------------------------------
+        const SA_STREET_DETAIL_URL = @json(route('pattern-detection.street-detail'));
+        const SA_STREET_AI_URL = @json(route('pattern-detection.street-ai-suggest'));
+
+        let streetModalMap = null;        // mini Leaflet map, created once
+        let streetModalLayer = null;      // per-open overlay (street lines + crime dots)
+        let currentStreetModalName = null;
+        let streetModalMarkers = {};      // incident code -> circle marker
+
+        // Stable colour per crime category (same golden-angle trick as streets)
+        function colorForCategory(cat) {
+            let h = 0;
+            const s = String(cat || 'Uncategorized');
+            for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+            return 'hsl(' + Math.round((h * 137.508) % 360) + ', 72%, 40%)';
+        }
+
+        function openStreetModal(name, g) {
+            currentStreetModalName = name;
+            streetModalMarkers = {};
+
+            document.getElementById('streetModalName').textContent = name;
+            document.getElementById('streetModalSwatch').style.background = g.color;
+            document.getElementById('streetModalPills').innerHTML =
+                '<span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>';
+            document.getElementById('streetIncCount').textContent = '';
+            document.getElementById('streetIncidentList').innerHTML =
+                '<div style="font-size:12px;color:#9ca3af;padding:12px;"><i class="fas fa-spinner fa-spin mr-1"></i>Loading incidents…</div>';
+
+            document.getElementById('streetModal').style.display = 'flex';
+
+            // Mini map: built once, overlays rebuilt per open
+            if (!streetModalMap) {
+                streetModalMap = L.map('streetModalMap', { zoomControl: true, attributionControl: false });
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(streetModalMap);
+            }
+            if (streetModalLayer) { streetModalMap.removeLayer(streetModalLayer); }
+            streetModalLayer = L.layerGroup().addTo(streetModalMap);
+
+            // The clicked street only — cloned polylines (the originals stay on the big map)
+            const lines = [];
+            g.inner.forEach(function (l) {
+                L.polyline(l.getLatLngs(), { color: '#111827', weight: 8, opacity: 0.35 }).addTo(streetModalLayer);
+                lines.push(L.polyline(l.getLatLngs(), { color: g.color, weight: 4.5, opacity: 1 }).addTo(streetModalLayer));
+            });
+
+            const bounds = L.featureGroup(lines).getBounds();
+            // The modal was hidden a moment ago, so Leaflet needs a size recalc
+            setTimeout(function () {
+                streetModalMap.invalidateSize();
+                if (bounds.isValid()) streetModalMap.fitBounds(bounds.pad(0.25), { maxZoom: 18 });
+            }, 60);
+
+            loadStreetDetail(name, g);
+            loadStreetAi(name);
+        }
+
+        function closeStreetModal() {
+            document.getElementById('streetModal').style.display = 'none';
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeStreetModal();
+        });
+
+        async function loadStreetDetail(name, g) {
+            try {
+                const res = await fetch(SA_STREET_DETAIL_URL + '?street=' + encodeURIComponent(name),
+                    { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (data.error) throw new Error(data.message || data.error);
+                if (currentStreetModalName !== name) return;   // user opened another street meanwhile
+
+                renderStreetSummary(data.summary || {});
+                renderStreetIncidents(data.incidents || [], g);
+            } catch (e) {
+                console.error('Street detail failed:', e);
+                document.getElementById('streetIncidentList').innerHTML =
+                    '<div style="font-size:12px;color:#b91c1c;padding:12px;">Could not load incidents for this street.</div>';
+            }
+        }
+
+        function renderStreetSummary(s) {
+            const pills = [];
+            pills.push('<span class="sm-pill"><i class="fas fa-triangle-exclamation" style="color:#b45309;"></i>' +
+                (s.count || 0) + ' incident' + (s.count === 1 ? '' : 's') + '</span>');
+            if (s.top_category) {
+                pills.push('<span class="sm-pill"><span style="width:9px;height:9px;border-radius:50%;background:' +
+                    colorForCategory(s.top_category) + ';display:inline-block;"></span>Mostly ' + escStreet(s.top_category) + '</span>');
+            }
+            if (s.peak_hours && s.peak_hours.length) {
+                pills.push('<span class="sm-pill"><i class="fas fa-clock" style="color:#6d28d9;"></i>Peak: ' +
+                    s.peak_hours.map(escStreet).join(', ') + '</span>');
+            }
+            if (s.unresolved > 0) {
+                pills.push('<span class="sm-pill" style="background:#fef2f2;color:#b91c1c;"><i class="fas fa-folder-open"></i>' +
+                    s.unresolved + ' unresolved</span>');
+            }
+            document.getElementById('streetModalPills').innerHTML = pills.join('');
+        }
+
+        function renderStreetIncidents(incidents, g) {
+            document.getElementById('streetIncCount').textContent = '(' + incidents.length + ')';
+
+            if (!incidents.length) {
+                document.getElementById('streetIncidentList').innerHTML =
+                    '<div style="font-size:12px;color:#9ca3af;padding:12px;">No recorded incidents on this street.</div>';
+                return;
+            }
+
+            // Crime dots on the mini map — the circle sits exactly where the
+            // incident happened, coloured by its category
+            incidents.forEach(function (inc) {
+                if (!isFinite(inc.lat) || !isFinite(inc.lng)) return;
+                const c = colorForCategory(inc.category);
+                const marker = L.circleMarker([inc.lat, inc.lng], {
+                    radius: 8, color: '#111827', weight: 1.5, fillColor: c, fillOpacity: 0.95
+                }).addTo(streetModalLayer);
+                marker.bindPopup(
+                    '<div style="min-width:190px;">' +
+                        '<div style="font-weight:800;font-size:12px;color:' + c + ';">' + escStreet(inc.category) + '</div>' +
+                        '<div style="font-weight:700;font-size:12px;margin:2px 0;">' + escStreet(inc.title || inc.code) + '</div>' +
+                        '<div style="font-size:11px;color:#4b5563;">' + escStreet(inc.date || '') + (inc.time ? ' · ' + escStreet(inc.time) : '') + '</div>' +
+                        '<div style="font-size:11px;color:#4b5563;">Status: ' + escStreet(inc.status || '—') + '</div>' +
+                        '<div style="font-size:10px;color:#9ca3af;font-family:monospace;margin-top:2px;">' + escStreet(inc.code) + '</div>' +
+                    '</div>');
+                streetModalMarkers[inc.code] = marker;
+            });
+
+            // Full-detail cards; clicking one flies the mini map to its dot
+            document.getElementById('streetIncidentList').innerHTML = incidents.map(function (inc) {
+                const c = colorForCategory(inc.category);
+                const meta = [];
+                if (inc.victim_count > 0) meta.push(inc.victim_count + ' victim' + (inc.victim_count === 1 ? '' : 's'));
+                if (inc.suspect_count > 0) meta.push(inc.suspect_count + ' suspect' + (inc.suspect_count === 1 ? '' : 's'));
+                if (inc.weather) meta.push(escStreet(inc.weather));
+                return '<div class="sm-inc-card" data-code="' + escStreet(inc.code) + '">' +
+                    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                        '<span style="font-size:10px;font-weight:800;color:#fff;background:' + c + ';padding:2px 8px;border-radius:9999px;">' + escStreet(inc.category) + '</span>' +
+                        '<span style="font-size:10px;color:#9ca3af;font-family:monospace;">' + escStreet(inc.code) + '</span>' +
+                        '<span style="margin-left:auto;font-size:10px;font-weight:700;color:' +
+                            (['solved','resolved','closed','cleared'].indexOf(String(inc.status || '').toLowerCase()) >= 0 ? '#15803d' : '#b45309') + ';">' +
+                            escStreet(String(inc.status || '—').toUpperCase()) + '</span>' +
+                    '</div>' +
+                    '<div style="font-size:13px;font-weight:700;color:#111;margin-top:6px;">' + escStreet(inc.title || 'Incident') + '</div>' +
+                    '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><i class="fas fa-calendar mr-1"></i>' +
+                        escStreet(inc.date || '—') + (inc.time ? ' · <i class="fas fa-clock mr-1"></i>' + escStreet(inc.time) : '') + '</div>' +
+                    (inc.description ? '<div style="font-size:11.5px;color:#4b5563;margin-top:6px;line-height:1.45;">' + escStreet(inc.description) + '</div>' : '') +
+                    (inc.modus_operandi ? '<div style="font-size:11px;color:#6b7280;margin-top:4px;"><span style="font-weight:700;">Modus:</span> ' + escStreet(inc.modus_operandi) + '</div>' : '') +
+                    (meta.length ? '<div style="font-size:11px;color:#6b7280;margin-top:4px;">' + meta.join(' · ') + '</div>' : '') +
+                    (inc.clearance_status ? '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><span style="font-weight:700;">Clearance:</span> ' +
+                        escStreet(inc.clearance_status) + (inc.clearance_date ? ' (' + escStreet(inc.clearance_date) + ')' : '') + '</div>' : '') +
+                    (inc.assigned_officer ? '<div style="font-size:11px;color:#6b7280;margin-top:2px;"><span style="font-weight:700;">Officer:</span> ' + escStreet(inc.assigned_officer) + '</div>' : '') +
+                    '<div style="font-size:10.5px;color:#9ca3af;margin-top:4px;"><i class="fas fa-location-dot mr-1"></i>' + escStreet(inc.address || '') + '</div>' +
+                '</div>';
+            }).join('');
+
+            document.getElementById('streetIncidentList').querySelectorAll('.sm-inc-card').forEach(function (card) {
+                card.addEventListener('click', function () {
+                    const marker = streetModalMarkers[card.dataset.code];
+                    if (marker) {
+                        streetModalMap.setView(marker.getLatLng(), Math.max(streetModalMap.getZoom(), 18));
+                        marker.openPopup();
+                    }
+                });
+            });
+        }
+
+        async function loadStreetAi(name) {
+            const loading = document.getElementById('streetAiLoading');
+            const errBox = document.getElementById('streetAiError');
+            const results = document.getElementById('streetAiResults');
+            const risk = document.getElementById('streetAiRisk');
+            loading.style.display = 'block';
+            errBox.style.display = 'none';
+            results.style.display = 'none';
+            risk.style.display = 'none';
+
+            try {
+                const res = await fetch(SA_STREET_AI_URL + '?street=' + encodeURIComponent(name),
+                    { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || (res.status === 429
+                    ? 'Too many AI requests — wait a minute and press Retry.' : 'HTTP ' + res.status));
+                if (currentStreetModalName !== name) return;
+
+                const a = data.analysis || {};
+                const lvl = String(a.risk_level || 'low').toLowerCase();
+                const riskStyle = {
+                    high:   'background:#fee2e2;color:#b91c1c;',
+                    medium: 'background:#fef3c7;color:#b45309;',
+                    low:    'background:#dcfce7;color:#15803d;'
+                }[lvl] || 'background:#f3f4f6;color:#374151;';
+                risk.style.cssText = 'display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9999px;' + riskStyle;
+                risk.textContent = lvl.toUpperCase() + ' RISK';
+
+                document.getElementById('streetAiSummary').textContent = a.summary || '';
+
+                const prioStyle = {
+                    high:   'background:#fee2e2;color:#b91c1c;',
+                    medium: 'background:#fef3c7;color:#b45309;',
+                    low:    'background:#f3f4f6;color:#374151;'
+                };
+                document.getElementById('streetAiSuggestions').innerHTML = (a.suggestions || []).map(function (s) {
+                    const imp = s.expected_impact || {};
+                    const pct = Number(imp.estimated_change_percent);
+                    const pr = String(s.priority || 'low').toLowerCase();
+                    return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;">' +
+                        '<div style="display:flex;align-items:flex-start;gap:8px;">' +
+                            '<div style="font-size:12.5px;font-weight:700;color:#111;flex:1;"><i class="fas fa-shield-halved mr-1" style="color:#7c3aed;"></i>' + escStreet(s.action) + '</div>' +
+                            '<span style="flex-shrink:0;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9999px;' + (prioStyle[pr] || prioStyle.low) + '">' + pr.toUpperCase() + '</span>' +
+                        '</div>' +
+                        (s.time_window ? '<div style="font-size:11px;color:#6d28d9;font-weight:600;margin-top:3px;"><i class="fas fa-clock mr-1"></i>' + escStreet(s.time_window) + '</div>' : '') +
+                        (s.rationale ? '<div style="font-size:11.5px;color:#4b5563;margin-top:4px;line-height:1.45;">' + escStreet(s.rationale) + '</div>' : '') +
+                        (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:5px;">' +
+                            '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
+                            'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer incidents' : 'stable') +
+                            (imp.explanation ? ' — <span style="font-weight:400;color:#6b7280;">' + escStreet(imp.explanation) + '</span>' : '') + '</div>' : '') +
+                    '</div>';
+                }).join('') || '<div style="font-size:12px;color:#9ca3af;">No suggestions returned.</div>';
+
+                loading.style.display = 'none';
+                risk.style.display = 'inline-block';
+                results.style.display = 'block';
+            } catch (e) {
+                console.error('Street AI failed:', e);
+                loading.style.display = 'none';
+                document.getElementById('streetAiErrorMsg').textContent = e.message;
+                errBox.style.display = 'block';
             }
         }
 
