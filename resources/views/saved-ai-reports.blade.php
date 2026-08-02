@@ -42,7 +42,7 @@
                     <i class="fas fa-robot text-alertara-700 mr-2"></i>Saved AI Reports
                 </h1>
                 <p class="text-gray-600 mt-1 text-sm lg:text-base">
-                    Every AI analysis and recommendation you saved from Pattern Detection, grouped by save.
+                    Every analysis and recommendation you saved from Pattern Detection and Crime Mapping, grouped by save.
                 </p>
             </div>
             <div class="flex items-center gap-3">
@@ -85,8 +85,25 @@
             </a>
         </div>
     @else
-        <div class="mb-4 text-sm text-gray-500">
-            <i class="fas fa-layer-group mr-1"></i>{{ count($batches) }} saved report{{ count($batches) === 1 ? '' : 's' }}
+        @php
+            $isMappingBatch = fn ($b) => (($b['scenario']['type'] ?? '') === 'street_advice');
+            $mapCount = count(array_filter($batches, $isMappingBatch));
+            $patCount = count($batches) - $mapCount;
+        @endphp
+
+        <!-- Source filter: where each saved report came from -->
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+            <span class="text-xs font-bold text-gray-400 uppercase tracking-wide mr-1"><i class="fas fa-filter mr-1"></i>Source</span>
+            <button type="button" class="report-filter px-3 py-1.5 rounded-lg text-xs font-bold border" data-filter="all">
+                <i class="fas fa-layer-group mr-1"></i>All ({{ count($batches) }})
+            </button>
+            <button type="button" class="report-filter px-3 py-1.5 rounded-lg text-xs font-bold border" data-filter="pattern">
+                <i class="fas fa-magnifying-glass-chart mr-1"></i>Pattern Detection ({{ $patCount }})
+            </button>
+            <button type="button" class="report-filter px-3 py-1.5 rounded-lg text-xs font-bold border" data-filter="mapping">
+                <i class="fas fa-map-location-dot mr-1"></i>Crime Mapping ({{ $mapCount }})
+            </button>
+            <span id="filterEmptyNote" class="hidden text-xs text-gray-400 ml-2">No saved reports from this source yet.</span>
         </div>
 
         <div class="space-y-6">
@@ -97,18 +114,28 @@
                     $forecast = $payload['forecast'] ?? [];
                     $findings = $payload['key_findings'] ?? [];
                     $recs     = $batch['recommendations'];
+                    $fromMapping = $isMappingBatch($batch);
                 @endphp
 
-                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div class="report-batch bg-white rounded-xl border border-gray-200 overflow-hidden" data-source="{{ $fromMapping ? 'mapping' : 'pattern' }}">
                     <!-- Batch header -->
                     @php $isSim = ($batch['data_source'] ?? 'real') === 'simulation'; @endphp
-                    <div class="px-6 py-4 border-b border-gray-200 {{ $isSim ? 'bg-amber-50' : 'bg-gray-50' }} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div class="px-6 py-4 border-b border-gray-200 {{ $isSim ? 'bg-amber-50' : ($fromMapping ? 'bg-indigo-50/50' : 'bg-gray-50') }} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div class="flex items-center gap-3 flex-wrap">
+                            @if($fromMapping)
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 text-xs font-bold">
+                                    <i class="fas fa-map-location-dot mr-1"></i>CRIME MAPPING
+                                </span>
+                            @else
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-violet-100 text-violet-800 text-xs font-bold">
+                                    <i class="fas fa-magnifying-glass-chart mr-1"></i>PATTERN DETECTION
+                                </span>
+                            @endif
                             @if($isSim)
                                 <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-amber-200 text-amber-900 text-xs font-bold">
                                     <i class="fas fa-flask mr-1"></i>SIMULATION
                                 </span>
-                            @else
+                            @elseif(!$fromMapping)
                                 <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
                                     <i class="fas fa-database mr-1"></i>REAL DATA
                                 </span>
@@ -132,6 +159,13 @@
                     </div>
 
                     <div class="p-6 space-y-6">
+                        @if($fromMapping && !empty($batch['scenario']['streets']))
+                            <div class="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 text-xs text-indigo-900 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                <span class="font-bold uppercase tracking-wide text-indigo-700">Streets analyzed</span>
+                                <span><i class="fas fa-road mr-1"></i>{{ implode(', ', (array) $batch['scenario']['streets']) }}</span>
+                            </div>
+                        @endif
+
                         @if($isSim && !empty($batch['scenario']))
                             @php $sc = $batch['scenario']; @endphp
                             <div class="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-900 flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -253,6 +287,29 @@
 </div>
 
 <script>
+(function () {
+    // Source filter: show only Pattern Detection or Crime Mapping saves
+    const filterBtns = document.querySelectorAll('.report-filter');
+    function applyFilter(which) {
+        filterBtns.forEach(function (b) {
+            const on = b.dataset.filter === which;
+            b.className = 'report-filter px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ' +
+                (on ? 'bg-alertara-700 text-white border-alertara-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50');
+        });
+        let visible = 0;
+        document.querySelectorAll('.report-batch').forEach(function (el) {
+            const show = which === 'all' || el.dataset.source === which;
+            el.classList.toggle('hidden', !show);
+            if (show) visible++;
+        });
+        const note = document.getElementById('filterEmptyNote');
+        if (note) note.classList.toggle('hidden', visible > 0);
+    }
+    filterBtns.forEach(function (b) {
+        b.addEventListener('click', function () { applyFilter(b.dataset.filter); });
+    });
+    if (filterBtns.length) applyFilter('all');
+})();
 (function () {
     const btn = document.getElementById('copyApiBtn');
     if (!btn) return;
