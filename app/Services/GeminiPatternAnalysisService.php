@@ -35,7 +35,7 @@ class GeminiPatternAnalysisService
         if ($incidents->isEmpty()) {
             return [
                 'success' => false,
-                'error'   => 'No San Agustin incident records found in the selected period, so there is nothing to analyze.',
+                'error'   => 'No San Agustin crime records found in the selected period, so there is nothing to analyze.',
             ];
         }
 
@@ -99,7 +99,7 @@ class GeminiPatternAnalysisService
         if ($incidents->isEmpty()) {
             return [
                 'success' => false,
-                'error'   => 'No San Agustin incident records found in the selected period, so there is no baseline to simulate from.',
+                'error'   => 'No San Agustin crime records found in the selected period, so there is no baseline to simulate from.',
             ];
         }
 
@@ -176,11 +176,11 @@ class GeminiPatternAnalysisService
                 ],
                 'analysis' => [
                     'risk_level' => 'low',
-                    'summary'    => 'No incidents were recorded on ' . $street . ' in the selected period. Keep routine barangay patrol coverage and encourage residents to report suspicious activity.',
+                    'summary'    => 'No crimes were recorded on ' . $street . ' in the selected period. Keep routine barangay patrol coverage and encourage residents to report suspicious activity.',
                     'suggestions' => [[
                         'action'      => 'Maintain routine patrol pass-through',
                         'time_window' => '18:00-23:00',
-                        'rationale'   => 'The street has no recorded incidents; an occasional evening pass keeps it that way.',
+                        'rationale'   => 'The street has no recorded crimes; an occasional evening pass keeps it that way.',
                         'expected_impact' => [
                             'direction' => 'stable',
                             'estimated_change_percent' => 0,
@@ -282,6 +282,7 @@ Rules:
 - risk_level must reflect the street's incident volume and trend (monthly_counts).
 - Be precise about TIMING: name the exact peak hours from by_hour in every time_window.
 - estimated_change_percent must be realistic per published research effect sizes (street lighting ≈ -20%, CCTV ≈ -13%, hot-spot patrols ≈ -15 to -25%, community watch ≈ -16%).
+- In every text field, refer to the records as "crimes", never "incidents".
 - Keep every text field concise. Output JSON only, no markdown.
 PROMPT;
     }
@@ -560,6 +561,7 @@ Rules:
 - Be precise about TIMING: use hourly_counts and category_peak_hours to name the exact hours each intervention should run (e.g. night patrols where robbery peaks 21:00-02:00, daytime theft watch 10:00-14:00, anti-burglary checks in early-morning hours).
 - Ground every recommendation in a REAL street from street_profiles, matched to that street's top_crime and peak_hours. Cover at least 5 different streets across all recommendations.
 - estimated_change_percent must be realistic and grounded in published crime-prevention research effect sizes (e.g. improved street lighting ≈ -20% area crime, CCTV ≈ -13%, hot-spot patrols ≈ -15 to -25%, community watch ≈ -16%).
+- In every text field, refer to the records as "crimes", never "incidents".
 - Keep every text field concise. Output JSON only, no markdown.
 PROMPT;
     }
@@ -633,6 +635,7 @@ Using the baseline and published crime-prevention research effect sizes (improve
 Rules:
 - Anchor expected_change_percent to the combined research effect sizes of the deployed measures, applied to the crime categories each measure addresses.
 - Be precise about TIMING and STREETS: use hourly_counts, category_peak_hours and street_profiles.
+- In every text field, refer to the records as "crimes", never "incidents".
 - Keep every text field concise. Output JSON only, no markdown.
 PROMPT;
         }
@@ -659,6 +662,7 @@ Rules:
 - Anchor expected_change_percent to the combined research effect sizes of the MISSING safeguards, applied to the crime categories each safeguard normally protects.
 - Be precise about TIMING and STREETS: use hourly_counts, category_peak_hours and street_profiles to name exact hours and streets.
 - Every recommendation must be a prevention measure that directly counters one of the missing safeguards.
+- In every text field, refer to the records as "crimes", never "incidents".
 - Keep every text field concise. Output JSON only, no markdown.
 PROMPT;
     }
