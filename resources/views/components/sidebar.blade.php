@@ -211,6 +211,13 @@
                 <div class="nav-section">
                     <span class="section-label">Custom Report</span>
                     <div class="tree-node mt-0.5">
+                        <a href="{{ authUrl('reports.crime-data') }}"
+                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('reports.crime-data') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
+                            <i class="fas fa-file-shield w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>Crime Data Reports</span>
+                        </a>
+                    </div>
+                    <div class="tree-node mt-0.5">
                         <a href="{{ authUrl('saved-ai-reports') }}"
                            class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('saved-ai-reports') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                             <i class="fas fa-robot w-4 h-4 mr-3 flex-shrink-0"></i>
