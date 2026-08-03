@@ -62,6 +62,10 @@
                 <span class="ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 align-middle">REAL</span>
             </h2>
             <div class="flex items-center gap-2">
+                <div id="aiLangToggle" class="flex rounded-lg border border-violet-300 overflow-hidden text-[11px] font-bold" title="Language of the suggestions">
+                    <button type="button" data-lang="en" class="px-2.5 py-1">English</button>
+                    <button type="button" data-lang="tl" class="px-2.5 py-1">Taglish</button>
+                </div>
                 <span id="aiMetaBadge" class="hidden text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 text-violet-800"></span>
                 <button id="aiSaveBtn" class="hidden px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-xs font-semibold">
                     <i class="fas fa-floppy-disk mr-1"></i>Save
@@ -742,9 +746,10 @@
         $(p + 'ForecastPercent').className = 'text-sm font-bold ' + (pct > 0 ? 'text-red-700' : pct < 0 ? 'text-green-700' : 'text-gray-700');
 
         $(p + 'Confidence').textContent = 'CONFIDENCE: ' + String(f.confidence || 'low').toUpperCase();
-        $(p + 'ForecastSummary').textContent = f.summary || '';
+        $(p + 'ForecastSummary').textContent = (isTl() && f.summary_tl) ? f.summary_tl : (f.summary || '');
 
-        $(p + 'Findings').innerHTML = (a.key_findings || []).map(k =>
+        const findings = (isTl() && a.key_findings_tl) ? a.key_findings_tl : (a.key_findings || []);
+        $(p + 'Findings').innerHTML = findings.map(k =>
             '<li class="flex items-start gap-2 text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3">' +
                 '<i class="fas fa-circle-check text-' + accent + '-600 mt-0.5"></i><span>' + esc(k) + '</span>' +
             '</li>').join('') || '<li class="text-sm text-gray-500">No findings returned.</li>';
@@ -756,11 +761,12 @@
         };
 
         const recWrap = $(p + 'Recommendations');
-        if (a.streets && a.streets.length) {
+        const streetSecs = (isTl() && a.streets_tl && a.streets_tl.length) ? a.streets_tl : a.streets;
+        if (streetSecs && streetSecs.length) {
             // Rule-engine shape: one section per street, one block per crime
             // type inside — same structure as the crime-mapping street modal
             recWrap.className = 'space-y-3';
-            recWrap.innerHTML = a.streets.map((sec, i) => pdStreetSection(sec, i)).join('');
+            recWrap.innerHTML = streetSecs.map((sec, i) => pdStreetSection(sec, i)).join('');
             return;
         }
 
@@ -809,6 +815,26 @@
         moderate: 'bg-amber-100 text-amber-800 border-amber-200',
         low:      'bg-gray-100 text-gray-600 border-gray-200'
     };
+
+    // ---------- language (English | Taglish) ----------
+    let saLang = localStorage.getItem('sa_sugg_lang') === 'tl' ? 'tl' : 'en';
+    const isTl = () => saLang === 'tl';
+
+    function pdApplyLangButtons() {
+        document.querySelectorAll('#aiLangToggle [data-lang]').forEach(b => {
+            b.className = 'px-2.5 py-1 ' + (b.dataset.lang === saLang
+                ? 'bg-violet-600 text-white'
+                : 'bg-white text-violet-700 hover:bg-violet-50');
+        });
+    }
+    document.querySelectorAll('#aiLangToggle [data-lang]').forEach(b => b.addEventListener('click', () => {
+        if (saLang === b.dataset.lang) return;
+        saLang = b.dataset.lang;
+        localStorage.setItem('sa_sugg_lang', saLang);
+        pdApplyLangButtons();
+        if (latestAi) renderAiInto('ai', latestAi, 'violet');
+    }));
+    pdApplyLangButtons();
     function pdSeverityChip(sev) {
         const s = String(sev || '').toLowerCase();
         if (!PD_SEV_CHIP[s]) return '';
@@ -819,18 +845,30 @@
     // so the barangay / police station can study the area, not just the advice
     function pdEvidenceBlock(ev) {
         if (!ev || !ev.cases) return '';
+        const T = isTl();
         const row = (icon, html) =>
             '<div class="flex gap-1.5 text-[11px] text-amber-900 leading-relaxed"><i class="fas ' + icon + ' text-amber-600 mt-0.5 flex-shrink-0"></i><span>' + html + '</span></div>';
+        const sev = esc(String(ev.severity || '').toUpperCase());
         return '<div class="mt-2 rounded-lg bg-amber-50 border border-amber-200 p-2.5">' +
-            '<div class="text-[9.5px] font-bold text-amber-800 uppercase tracking-wide mb-1"><i class="fas fa-magnifying-glass mr-1"></i>Basis — recorded crimes</div>' +
-            row('fa-hashtag', '<b>' + ev.cases + ' recorded case' + (ev.cases === 1 ? '' : 's') + '</b> (' + ev.share + '% of this street\'s crimes) — severity assessed as <b>' + esc(String(ev.severity || '').toUpperCase()) + '</b>.') +
-            (ev.modus && ev.modus.length ? row('fa-user-ninja', 'How they were committed: ' + ev.modus.map(esc).join('; ') + '.') : '') +
+            '<div class="text-[9.5px] font-bold text-amber-800 uppercase tracking-wide mb-1"><i class="fas fa-magnifying-glass mr-1"></i>' + (T ? 'Basehan — mga naitalang krimen' : 'Basis — recorded crimes') + '</div>' +
+            row('fa-hashtag', T
+                ? '<b>' + ev.cases + ' naitalang kaso</b> (' + ev.share + '% ng krimen sa kalyeng ito) — ang tindi ay <b>' + sev + '</b>.'
+                : '<b>' + ev.cases + ' recorded case' + (ev.cases === 1 ? '' : 's') + '</b> (' + ev.share + '% of this street\'s crimes) — severity assessed as <b>' + sev + '</b>.') +
+            (ev.modus && ev.modus.length ? row('fa-user-ninja', (T ? 'Paano ginawa: ' : 'How they were committed: ') + ev.modus.map(esc).join('; ') + '.') : '') +
             (typeof ev.unresolved === 'number' ? row('fa-folder-open', (ev.unresolved > 0
-                ? '<b>' + ev.unresolved + ' of ' + ev.cases + ' still unresolved</b> — follow up with the assigned officers.'
-                : 'All ' + ev.cases + ' cases already resolved.')) : '') +
+                ? (T
+                    ? '<b>' + ev.unresolved + ' sa ' + ev.cases + ' ang hindi pa naresolba</b> — i-follow up sa mga nakatalagang opisyal.'
+                    : '<b>' + ev.unresolved + ' of ' + ev.cases + ' still unresolved</b> — follow up with the assigned officers.')
+                : (T
+                    ? 'Lahat ng ' + ev.cases + ' kaso ay naresolba na.'
+                    : 'All ' + ev.cases + ' cases already resolved.'))) : '') +
             ((ev.busiest_day || ev.latest) ? row('fa-calendar-day',
-                (ev.busiest_day ? 'Most cases fall on <b>' + esc(ev.busiest_day) + 's</b>. ' : '') +
-                (ev.latest ? 'Most recent case: <b>' + esc(ev.latest) + '</b>.' : '')) : '') +
+                (ev.busiest_day ? (T
+                    ? 'Karamihan ng kaso ay tuwing <b>' + esc(ev.busiest_day) + '</b>. '
+                    : 'Most cases fall on <b>' + esc(ev.busiest_day) + 's</b>. ') : '') +
+                (ev.latest ? (T
+                    ? 'Pinakahuling kaso: <b>' + esc(ev.latest) + '</b>.'
+                    : 'Most recent case: <b>' + esc(ev.latest) + '</b>.') : '')) : '') +
             pdCaseLog(ev.cases_list) +
         '</div>';
     }
@@ -839,6 +877,7 @@
     // behind the suggestion, ready for the barangay / police to study
     function pdCaseLog(cases) {
         if (!cases || !cases.length) return '';
+        const T = isTl();
         const MAX = 8;
         const rows = cases.slice(0, MAX).map(c =>
             '<div class="flex flex-wrap items-baseline gap-x-2 text-[10.5px] text-amber-900 border-t border-dashed border-amber-200 py-1">' +
@@ -846,12 +885,15 @@
                 (c.day ? '<span>(' + esc(c.day) + ')</span>' : '') +
                 (c.time ? '<span class="font-semibold text-amber-700"><i class="fas fa-clock mr-0.5"></i>' + esc(c.time) + '</span>' : '') +
                 (c.modus ? '<span class="text-amber-800">— ' + esc(c.modus) + '</span>' : '') +
-                '<span class="ml-auto font-bold ' + (c.resolved ? 'text-green-700' : 'text-red-700') + '">' + (c.resolved ? 'RESOLVED' : 'UNRESOLVED') + '</span>' +
+                '<span class="ml-auto font-bold ' + (c.resolved ? 'text-green-700' : 'text-red-700') + '">' +
+                    (c.resolved ? (T ? 'RESOLBADO' : 'RESOLVED') : (T ? 'DI PA RESOLBADO' : 'UNRESOLVED')) + '</span>' +
             '</div>').join('');
         return '<div class="mt-1.5">' +
-            '<div class="text-[9.5px] font-bold text-amber-800 uppercase tracking-wide"><i class="fas fa-list-ul mr-1"></i>Case log (date · day · time)</div>' +
+            '<div class="text-[9.5px] font-bold text-amber-800 uppercase tracking-wide"><i class="fas fa-list-ul mr-1"></i>' + (T ? 'Talaan ng kaso (petsa · araw · oras)' : 'Case log (date · day · time)') + '</div>' +
             rows +
-            (cases.length > MAX ? '<div class="text-[10px] text-amber-700 pt-1">+' + (cases.length - MAX) + ' more — press "View crimes" above for the full list.</div>' : '') +
+            (cases.length > MAX ? '<div class="text-[10px] text-amber-700 pt-1">' + (T
+                ? '+' + (cases.length - MAX) + ' pa — pindutin ang "Tingnan ang mga krimen" sa itaas para sa buong listahan.'
+                : '+' + (cases.length - MAX) + ' more — press "View crimes" above for the full list.') + '</div>' : '') +
         '</div>';
     }
 
@@ -879,19 +921,19 @@
             pdEvidenceBlock(d.evidence) +
             (d.coverage ? '<div class="text-[11px] text-gray-700 mt-1.5"><i class="fas fa-location-crosshairs mr-1 text-violet-500"></i>' + esc(d.coverage) + '</div>' : '') +
             (d.steps && d.steps.length ? '<div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-2.5">' +
-                '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">How to implement</div>' +
+                '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">' + (isTl() ? 'Paano ipapatupad' : 'How to implement') + '</div>' +
                 d.steps.map((st, i) => '<div class="flex gap-1.5 text-[11px] text-gray-600 leading-relaxed"><span class="font-bold text-violet-600 flex-shrink-0">' + (i + 1) + '.</span><span>' + esc(st) + '</span></div>').join('') +
             '</div>' : '') +
-            infoRow('fa-toolbox', 'Needs', d.resources) +
-            infoRow('fa-user-shield', 'Lead', d.lead) +
+            infoRow('fa-toolbox', isTl() ? 'Kailangan' : 'Needs', d.resources) +
+            infoRow('fa-user-shield', isTl() ? 'Mamumuno' : 'Lead', d.lead) +
             infoRow('fa-calendar-check', 'Timeline', d.timeline) +
             (d.tips && d.tips.length ? '<div class="mt-2 rounded-lg bg-sky-50 border border-sky-200 p-2.5">' +
-                '<div class="text-[9.5px] font-bold text-sky-700 uppercase tracking-wide mb-1"><i class="fas fa-people-roof mr-1"></i>Prevention tips for residents</div>' +
+                '<div class="text-[9.5px] font-bold text-sky-700 uppercase tracking-wide mb-1"><i class="fas fa-people-roof mr-1"></i>' + (isTl() ? 'Mga tip sa pag-iwas para sa mga residente' : 'Prevention tips for residents') + '</div>' +
                 d.tips.map(t => '<div class="flex gap-1.5 text-[11px] text-sky-900 leading-relaxed"><i class="fas fa-check text-sky-500 mt-0.5 flex-shrink-0"></i><span>' + esc(t) + '</span></div>').join('') +
             '</div>' : '') +
             (isFinite(pct) ? '<div class="text-[11px] font-bold mt-2 ' + (pct < 0 ? 'text-green-700' : 'text-gray-700') + '">' +
                 '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
-                'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer crimes' : 'stable') +
+                (isTl() ? 'Kapag ipinatupad: ' : 'If implemented: ') + (pct < 0 ? '~' + Math.abs(pct) + '% ' + (isTl() ? 'mas kaunting krimen' : 'fewer crimes') : 'stable') +
                 (imp.explanation ? ' <span class="font-normal text-gray-500">— ' + esc(imp.explanation) + '</span>' : '') +
             '</div>' : '') +
             (d.kpi ? '<div class="text-[11px] font-semibold text-green-700 mt-1"><i class="fas fa-bullseye mr-1"></i>' + esc(d.kpi) + '</div>' : '') +
@@ -906,15 +948,18 @@
         if (sec.categories && sec.categories.length) {
             body = sec.categories.map(cb => {
                 const cc = PD_CAT_COLORS[cb.category] || '#64748b';
+                const T = isTl();
                 return '<div class="pd-cat-block rounded-lg border border-gray-200 overflow-hidden">' +
                     '<div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50">' +
-                        '<span class="text-[10px] font-bold text-white px-2 py-0.5 rounded-full" style="background:' + cc + ';">' + esc(cb.category) + '</span>' +
+                        '<span class="text-[10px] font-bold text-white px-2 py-0.5 rounded-full" style="background:' + cc + ';">' + esc(cb.category_label || cb.category) + '</span>' +
                         pdSeverityChip(cb.severity) +
-                        '<span class="text-[11px] font-bold text-gray-700">' + cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)</span>' +
+                        '<span class="text-[11px] font-bold text-gray-700">' + (T
+                            ? cb.count + ' sa ' + sec.total + ' krimen (' + cb.share + '%)'
+                            : cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)') + '</span>' +
                         (cb.peak_hours && cb.peak_hours.length ? '<span class="text-[10.5px] font-semibold text-violet-700"><i class="fas fa-clock mr-1"></i>Peak: ' + cb.peak_hours.map(esc).join(', ') + '</span>' : '') +
                         '<button type="button" class="pd-cat-crimes ml-auto text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1 hover:bg-violet-100"' +
                             ' data-street="' + esc(sec.street) + '" data-cat="' + esc(cb.category) + '">' +
-                            '<i class="fas fa-list mr-1"></i>View crimes</button>' +
+                            '<i class="fas fa-list mr-1"></i>' + (T ? 'Tingnan ang mga krimen' : 'View crimes') + '</button>' +
                     '</div>' +
                     '<div class="pd-cat-list hidden px-3 py-2 bg-white border-b border-gray-100"></div>' +
                     '<div class="p-2.5">' + pdSuggCard(cb.suggestion || {}) + '</div>' +
@@ -929,7 +974,9 @@
             '<button type="button" class="pd-street-toggle w-full flex flex-wrap items-center gap-2 px-4 py-3 text-left hover:bg-gray-100/70">' +
                 '<span class="text-sm font-extrabold text-gray-900"><i class="fas fa-road text-gray-400 mr-1.5"></i>' + esc(sec.street) + '</span>' +
                 '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (PD_RISK_CHIP[lvl] || PD_RISK_CHIP.low) + '">' + lvl.toUpperCase() + ' RISK</span>' +
-                (typeof sec.total === 'number' ? '<span class="text-[11px] font-bold text-gray-500">' + sec.total + ' total crime' + (sec.total === 1 ? '' : 's') + '</span>' : '') +
+                (typeof sec.total === 'number' ? '<span class="text-[11px] font-bold text-gray-500">' + (isTl()
+                    ? sec.total + ' kabuuang krimen'
+                    : sec.total + ' total crime' + (sec.total === 1 ? '' : 's')) + '</span>' : '') +
                 '<i class="fas fa-chevron-' + (open ? 'up' : 'down') + ' pd-chev ml-auto text-gray-400 text-xs"></i>' +
             '</button>' +
             '<div class="pd-street-body px-4 pb-4' + (open ? '' : ' hidden') + '">' +
@@ -981,11 +1028,12 @@
         const stat = (icon, html) =>
             '<span class="inline-flex items-center gap-1"><i class="fas ' + icon + ' text-gray-400"></i>' + html + '</span>';
 
+        const T = isTl();
         return '<div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 mb-1.5">' +
-            stat('fa-hashtag', incs.length + ' crime' + (incs.length === 1 ? '' : 's')) +
-            stat('fa-folder-open', '<span class="' + (unresolved > 0 ? 'text-amber-700' : 'text-green-700') + '">' + unresolved + ' unresolved</span>') +
+            stat('fa-hashtag', incs.length + (T ? ' krimen' : ' crime' + (incs.length === 1 ? '' : 's'))) +
+            stat('fa-folder-open', '<span class="' + (unresolved > 0 ? 'text-amber-700' : 'text-green-700') + '">' + unresolved + (T ? ' di pa resolba' : ' unresolved') + '</span>') +
             (topHours.length ? stat('fa-clock', 'Peak: ' + topHours.map(esc).join(', ')) : '') +
-            (topDay ? stat('fa-calendar-day', 'Busiest: ' + esc(topDay) + 's') : '') +
+            (topDay ? stat('fa-calendar-day', (T ? 'Pinaka-madalas: ' : 'Busiest: ') + esc(topDay) + (T ? '' : 's')) : '') +
         '</div>';
     }
 
@@ -1000,10 +1048,10 @@
             '</div>' +
             '<div class="text-[10.5px] text-gray-500 mt-0.5">' +
                 [
-                    i.victim_count ? 'Victims: ' + i.victim_count : null,
-                    i.suspect_count ? 'Suspects: ' + i.suspect_count : null,
-                    i.weather ? 'Weather: ' + esc(i.weather) : null,
-                    i.assigned_officer ? 'Officer: ' + esc(i.assigned_officer) : null
+                    i.victim_count ? (isTl() ? 'Biktima: ' : 'Victims: ') + i.victim_count : null,
+                    i.suspect_count ? (isTl() ? 'Suspek: ' : 'Suspects: ') + i.suspect_count : null,
+                    i.weather ? (isTl() ? 'Panahon: ' : 'Weather: ') + esc(i.weather) : null,
+                    i.assigned_officer ? (isTl() ? 'Opisyal: ' : 'Officer: ') + esc(i.assigned_officer) : null
                 ].filter(Boolean).join(' · ') +
             '</div>' +
             (i.description ? '<div class="text-[10.5px] text-gray-400 mt-0.5">' + esc(i.description) + '</div>' : '') +
@@ -1029,29 +1077,31 @@
         const list = block ? block.querySelector('.pd-cat-list') : null;
         if (!list) return;
 
+        const T = isTl();
         if (!list.classList.contains('hidden')) {
             list.classList.add('hidden');
-            btn.innerHTML = '<i class="fas fa-list mr-1"></i>View crimes';
+            btn.innerHTML = '<i class="fas fa-list mr-1"></i>' + (T ? 'Tingnan ang mga krimen' : 'View crimes');
             return;
         }
 
         list.classList.remove('hidden');
-        btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>Hide crimes';
+        btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>' + (T ? 'Itago ang mga krimen' : 'Hide crimes');
         if (!list.dataset.loaded) {
-            list.innerHTML = '<div class="text-[11px] text-gray-400 py-1"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes&hellip;</div>';
+            list.innerHTML = '<div class="text-[11px] text-gray-400 py-1"><i class="fas fa-spinner fa-spin mr-1"></i>' + (T ? 'Nilo-load ang mga krimen&hellip;' : 'Loading crimes&hellip;') + '</div>';
             try {
                 const d = await pdStreetDetail(btn.dataset.street);
                 const incs = ((d && d.incidents) || []).filter(i => i.category === btn.dataset.cat);
                 list.innerHTML = incs.length
-                    ? '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">' +
-                          esc(btn.dataset.cat) + ' crimes on ' + esc(btn.dataset.street) + '</div>' +
+                    ? '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">' + (T
+                          ? 'Mga ' + esc(btn.dataset.cat) + ' na krimen sa ' + esc(btn.dataset.street)
+                          : esc(btn.dataset.cat) + ' crimes on ' + esc(btn.dataset.street)) + '</div>' +
                       pdCrimeSummary(incs) +
                       incs.map(pdCrimeRow).join('')
-                    : '<div class="text-[11px] text-gray-400 py-1">No recorded crimes found for this category.</div>';
+                    : '<div class="text-[11px] text-gray-400 py-1">' + (T ? 'Walang naitalang krimen para sa kategoryang ito.' : 'No recorded crimes found for this category.') + '</div>';
                 list.dataset.loaded = '1';
             } catch (err) {
                 console.error('Street detail failed:', err);
-                list.innerHTML = '<div class="text-[11px] text-red-600 py-1">Could not load the crime list — click again to retry.</div>';
+                list.innerHTML = '<div class="text-[11px] text-red-600 py-1">' + (T ? 'Hindi ma-load ang listahan — i-click ulit para subukan muli.' : 'Could not load the crime list — click again to retry.') + '</div>';
             }
         }
     });
