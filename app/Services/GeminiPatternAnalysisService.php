@@ -285,7 +285,7 @@ class GeminiPatternAnalysisService
         // Data fingerprint in the key → the cache refreshes the moment the
         // incident table changes (migrations, new records), never serving
         // stale street counts.
-        $cacheKey = 'street_rules_v4_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
+        $cacheKey = 'street_rules_v5_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($streets, $days) {
             // ALL records, no date cutoff — the street modal lists every crime
@@ -346,6 +346,158 @@ class GeminiPatternAnalysisService
         });
     }
 
+    /**
+     * SYSTEM-generated barangay-wide analysis for the pattern-detection page —
+     * no AI call at all, mirroring the street modal's rule engine. Instant,
+     * free, immune to Gemini limits.
+     *
+     * Output is shaped like analyze() (forecast + key_findings +
+     * recommendations, so Save/Download keep working) PLUS analysis.streets[]:
+     * one section per crime-carrying street, and under each street one block
+     * per crime CATEGORY with its own counts, peak hours and a detailed
+     * suggestion.
+     */
+    public function analyzeRuleBased(int $days = 180): array
+    {
+        $days = max(30, min(730, $days));
+
+        $cacheKey = 'pattern_rules_v1_' . md5($days . '|' . $this->tableFingerprint());
+
+        return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($days) {
+            // ALL records — street sections must match the street modal lists
+            $all = $this->loadAllIncidents();
+
+            if ($all->isEmpty()) {
+                return [
+                    'success' => false,
+                    'error'   => 'No San Agustin crime records found, so there is nothing to analyze.',
+                ];
+            }
+
+            $periodStart = now()->subDays($days)->toDateString();
+            $midpoint = now()->subDays((int) floor($days / 2))->toDateString();
+
+            // Trend from the selected period only; street sections use all rows
+            $period = $all->filter(fn ($i) => $i['date'] >= $periodStart)->values();
+            $trendBase = $period->isNotEmpty() ? $period : $all;
+            $recent = $trendBase->filter(fn ($i) => $i['date'] >= $midpoint)->count();
+            $earlier = $trendBase->count() - $recent;
+
+            $pct = $earlier > 0
+                ? (int) round(($recent - $earlier) / $earlier * 100)
+                : ($recent > 0 ? 100 : 0);
+            $pct = max(-60, min(60, $pct));
+            $direction = $pct >= 10 ? 'increase' : ($pct <= -10 ? 'decrease' : 'stable');
+            $confidence = $trendBase->count() >= 150 ? 'high' : ($trendBase->count() >= 60 ? 'medium' : 'low');
+
+            $forecast = [
+                'direction'               => $direction,
+                'expected_change_percent' => $pct,
+                'confidence'              => $confidence,
+                'summary'                 => 'Recorded crimes went from ' . $earlier . ' in the earlier half to '
+                    . $recent . ' in the recent half of the last ' . $days . ' days ('
+                    . ($pct > 0 ? '+' : '') . $pct . '%). If nothing changes, crime is likely to '
+                    . ($direction === 'increase' ? 'keep rising' : ($direction === 'decrease' ? 'keep falling' : 'stay at about this level'))
+                    . ' in the coming months. The street-by-street suggestions below target the exact'
+                    . ' crime categories and hours behind these numbers.',
+            ];
+
+            // Per-street sections (per-category blocks inside), busiest first
+            $sections = [];
+            foreach ($all->whereNotNull('street')->groupBy('street')
+                         ->sortByDesc(fn ($g) => $g->count())->take(15) as $street => $group) {
+                $sections[] = $this->buildStreetSection((string) $street, $group->values(), $midpoint);
+            }
+
+            $findings = $this->buildKeyFindings($all, $recent, $earlier, $sections);
+
+            // Flat copy — Save writes one row per recommendation, and the
+            // download/report path reads this same list
+            $flat = [];
+            foreach ($sections as $sec) {
+                foreach ($sec['suggestions'] as $s) {
+                    $flat[] = $s + [
+                        'street'   => $sec['street'],
+                        'location' => $sec['street'] . ($s['time_window'] ? ', ' . $s['time_window'] : ''),
+                    ];
+                }
+            }
+            $prioRank = ['high' => 0, 'medium' => 1, 'low' => 2];
+            usort($flat, fn ($a, $b) => ($prioRank[$a['priority']] ?? 3) <=> ($prioRank[$b['priority']] ?? 3));
+
+            return [
+                'success' => true,
+                'meta' => [
+                    'barangay'     => 'San Agustin',
+                    'data_source'  => 'real',
+                    'engine'       => 'rules',
+                    'model'        => 'system-rules',
+                    'period_days'  => $days,
+                    'period_start' => $periodStart,
+                    'period_end'   => now()->toDateString(),
+                    'records_used' => $all->count(),
+                    'generated_at' => now()->toIso8601String(),
+                    'from_cache'   => false,
+                ],
+                'analysis' => [
+                    'forecast'        => $forecast,
+                    'key_findings'    => $findings,
+                    'streets'         => $sections,
+                    'recommendations' => array_slice($flat, 0, 24),
+                ],
+            ];
+        });
+    }
+
+    /** Computed, number-citing findings for the rule-based barangay analysis */
+    private function buildKeyFindings(Collection $all, int $recent, int $earlier, array $sections): array
+    {
+        $total = $all->count();
+        $findings = [];
+
+        $streetCount = $all->whereNotNull('street')->groupBy('street')->count();
+        if (! empty($sections)) {
+            $top = $sections[0];
+            $findings[] = $total . ' crimes are recorded across ' . $streetCount . ' streets; the busiest is '
+                . $top['street'] . ' with ' . $top['total'] . ' ('
+                . (int) round($top['total'] / max(1, $total) * 100) . '% of all recorded crimes).';
+        }
+
+        $cats = $all->countBy('category')->sortDesc();
+        $topCat = $cats->keys()->first();
+        if ($topCat) {
+            $catHours = $all->where('category', $topCat)->whereNotNull('hour')->countBy('hour')->sortDesc();
+            $peak = $catHours->keys()->first();
+            $findings[] = $topCat . ' is the most common crime (' . $cats->first() . ' of ' . $total . ')'
+                . ($peak !== null ? ', typically happening around ' . $this->hour12((int) $peak) : '') . '.';
+        }
+
+        $hours = $all->whereNotNull('hour');
+        if ($hours->isNotEmpty()) {
+            $evening = $hours->filter(fn ($i) => $i['hour'] >= 18)->count();
+            $peakAll = $hours->countBy('hour')->sortDesc()->keys()->first();
+            $findings[] = (int) round($evening / max(1, $hours->count()) * 100)
+                . '% of crimes happen between 6:00 PM and 11:59 PM'
+                . ($peakAll !== null ? ', with the single busiest hour around ' . $this->hour12((int) $peakAll) : '') . '.';
+        }
+
+        $dows = $all->countBy('dow')->sortDesc();
+        if ($dows->isNotEmpty()) {
+            $findings[] = $dows->keys()->first() . ' is the busiest day, with ' . $dows->first()
+                . ' recorded crimes — schedule extra patrol coverage accordingly.';
+        }
+
+        $unresolved = $all->whereNotIn('status', ['solved', 'resolved', 'closed', 'cleared'])->count();
+        $findings[] = $unresolved . ' of ' . $total . ' crimes ('
+            . (int) round($unresolved / max(1, $total) * 100) . '%) are still unresolved.';
+
+        $findings[] = 'The recent half of the period logged ' . $recent . ' crimes versus ' . $earlier
+            . ' in the earlier half — the trend is '
+            . ($recent > $earlier ? 'RISING' : ($recent < $earlier ? 'FALLING' : 'FLAT')) . '.';
+
+        return $findings;
+    }
+
     /** 21 → "9:00 PM" — every user-facing hour is 12-hour format */
     private function hour12(int $h, int $m = 0): string
     {
@@ -370,12 +522,19 @@ class GeminiPatternAnalysisService
                     'time_window' => '6:00 PM - 11:00 PM',
                     'rationale'   => 'No recorded crimes here; an occasional evening pass keeps it that way.',
                     'details'     => [
-                        'coverage' => 'Light-touch coverage of ' . $street . ' during the evening.',
-                        'steps'    => [
+                        'coverage'  => 'Light-touch coverage of ' . $street . ' during the evening.',
+                        'steps'     => [
                             'Include this street in the regular ronda route once per shift.',
                             'Ask residents to report anything suspicious to the barangay hotline.',
                         ],
-                        'kpi'      => 'Target: keep this street at zero recorded crimes.',
+                        'resources' => self::ACTION_INFO['Maintain routine patrol pass-through']['resources'],
+                        'lead'      => self::ACTION_INFO['Maintain routine patrol pass-through']['lead'],
+                        'timeline'  => self::ACTION_INFO['Maintain routine patrol pass-through']['timeline'],
+                        'tips'      => [
+                            'Keep porch and gate lights on through the night.',
+                            'Report anything suspicious to the barangay hotline right away.',
+                        ],
+                        'kpi'       => 'Target: keep this street at zero recorded crimes.',
                     ],
                     'expected_impact' => [
                         'direction' => 'stable',
@@ -486,6 +645,45 @@ class GeminiPatternAnalysisService
         ],
     ];
 
+    /** Who leads, what it needs, and how fast it can start — per intervention */
+    private const ACTION_INFO = [
+        'Deploy roving tanod patrol (ronda)' => [
+            'resources' => '2-4 tanods per shift, patrol logbook, flashlights, and two-way radios or a patrol group chat.',
+            'lead'      => 'Barangay Peace and Order Committee (tanod team).',
+            'timeline'  => 'Can start within the week; review the logbook and crime counts after 30 days.',
+        ],
+        'Install CCTV' => [
+            'resources' => '2-4 night-vision CCTV units, a DVR with at least 30 days of storage, and warning signage.',
+            'lead'      => 'Barangay council, coordinated with the city CCTV program.',
+            'timeline'  => 'Procure and mount within 4-6 weeks; set the footage-review protocol from day one.',
+        ],
+        'Install streetlights' => [
+            'resources' => 'LED lampposts or replacement bulbs for every dark segment listed in the night walk-through.',
+            'lead'      => 'Barangay council with the City Engineering Office.',
+            'timeline'  => 'File the request within the week; bulb replacements within days, new lampposts within 1-2 months.',
+        ],
+        'Organize community watch' => [
+            'resources' => '5-10 resident volunteers, ID lanyards, whistles or alarms, and a group chat linked to the tanod team.',
+            'lead'      => 'Barangay captain with the homeowners/residents association.',
+            'timeline'  => 'Recruit and orient within 2 weeks; first coordination meeting within the month.',
+        ],
+        'Set up checkpoint' => [
+            'resources' => 'Checkpoint table and signage, early-warning devices, at least 2 tanods plus 1 police officer per shift.',
+            'lead'      => 'Barangay tanod team in coordination with the local PNP station.',
+            'timeline'  => 'Coordinate with the PNP this week; run on randomized nights thereafter.',
+        ],
+        'Run crime-awareness drive' => [
+            'resources' => 'Printed advisories, the barangay PA system and social media page, and a PNP resource speaker.',
+            'lead'      => 'Barangay information officer with the Peace and Order Committee.',
+            'timeline'  => 'First advisory within the week; seminar within the month; repeat quarterly.',
+        ],
+        'Maintain routine patrol pass-through' => [
+            'resources' => '1-2 tanods on the existing ronda route.',
+            'lead'      => 'Barangay tanod team.',
+            'timeline'  => 'Ongoing — fold this street into the existing patrol route.',
+        ],
+    ];
+
     /**
      * ONE tailored intervention per crime type (fixed menu shared with pattern
      * detection, research effect sizes), with steps, coverage and a target.
@@ -498,47 +696,96 @@ class GeminiPatternAnalysisService
             $action = 'Set up checkpoint';
             $pct = -13;
             $explanation = 'Access control and checkpoints cut vehicle crime by ~13% (research).';
+            $tips = [
+                'Use a steering, wheel or disc lock and an alarm on parked motorcycles and cars.',
+                'Park in lighted, visible spots — avoid leaving vehicles on the roadside overnight.',
+                'Ask the barangay to list your plate number in the vehicle watch list.',
+            ];
         } elseif (str_contains($c, 'theft')) {
             $action = 'Deploy roving tanod patrol (ronda)';
             $pct = -20;
             $explanation = 'Hot-spot patrols cut street crime by ~15-25% (research).';
+            $tips = [
+                'Keep phones and bags away from the roadside edge; use crossbody bags with zippers.',
+                'Avoid using your phone while walking near the road, especially at the peak hours above.',
+                'Store owners: keep small valuables away from entrances and counters near the door.',
+            ];
         } elseif (str_contains($c, 'robbery') || str_contains($c, 'holdap')) {
             $action = $night ? 'Install streetlights' : 'Deploy roving tanod patrol (ronda)';
             $pct = $night ? -20 : -22;
             $explanation = $night
                 ? 'Improved lighting cuts night street crime by ~20% (research).'
                 : 'Visible patrols deter robbery during its peak hours.';
+            $tips = [
+                'Avoid walking alone during the peak hold-up hours; take the lighted main routes.',
+                'Do not display jewelry, phones or cash late at night.',
+                'If held up, do not resist — note the suspects\' faces, clothing and any motorcycle plate, then report immediately.',
+            ];
         } elseif (str_contains($c, 'burglary') || str_contains($c, 'akyat')) {
             $action = 'Organize community watch';
             $pct = -16;
             $explanation = 'Neighborhood watch reduces burglary by ~16% (research).';
+            $tips = [
+                'Double-lock doors and secure window grills before sleeping or leaving the house.',
+                'Ask a trusted neighbor to watch the house and receive deliveries when you are away.',
+                'Add lighting over entry points and trim shrubs that hide doors and windows.',
+            ];
         } elseif (str_contains($c, 'assault') || str_contains($c, 'injur') || str_contains($c, 'homicide') || str_contains($c, 'murder')) {
             $action = 'Deploy roving tanod patrol (ronda)';
             $pct = -18;
             $explanation = 'Patrol presence at peak hours interrupts violent confrontations.';
+            $tips = [
+                'Report heated disputes to the barangay early — most injuries here start as arguments.',
+                'Store and videoke owners: stop serving obviously intoxicated customers and close on time.',
+                'Walk away from provocations; call the tanod hotline instead of confronting.',
+            ];
         } elseif (str_contains($c, 'sexual') || str_contains($c, 'rape')) {
             $action = 'Install streetlights';
             $pct = -20;
             $explanation = 'Lighting removes the dark segments where offenders strike.';
+            $tips = [
+                'Travel in pairs or groups at night where possible; share your location with family.',
+                'Report harassment at once — the barangay VAW desk handles complaints confidentially.',
+                'Note and report dark or hidden spots along this street to the barangay.',
+            ];
         } elseif (str_contains($c, 'fraud') || str_contains($c, 'estafa') || str_contains($c, 'scam')) {
             $action = 'Run crime-awareness drive';
             $pct = -10;
             $explanation = 'Scam-awareness campaigns reduce fraud victimization.';
+            $tips = [
+                'Verify sellers and "investment" offers before paying — meet at the barangay hall for big transactions.',
+                'Never share OTPs, PINs or bank details, even with callers claiming to be your bank.',
+                'If an offer sounds too good to be true, it is — ask the barangay desk before sending money.',
+            ];
         } elseif (str_contains($c, 'domestic') || str_contains($c, 'vawc')) {
             $action = 'Run crime-awareness drive';
             $pct = -10;
             $explanation = 'VAWC awareness plus barangay protection-order info reaches victims early.';
+            $tips = [
+                'Victims can get a Barangay Protection Order the same day — the VAW desk assists for free.',
+                'Neighbors: call the tanod hotline while a disturbance is ongoing, not after.',
+                'Keep the VAW desk and PNP women\'s desk numbers saved on your phone.',
+            ];
         } elseif (str_contains($c, 'drug')) {
             $action = 'Set up checkpoint';
             $pct = -13;
             $explanation = 'Checkpoints disrupt the transport of illegal drugs.';
+            $tips = [
+                'Report suspected drug activity anonymously through the barangay drop box or hotline.',
+                'Parents: know where your children are during the peak hours above.',
+            ];
         } else {
             $action = 'Deploy roving tanod patrol (ronda)';
             $pct = -15;
             $explanation = 'Hot-spot patrols reduce most street crime types.';
+            $tips = [
+                'Report anything suspicious to the barangay hotline right away.',
+                'Keep porch and gate lights on through the night.',
+            ];
         }
 
         $prevented = max(1, (int) round($n * abs($pct) / 100));
+        $info = self::ACTION_INFO[$action] ?? [];
 
         return [
             'action'      => $action,
@@ -546,10 +793,14 @@ class GeminiPatternAnalysisService
             'rationale'   => $n . ' of the ' . $total . ' crimes here (' . $share . '%) are ' . $cat
                 . ($window ? ', concentrated around ' . $window : '') . ' on ' . $street . '.',
             'details'     => [
-                'coverage' => 'Cover ' . $street . ' during ' . $window
+                'coverage'  => 'Cover ' . $street . ' during ' . $window
                     . ($peakDay ? ', with extra attention on ' . $peakDay . 's (its busiest day)' : '') . '.',
-                'steps'    => self::ACTION_STEPS[$action] ?? [],
-                'kpi'      => 'Target: roughly ' . $prevented . ' fewer ' . $cat . ' case' . ($prevented === 1 ? '' : 's')
+                'steps'     => self::ACTION_STEPS[$action] ?? [],
+                'resources' => $info['resources'] ?? null,
+                'lead'      => $info['lead'] ?? null,
+                'timeline'  => $info['timeline'] ?? null,
+                'tips'      => $tips,
+                'kpi'       => 'Target: roughly ' . $prevented . ' fewer ' . $cat . ' case' . ($prevented === 1 ? '' : 's')
                     . ' on this street over the same period if sustained.',
             ],
             'expected_impact' => [
