@@ -131,6 +131,14 @@ Route::middleware('jwt.api')->group(function () {
         Route::get('/', [ReportsController::class, 'index'])->name('index');
         Route::get('/create', [ReportsController::class, 'create'])->name('create');
         Route::post('/', [ReportsController::class, 'store'])->name('store');
+
+        // Crime Data page — registered BEFORE the /{id} wildcard
+        Route::get('/crime-data', [ReportsController::class, 'crimeData'])->name('crime-data');
+        Route::get('/crime-data/list', [ReportsController::class, 'crimeDataList'])->name('crime-data.list');
+        Route::post('/crime-data/save', [ReportsController::class, 'storeCrimeReport'])->name('crime-data.save');
+        Route::get('/crime-data/saved', [ReportsController::class, 'listCrimeReports'])->name('crime-data.saved');
+        Route::delete('/crime-data/saved/{id}', [ReportsController::class, 'deleteCrimeReport'])->name('crime-data.delete');
+
         Route::get('/{id}', [ReportsController::class, 'show'])->name('show');
         Route::get('/{id}/download', [ReportsController::class, 'download'])->name('download');
     });
