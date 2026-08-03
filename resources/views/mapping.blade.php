@@ -729,6 +729,10 @@ if (request()->query('token')) {
                                 <i class="fas fa-shield-halved mr-1" style="color: #7c3aed;"></i>Prevention suggestions
                             </span>
                             <span id="streetAiRisk" style="display: none; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;"></span>
+                            <span id="streetLangToggle" title="Language of the suggestions" style="display: inline-flex; border: 1px solid #ddd6fe; border-radius: 8px; overflow: hidden; font-size: 10px; font-weight: 800;">
+                                <button type="button" data-lang="en" style="border: none; padding: 3px 8px; cursor: pointer;">English</button>
+                                <button type="button" data-lang="tl" style="border: none; padding: 3px 8px; cursor: pointer;">Taglish</button>
+                            </span>
                             <button type="button" class="sm-pop-btn" onclick="popOutSection('sugg')" title="Open the suggestions in a separate window" style="margin-left: auto;">
                                 <i class="fas fa-up-right-from-square"></i>
                             </button>
@@ -1957,6 +1961,26 @@ if (request()->query('token')) {
         let latestStreetAi = null;         // last successful result, for Save
         let streetAiSeq = 0;               // stale-response guard
 
+        // Language of the suggestions (shared with pattern detection via localStorage)
+        let saLang = localStorage.getItem('sa_sugg_lang') === 'tl' ? 'tl' : 'en';
+        function isTl() { return saLang === 'tl'; }
+        function applyStreetLangToggle() {
+            document.querySelectorAll('#streetLangToggle [data-lang]').forEach(function (b) {
+                b.style.background = b.dataset.lang === saLang ? '#7c3aed' : '#fff';
+                b.style.color = b.dataset.lang === saLang ? '#fff' : '#6d28d9';
+            });
+        }
+        document.querySelectorAll('#streetLangToggle [data-lang]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                if (saLang === b.dataset.lang) return;
+                saLang = b.dataset.lang;
+                localStorage.setItem('sa_sugg_lang', saLang);
+                applyStreetLangToggle();
+                renderStreetAiPanel();
+            });
+        });
+        applyStreetLangToggle();
+
         // Fresh AI state each time the modal opens: nothing analyzed yet
         function resetStreetAiSection() {
             latestStreetAi = null;
@@ -2017,7 +2041,30 @@ if (request()->query('token')) {
                 if (seq !== streetAiSeq) return;   // user switched streets meanwhile
 
                 latestStreetAi = data;
-                const a = data.analysis || {};
+                renderStreetAiPanel();
+
+                loading.style.display = 'none';
+                results.style.display = 'block';
+                document.getElementById('streetAiSaveBtn').style.display = 'inline-block';
+            } catch (e) {
+                console.error('Street AI failed:', e);
+                if (seq === streetAiSeq) {
+                    loading.style.display = 'none';
+                    document.getElementById('streetAiErrorMsg').textContent = e.message;
+                    errBox.style.display = 'block';
+                }
+            } finally {
+                analyzeBtn.disabled = false;
+                analyzeBtn.style.opacity = '1';
+            }
+        }
+
+        // Renders latestStreetAi into the modal panel — separated from the
+        // fetch so the language toggle can re-render without a new request
+        function renderStreetAiPanel() {
+                if (!latestStreetAi) return;
+                const risk = document.getElementById('streetAiRisk');
+                const a = latestStreetAi.analysis || {};
 
                 const RISK_CHIP = {
                     high:   'background:#fee2e2;color:#b91c1c;',
@@ -2029,7 +2076,8 @@ if (request()->query('token')) {
                     (RISK_CHIP[lvl] || 'background:#f3f4f6;color:#374151;');
                 risk.textContent = lvl.toUpperCase() + ' RISK';
 
-                document.getElementById('streetAiSummary').textContent = a.summary || '';
+                document.getElementById('streetAiSummary').textContent =
+                    (isTl() && a.summary_tl) ? a.summary_tl : (a.summary || '');
 
                 const prioStyle = {
                     high:   'background:#fee2e2;color:#b91c1c;',
@@ -2051,26 +2099,39 @@ if (request()->query('token')) {
                 };
                 const evidenceBlock = function (ev) {
                     if (!ev || !ev.cases) return '';
+                    const T = isTl();
                     const row = function (icon, html) {
                         return '<div style="display:flex;gap:6px;font-size:11px;color:#78350f;line-height:1.5;margin-top:2px;">' +
                             '<i class="fas ' + icon + '" style="color:#d97706;margin-top:2px;flex-shrink:0;"></i><span>' + html + '</span></div>';
                     };
+                    const sev = escStreet(String(ev.severity || '').toUpperCase());
                     return '<div style="margin-top:6px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">' +
-                        '<div style="font-size:9.5px;font-weight:800;color:#92400e;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-magnifying-glass mr-1"></i>Basis — recorded crimes</div>' +
-                        row('fa-hashtag', '<b>' + ev.cases + ' recorded case' + (ev.cases === 1 ? '' : 's') + '</b> (' + ev.share + '% of this street\'s crimes) — severity <b>' + escStreet(String(ev.severity || '').toUpperCase()) + '</b>.') +
-                        (ev.modus && ev.modus.length ? row('fa-user-ninja', 'How they were committed: ' + ev.modus.map(escStreet).join('; ') + '.') : '') +
+                        '<div style="font-size:9.5px;font-weight:800;color:#92400e;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-magnifying-glass mr-1"></i>' + (T ? 'Basehan — mga naitalang krimen' : 'Basis — recorded crimes') + '</div>' +
+                        row('fa-hashtag', T
+                            ? '<b>' + ev.cases + ' naitalang kaso</b> (' + ev.share + '% ng krimen sa kalyeng ito) — ang tindi ay <b>' + sev + '</b>.'
+                            : '<b>' + ev.cases + ' recorded case' + (ev.cases === 1 ? '' : 's') + '</b> (' + ev.share + '% of this street\'s crimes) — severity <b>' + sev + '</b>.') +
+                        (ev.modus && ev.modus.length ? row('fa-user-ninja', (T ? 'Paano ginawa: ' : 'How they were committed: ') + ev.modus.map(escStreet).join('; ') + '.') : '') +
                         (typeof ev.unresolved === 'number' ? row('fa-folder-open', (ev.unresolved > 0
-                            ? '<b>' + ev.unresolved + ' of ' + ev.cases + ' still unresolved</b> — follow up with the assigned officers.'
-                            : 'All ' + ev.cases + ' cases already resolved.')) : '') +
+                            ? (T
+                                ? '<b>' + ev.unresolved + ' sa ' + ev.cases + ' ang hindi pa naresolba</b> — i-follow up sa mga nakatalagang opisyal.'
+                                : '<b>' + ev.unresolved + ' of ' + ev.cases + ' still unresolved</b> — follow up with the assigned officers.')
+                            : (T
+                                ? 'Lahat ng ' + ev.cases + ' kaso ay naresolba na.'
+                                : 'All ' + ev.cases + ' cases already resolved.'))) : '') +
                         ((ev.busiest_day || ev.latest) ? row('fa-calendar-day',
-                            (ev.busiest_day ? 'Most cases fall on <b>' + escStreet(ev.busiest_day) + 's</b>. ' : '') +
-                            (ev.latest ? 'Most recent case: <b>' + escStreet(ev.latest) + '</b>.' : '')) : '') +
+                            (ev.busiest_day ? (T
+                                ? 'Karamihan ng kaso ay tuwing <b>' + escStreet(ev.busiest_day) + '</b>. '
+                                : 'Most cases fall on <b>' + escStreet(ev.busiest_day) + 's</b>. ') : '') +
+                            (ev.latest ? (T
+                                ? 'Pinakahuling kaso: <b>' + escStreet(ev.latest) + '</b>.'
+                                : 'Most recent case: <b>' + escStreet(ev.latest) + '</b>.') : '')) : '') +
                         caseLog(ev.cases_list) +
                     '</div>';
                 };
                 // Every recorded case with its date, day and exact time
                 const caseLog = function (cases) {
                     if (!cases || !cases.length) return '';
+                    const T = isTl();
                     const MAX = 8;
                     const rows = cases.slice(0, MAX).map(function (c) {
                         return '<div style="display:flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;font-size:10.5px;color:#78350f;border-top:1px dashed #fde68a;padding:3px 0;">' +
@@ -2078,13 +2139,16 @@ if (request()->query('token')) {
                             (c.day ? '<span>(' + escStreet(c.day) + ')</span>' : '') +
                             (c.time ? '<span style="font-weight:700;color:#b45309;"><i class="fas fa-clock" style="margin-right:2px;"></i>' + escStreet(c.time) + '</span>' : '') +
                             (c.modus ? '<span style="color:#92400e;">— ' + escStreet(c.modus) + '</span>' : '') +
-                            '<span style="margin-left:auto;font-weight:800;color:' + (c.resolved ? '#15803d' : '#b91c1c') + ';">' + (c.resolved ? 'RESOLVED' : 'UNRESOLVED') + '</span>' +
+                            '<span style="margin-left:auto;font-weight:800;color:' + (c.resolved ? '#15803d' : '#b91c1c') + ';">' +
+                                (c.resolved ? (T ? 'RESOLBADO' : 'RESOLVED') : (T ? 'DI PA RESOLBADO' : 'UNRESOLVED')) + '</span>' +
                         '</div>';
                     }).join('');
                     return '<div style="margin-top:5px;">' +
-                        '<div style="font-size:9.5px;font-weight:800;color:#92400e;text-transform:uppercase;"><i class="fas fa-list-ul mr-1"></i>Case log (date · day · time)</div>' +
+                        '<div style="font-size:9.5px;font-weight:800;color:#92400e;text-transform:uppercase;"><i class="fas fa-list-ul mr-1"></i>' + (T ? 'Talaan ng kaso (petsa · araw · oras)' : 'Case log (date · day · time)') + '</div>' +
                         rows +
-                        (cases.length > MAX ? '<div style="font-size:10px;color:#b45309;padding-top:3px;">+' + (cases.length - MAX) + ' more — press "View crimes" above for the full list.</div>' : '') +
+                        (cases.length > MAX ? '<div style="font-size:10px;color:#b45309;padding-top:3px;">' + (T
+                            ? '+' + (cases.length - MAX) + ' pa — pindutin ang "Tingnan ang mga krimen" sa itaas para sa buong listahan.'
+                            : '+' + (cases.length - MAX) + ' more — press "View crimes" above for the full list.') + '</div>' : '') +
                     '</div>';
                 };
 
@@ -2104,23 +2168,23 @@ if (request()->query('token')) {
                         evidenceBlock(d.evidence) +
                         (d.coverage ? '<div style="font-size:11px;color:#374151;margin-top:5px;"><i class="fas fa-location-crosshairs mr-1" style="color:#7c3aed;"></i>' + escStreet(d.coverage) + '</div>' : '') +
                         (d.steps && d.steps.length ? '<div style="margin-top:6px;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">' +
-                            '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">How to implement</div>' +
+                            '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">' + (isTl() ? 'Paano ipapatupad' : 'How to implement') + '</div>' +
                             d.steps.map(function (st, i2) {
                                 return '<div style="display:flex;gap:6px;font-size:11px;color:#4b5563;line-height:1.5;margin-top:2px;">' +
                                     '<span style="flex-shrink:0;font-weight:800;color:#7c3aed;">' + (i2 + 1) + '.</span><span>' + escStreet(st) + '</span></div>';
                             }).join('') + '</div>' : '') +
-                        (d.resources ? '<div style="font-size:11px;color:#4b5563;margin-top:5px;"><i class="fas fa-toolbox mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">Needs:</span> ' + escStreet(d.resources) + '</div>' : '') +
-                        (d.lead ? '<div style="font-size:11px;color:#4b5563;margin-top:3px;"><i class="fas fa-user-shield mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">Lead:</span> ' + escStreet(d.lead) + '</div>' : '') +
+                        (d.resources ? '<div style="font-size:11px;color:#4b5563;margin-top:5px;"><i class="fas fa-toolbox mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">' + (isTl() ? 'Kailangan:' : 'Needs:') + '</span> ' + escStreet(d.resources) + '</div>' : '') +
+                        (d.lead ? '<div style="font-size:11px;color:#4b5563;margin-top:3px;"><i class="fas fa-user-shield mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">' + (isTl() ? 'Mamumuno:' : 'Lead:') + '</span> ' + escStreet(d.lead) + '</div>' : '') +
                         (d.timeline ? '<div style="font-size:11px;color:#4b5563;margin-top:3px;"><i class="fas fa-calendar-check mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">Timeline:</span> ' + escStreet(d.timeline) + '</div>' : '') +
                         (d.tips && d.tips.length ? '<div style="margin-top:6px;padding:8px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;">' +
-                            '<div style="font-size:9.5px;font-weight:800;color:#0369a1;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-people-roof mr-1"></i>Prevention tips for residents</div>' +
+                            '<div style="font-size:9.5px;font-weight:800;color:#0369a1;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-people-roof mr-1"></i>' + (isTl() ? 'Mga tip sa pag-iwas para sa mga residente' : 'Prevention tips for residents') + '</div>' +
                             d.tips.map(function (tp) {
                                 return '<div style="display:flex;gap:6px;font-size:11px;color:#0c4a6e;line-height:1.5;margin-top:2px;">' +
                                     '<i class="fas fa-check" style="color:#0284c7;margin-top:2px;flex-shrink:0;"></i><span>' + escStreet(tp) + '</span></div>';
                             }).join('') + '</div>' : '') +
                         (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:6px;">' +
                             '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
-                            'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer crimes' : 'stable') +
+                            (isTl() ? 'Kapag ipinatupad: ' : 'If implemented: ') + (pct < 0 ? '~' + Math.abs(pct) + '% ' + (isTl() ? 'mas kaunting krimen' : 'fewer crimes') : 'stable') +
                             (imp.explanation ? ' — <span style="font-weight:400;color:#6b7280;">' + escStreet(imp.explanation) + '</span>' : '') + '</div>' : '') +
                         (d.kpi ? '<div style="font-size:11px;color:#15803d;font-weight:600;margin-top:3px;"><i class="fas fa-bullseye mr-1"></i>' + escStreet(d.kpi) + '</div>' : '') +
                     '</div>';
@@ -2129,8 +2193,9 @@ if (request()->query('token')) {
                 // Rule-engine responses carry one SECTION PER STREET; render
                 // each street separately with its own risk chip and summary
                 let out;
-                if (a.streets && a.streets.length) {
-                    out = a.streets.map(function (sec) {
+                const streetSecs = (isTl() && a.streets_tl && a.streets_tl.length) ? a.streets_tl : a.streets;
+                if (streetSecs && streetSecs.length) {
+                    out = streetSecs.map(function (sec) {
                         const sLvl = String(sec.risk_level || 'low').toLowerCase();
 
                         // One block PER CRIME TYPE — the counts add up to the
@@ -2142,13 +2207,15 @@ if (request()->query('token')) {
                                 const cc = colorForCategory(cb.category);
                                 return '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">' +
                                     '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fafafa;flex-wrap:wrap;">' +
-                                        '<span style="font-size:10px;font-weight:800;color:#fff;background:' + cc + ';padding:2px 8px;border-radius:9999px;">' + escStreet(cb.category) + '</span>' +
+                                        '<span style="font-size:10px;font-weight:800;color:#fff;background:' + cc + ';padding:2px 8px;border-radius:9999px;">' + escStreet(cb.category_label || cb.category) + '</span>' +
                                         sevChip(cb.severity) +
-                                        '<span style="font-size:11px;font-weight:700;color:#374151;">' + cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)</span>' +
+                                        '<span style="font-size:11px;font-weight:700;color:#374151;">' + (isTl()
+                                            ? cb.count + ' sa ' + sec.total + ' krimen (' + cb.share + '%)'
+                                            : cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)') + '</span>' +
                                         (cb.peak_hours && cb.peak_hours.length ? '<span style="font-size:10.5px;color:#6d28d9;font-weight:600;"><i class="fas fa-clock mr-1"></i>' + cb.peak_hours.map(escStreet).join(', ') + '</span>' : '') +
                                         '<button type="button" class="cat-crimes-toggle" data-street="' + escStreet(sec.street) + '" data-cat="' + escStreet(cb.category) + '"' +
                                             ' style="margin-left:auto;font-size:10px;font-weight:700;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:3px 9px;cursor:pointer;">' +
-                                            '<i class="fas fa-list mr-1"></i>View crimes</button>' +
+                                            '<i class="fas fa-list mr-1"></i>' + (isTl() ? 'Tingnan ang mga krimen' : 'View crimes') + '</button>' +
                                     '</div>' +
                                     '<div class="cat-crimes-list" style="display:none;padding:8px 10px;border-bottom:1px solid #f3f4f6;background:#fcfcfd;"></div>' +
                                     '<div style="padding:8px 10px;">' + suggCard(cb.suggestion || {}) + '</div>' +
@@ -2164,7 +2231,9 @@ if (request()->query('token')) {
                                 '<span style="width:14px;height:5px;border-radius:3px;background:' + ((miniStreets[sec.street] || {}).color || '#64748b') + ';flex-shrink:0;"></span>' +
                                 '<span style="font-size:12.5px;font-weight:800;color:#111;">' + escStreet(sec.street) + '</span>' +
                                 '<span style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9999px;' + (RISK_CHIP[sLvl] || '') + '">' + sLvl.toUpperCase() + ' RISK</span>' +
-                                (typeof sec.total === 'number' ? '<span style="font-size:10.5px;color:#6b7280;font-weight:700;">' + sec.total + ' total crime' + (sec.total === 1 ? '' : 's') + '</span>' : '') +
+                                (typeof sec.total === 'number' ? '<span style="font-size:10.5px;color:#6b7280;font-weight:700;">' + (isTl()
+                                    ? sec.total + ' kabuuang krimen'
+                                    : sec.total + ' total crime' + (sec.total === 1 ? '' : 's')) + '</span>' : '') +
                             '</div>' +
                             (sec.summary ? '<div style="font-size:11.5px;color:#4b5563;margin-bottom:8px;">' + escStreet(sec.summary) + '</div>' : '') +
                             '<div style="display:grid;gap:8px;">' + body + '</div>' +
@@ -2177,21 +2246,7 @@ if (request()->query('token')) {
                 document.getElementById('streetAiSuggestions').innerHTML =
                     out || '<div style="font-size:12px;color:#9ca3af;">No suggestions returned.</div>';
 
-                loading.style.display = 'none';
                 risk.style.display = 'inline-block';
-                results.style.display = 'block';
-                document.getElementById('streetAiSaveBtn').style.display = 'inline-block';
-            } catch (e) {
-                console.error('Street AI failed:', e);
-                if (seq === streetAiSeq) {
-                    loading.style.display = 'none';
-                    document.getElementById('streetAiErrorMsg').textContent = e.message;
-                    errBox.style.display = 'block';
-                }
-            } finally {
-                analyzeBtn.disabled = false;
-                analyzeBtn.style.opacity = '1';
-            }
         }
 
         // "View crimes" toggle inside a crime-type block: lists that type's
@@ -2205,15 +2260,16 @@ if (request()->query('token')) {
 
             if (list.style.display !== 'none') {
                 list.style.display = 'none';
-                btn.innerHTML = '<i class="fas fa-list mr-1"></i>View crimes';
+                btn.innerHTML = '<i class="fas fa-list mr-1"></i>' + (isTl() ? 'Tingnan ang mga krimen' : 'View crimes');
                 return;
             }
 
             const d = streetDetailCache[btn.dataset.street];
             const incs = ((d && d.incidents) || []).filter(function (i) { return i.category === btn.dataset.cat; });
             list.innerHTML = incs.length
-                ? '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">' +
-                      escStreet(btn.dataset.cat) + ' crimes on ' + escStreet(btn.dataset.street) + '</div>' +
+                ? '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">' + (isTl()
+                      ? 'Mga ' + escStreet(btn.dataset.cat) + ' na krimen sa ' + escStreet(btn.dataset.street)
+                      : escStreet(btn.dataset.cat) + ' crimes on ' + escStreet(btn.dataset.street)) + '</div>' +
                   incs.map(function (i) {
                     const done = ['solved', 'resolved', 'closed', 'cleared'].indexOf(String(i.status || '').toLowerCase()) >= 0;
                     return '<div style="display:flex;gap:8px;align-items:baseline;font-size:11px;color:#4b5563;padding:2.5px 0;flex-wrap:wrap;border-top:1px dashed #f3f4f6;">' +
@@ -2223,9 +2279,11 @@ if (request()->query('token')) {
                         '<span style="margin-left:auto;font-weight:700;color:' + (done ? '#15803d' : '#b45309') + ';">' + escStreet(String(i.status || '').toUpperCase()) + '</span>' +
                     '</div>';
                 }).join('')
-                : '<div style="font-size:11px;color:#9ca3af;">Crime list not loaded yet — this street\'s details are still loading.</div>';
+                : '<div style="font-size:11px;color:#9ca3af;">' + (isTl()
+                    ? 'Hindi pa na-load ang listahan — nilo-load pa ang detalye ng kalyeng ito.'
+                    : 'Crime list not loaded yet — this street\'s details are still loading.') + '</div>';
             list.style.display = 'block';
-            btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>Hide crimes';
+            btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>' + (isTl() ? 'Itago ang mga krimen' : 'Hide crimes');
         });
 
         // Save the street AI report to the database — same endpoint and row
