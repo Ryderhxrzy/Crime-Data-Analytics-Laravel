@@ -2036,6 +2036,38 @@ if (request()->query('token')) {
                     medium: 'background:#fef3c7;color:#b45309;',
                     low:    'background:#f3f4f6;color:#374151;'
                 };
+                // "Basis — recorded crimes" box: what actually happened, how,
+                // and how bad — grounds every suggestion in the real cases
+                const SEV_CHIP = {
+                    critical: 'background:#7f1d1d;color:#fff;',
+                    high:     'background:#fee2e2;color:#b91c1c;',
+                    moderate: 'background:#fef3c7;color:#b45309;',
+                    low:      'background:#f3f4f6;color:#4b5563;'
+                };
+                const sevChip = function (sev) {
+                    const s2 = String(sev || '').toLowerCase();
+                    if (!SEV_CHIP[s2]) return '';
+                    return '<span style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9999px;' + SEV_CHIP[s2] + '">' + s2.toUpperCase() + '</span>';
+                };
+                const evidenceBlock = function (ev) {
+                    if (!ev || !ev.cases) return '';
+                    const row = function (icon, html) {
+                        return '<div style="display:flex;gap:6px;font-size:11px;color:#78350f;line-height:1.5;margin-top:2px;">' +
+                            '<i class="fas ' + icon + '" style="color:#d97706;margin-top:2px;flex-shrink:0;"></i><span>' + html + '</span></div>';
+                    };
+                    return '<div style="margin-top:6px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">' +
+                        '<div style="font-size:9.5px;font-weight:800;color:#92400e;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-magnifying-glass mr-1"></i>Basis — recorded crimes</div>' +
+                        row('fa-hashtag', '<b>' + ev.cases + ' recorded case' + (ev.cases === 1 ? '' : 's') + '</b> (' + ev.share + '% of this street\'s crimes) — severity <b>' + escStreet(String(ev.severity || '').toUpperCase()) + '</b>.') +
+                        (ev.modus && ev.modus.length ? row('fa-user-ninja', 'How they were committed: ' + ev.modus.map(escStreet).join('; ') + '.') : '') +
+                        (typeof ev.unresolved === 'number' ? row('fa-folder-open', (ev.unresolved > 0
+                            ? '<b>' + ev.unresolved + ' of ' + ev.cases + ' still unresolved</b> — follow up with the assigned officers.'
+                            : 'All ' + ev.cases + ' cases already resolved.')) : '') +
+                        ((ev.busiest_day || ev.latest) ? row('fa-calendar-day',
+                            (ev.busiest_day ? 'Most cases fall on <b>' + escStreet(ev.busiest_day) + 's</b>. ' : '') +
+                            (ev.latest ? 'Most recent case: <b>' + escStreet(ev.latest) + '</b>.' : '')) : '') +
+                    '</div>';
+                };
+
                 const suggCard = function (s, showStreet) {
                     const imp = s.expected_impact || {};
                     const d = s.details || {};
@@ -2049,6 +2081,7 @@ if (request()->query('token')) {
                         (showStreet && s.street ? '<div style="font-size:11px;color:#b45309;font-weight:600;margin-top:3px;"><i class="fas fa-road mr-1"></i>' + escStreet(s.street) + '</div>' : '') +
                         (s.time_window ? '<div style="font-size:11px;color:#6d28d9;font-weight:600;margin-top:3px;"><i class="fas fa-clock mr-1"></i>' + escStreet(s.time_window) + '</div>' : '') +
                         (s.rationale ? '<div style="font-size:11.5px;color:#4b5563;margin-top:4px;line-height:1.45;">' + escStreet(s.rationale) + '</div>' : '') +
+                        evidenceBlock(d.evidence) +
                         (d.coverage ? '<div style="font-size:11px;color:#374151;margin-top:5px;"><i class="fas fa-location-crosshairs mr-1" style="color:#7c3aed;"></i>' + escStreet(d.coverage) + '</div>' : '') +
                         (d.steps && d.steps.length ? '<div style="margin-top:6px;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">' +
                             '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">How to implement</div>' +
@@ -2090,6 +2123,7 @@ if (request()->query('token')) {
                                 return '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">' +
                                     '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fafafa;flex-wrap:wrap;">' +
                                         '<span style="font-size:10px;font-weight:800;color:#fff;background:' + cc + ';padding:2px 8px;border-radius:9999px;">' + escStreet(cb.category) + '</span>' +
+                                        sevChip(cb.severity) +
                                         '<span style="font-size:11px;font-weight:700;color:#374151;">' + cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)</span>' +
                                         (cb.peak_hours && cb.peak_hours.length ? '<span style="font-size:10.5px;color:#6d28d9;font-weight:600;"><i class="fas fa-clock mr-1"></i>' + cb.peak_hours.map(escStreet).join(', ') + '</span>' : '') +
                                         '<button type="button" class="cat-crimes-toggle" data-street="' + escStreet(sec.street) + '" data-cat="' + escStreet(cb.category) + '"' +
