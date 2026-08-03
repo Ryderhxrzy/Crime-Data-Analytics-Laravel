@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use GuzzleHttp\Client;
 use App\Models\User;
-use App\Models\OtpVerification;
 
 class AuthController extends Controller
 {
@@ -85,26 +84,7 @@ class AuthController extends Controller
             ])->onlyInput('email');
         }
 
-        // Password is correct - check if 2FA is enabled
-        $isTwoFactorEnabled = \DB::table('crime_department_user_settings')
-            ->where('admin_user_id', $user->id)
-            ->where('two_factor_auth', 1)
-            ->exists();
-
-        if ($isTwoFactorEnabled) {
-            // Send OTP and redirect to verification page
-            $this->sendOtpEmail($user, $ipAddress);
-
-            $request->session()->put([
-                'pending_user_id' => $user->id,
-                'pending_ip' => $ipAddress,
-                'otp_sent_at' => now(),
-            ]);
-
-            return redirect()->route('verify.otp.show');
-        }
-
-        // 2FA not enabled - login directly
+        // Password is correct - login directly (no OTP step)
         $user->update([
             'attempt_count' => 0,
             'ip_address' => $ipAddress,
@@ -142,146 +122,6 @@ class AuthController extends Controller
         } catch (\Exception $e) {
             \Log::error("Failed to send account locked email: " . $e->getMessage());
         }
-    }
-
-    private function sendOtpEmail($user, $ipAddress)
-    {
-        $otpCode = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $expiresAt = now()->addMinutes(5);
-
-        // Create OTP record in verification table
-        OtpVerification::create([
-            'admin_user_id' => $user->id,
-            'otp_code' => $otpCode,
-            'expires_at' => $expiresAt,
-            'is_used' => false,
-            'attempt_count' => 0,
-        ]);
-
-        // Send OTP email
-        try {
-            \Mail::send('emails.otp-verification', [
-                'user' => $user,
-                'otpCode' => $otpCode,
-                'ipAddress' => $ipAddress,
-            ], function ($message) use ($user) {
-                $message->to($user->email)
-                    ->subject('Verify Your Login - New Device Detected');
-            });
-        } catch (\Exception $e) {
-            \Log::error("Failed to send OTP email: " . $e->getMessage());
-        }
-    }
-
-    public function showVerifyOtp()
-    {
-        if (!session()->has('pending_user_id')) {
-            return redirect('/')->withErrors(['error' => 'Session expired. Please login again.']);
-        }
-
-        $userId = session('pending_user_id');
-        $user = User::find($userId);
-        $otpSentAt = session('otp_sent_at');
-
-        return view('auth.verify-otp', [
-            'user' => $user,
-            'otpSentAt' => $otpSentAt,
-        ]);
-    }
-
-    public function resendOtp(Request $request)
-    {
-        if (!session()->has('pending_user_id')) {
-            return response()->json(['error' => 'Session expired'], 401);
-        }
-
-        $userId = session('pending_user_id');
-        $pendingIp = session('pending_ip');
-        $user = User::find($userId);
-
-        if (!$user) {
-            return response()->json(['error' => 'User not found'], 404);
-        }
-
-        // Check if user can resend (prevent spam - 30 seconds)
-        $lastOtp = OtpVerification::where('admin_user_id', $user->id)
-            ->latest('created_at')
-            ->first();
-
-        if ($lastOtp && $lastOtp->created_at->addSeconds(30) > now()) {
-            return response()->json([
-                'error' => 'Please wait before requesting a new OTP',
-                'retryAfter' => $lastOtp->created_at->addSeconds(30)->diffInSeconds(now())
-            ], 429);
-        }
-
-        // Send new OTP
-        $this->sendOtpEmail($user, $pendingIp);
-        $request->session()->put('otp_sent_at', now());
-
-        return response()->json(['success' => true, 'message' => 'OTP sent successfully']);
-    }
-
-    public function verifyOtp(Request $request)
-    {
-        $request->validate([
-            'otp_code' => 'required|digits:6',
-        ]);
-
-        $userId = $request->session()->get('pending_user_id');
-        $pendingIp = $request->session()->get('pending_ip');
-
-        $user = User::find($userId);
-
-        if (!$user) {
-            return back()->withErrors(['error' => 'Session expired. Please login again.']);
-        }
-
-        // Find the latest OTP record for this user
-        $otp = OtpVerification::where('admin_user_id', $user->id)
-            ->where('is_used', false)
-            ->latest('created_at')
-            ->first();
-
-        if (!$otp) {
-            return back()->withErrors(['error' => 'No pending OTP found. Please login again.']);
-        }
-
-        // Check if OTP has expired
-        if ($otp->isExpired()) {
-            return back()->withErrors(['otp_code' => 'OTP has expired. Please login again.']);
-        }
-
-        // Check attempt count
-        if ($otp->attempt_count >= 3) {
-            return back()->withErrors(['otp_code' => 'Too many failed attempts. Please login again.']);
-        }
-
-        // Verify OTP code
-        if ($otp->otp_code !== $request->input('otp_code')) {
-            $otp->increment('attempt_count');
-            $otp->update(['last_attempt_at' => now()]);
-
-            $remainingAttempts = 3 - $otp->attempt_count;
-            return back()->withErrors(['otp_code' => "Invalid OTP code. $remainingAttempts attempt(s) remaining."]);
-        }
-
-        // Mark OTP as used
-        $otp->update(['is_used' => true]);
-
-        // Update user and login
-        $user->update([
-            'attempt_count' => 0,
-            'ip_address' => $pendingIp,
-            'last_login' => now(),
-            'last_activity' => now(),
-        ]);
-
-        Auth::login($user);
-        $request->session()->forget(['pending_user_id', 'pending_ip']);
-        $request->session()->regenerate();
-
-        return redirect()->intended('dashboard')->with('success', 'Welcome back! Your login was verified.');
     }
 
     private function verifyCaptcha($token)
@@ -388,12 +228,8 @@ class AuthController extends Controller
             $request->session()->regenerateToken();
             $request->session()->invalidate();
 
-            // Determine redirect URL
-            $redirectUrl = app()->environment() === 'production' 
-                ? 'https://login.alertaraqc.com'
-                : '/login';
-
-            $response = redirect($redirectUrl);
+            // Always redirect back to this app's own login page
+            $response = redirect('/login');
 
             // Get cookie configuration
             $sessionCookieName = config('session.cookie');
