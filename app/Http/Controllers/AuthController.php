@@ -11,6 +11,34 @@ use App\Models\User;
 
 class AuthController extends Controller
 {
+    /** Columns that actually exist on the centralized user table (cached per request) */
+    private ?array $userColumns = null;
+
+    /**
+     * Update only the columns the centralized_admin_user table really has.
+     * That table is shared with the central portal and its schema differs per
+     * environment (production lacks attempt_count etc.), so writing a fixed
+     * column list crashes with "Unknown column".
+     */
+    private function safeUpdate(User $user, array $attrs): void
+    {
+        if ($this->userColumns === null) {
+            try {
+                $this->userColumns = $user->getConnection()
+                    ->getSchemaBuilder()
+                    ->getColumnListing($user->getTable());
+            } catch (\Exception $e) {
+                \Log::warning('Could not list user table columns: ' . $e->getMessage());
+                $this->userColumns = [];
+            }
+        }
+
+        $filtered = array_intersect_key($attrs, array_flip($this->userColumns));
+        if (!empty($filtered)) {
+            $user->update($filtered);
+        }
+    }
+
     public function showLogin()
     {
         return view('auth.login', [
@@ -63,7 +91,7 @@ class AuthController extends Controller
             if ($currentAttempts >= 3) {
                 // Lock account by setting unlock token
                 $this->sendAccountLockedEmail($user, $ipAddress);
-                $user->update([
+                $this->safeUpdate($user, [
                     'attempt_count' => $currentAttempts,
                     'ip_address' => $ipAddress,
                 ]);
@@ -73,7 +101,7 @@ class AuthController extends Controller
             }
 
             // Update attempt count and IP
-            $user->update([
+            $this->safeUpdate($user, [
                 'attempt_count' => $currentAttempts,
                 'ip_address' => $ipAddress,
             ]);
@@ -85,7 +113,7 @@ class AuthController extends Controller
         }
 
         // Password is correct - login directly (no OTP step)
-        $user->update([
+        $this->safeUpdate($user, [
             'attempt_count' => 0,
             'ip_address' => $ipAddress,
             'last_login' => now(),
@@ -104,7 +132,7 @@ class AuthController extends Controller
         $unlockTokenExpiry = now()->addHour();
 
         // Update with unlock token for locked state
-        $user->update([
+        $this->safeUpdate($user, [
             'unlock_token' => $unlockToken,
             'unlock_token_expiry' => $unlockTokenExpiry,
         ]);
@@ -183,7 +211,7 @@ class AuthController extends Controller
             return redirect('/')->withErrors(['error' => 'Unlock token has expired. Please contact administrator.']);
         }
 
-        $user->update([
+        $this->safeUpdate($user, [
             'attempt_count' => 0,
             'unlock_token' => null,
             'unlock_token_expiry' => null,
@@ -335,7 +363,7 @@ class AuthController extends Controller
             }
 
             // Update last login, attempt count reset, and activity timestamp
-            $user->update([
+            $this->safeUpdate($user, [
                 'attempt_count' => 0,
                 'last_login' => now(),
                 'last_activity' => now(),
