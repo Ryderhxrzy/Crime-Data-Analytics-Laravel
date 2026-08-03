@@ -285,7 +285,7 @@ class GeminiPatternAnalysisService
         // Data fingerprint in the key → the cache refreshes the moment the
         // incident table changes (migrations, new records), never serving
         // stale street counts.
-        $cacheKey = 'street_rules_v5_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
+        $cacheKey = 'street_rules_v6_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($streets, $days) {
             // ALL records, no date cutoff — the street modal lists every crime
@@ -361,7 +361,7 @@ class GeminiPatternAnalysisService
     {
         $days = max(30, min(730, $days));
 
-        $cacheKey = 'pattern_rules_v1_' . md5($days . '|' . $this->tableFingerprint());
+        $cacheKey = 'pattern_rules_v2_' . md5($days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($days) {
             // ALL records — street sections must match the street modal lists
@@ -583,14 +583,51 @@ class GeminiPatternAnalysisService
             $catNight = $catPeak !== null && ($catPeak >= 18 || $catPeak <= 4);
             $share = (int) round($n / max(1, $total) * 100);
 
+            // Evidence pulled from the ACTUAL recorded cases, so the barangay /
+            // police can study what really happens here, how, and how bad it is
+            $catUnresolved = $catInc->whereNotIn('status', ['solved', 'resolved', 'closed', 'cleared'])->count();
+            $catDay = $catInc->countBy('dow')->sortDesc()->keys()->first();
+            $latest = $catInc->max('date');
+            $latestLabel = $latest ? Carbon::parse($latest)->format('M j, Y') : null;
+            $modus = $catInc->pluck('modus')
+                ->filter(fn ($m) => is_string($m) && $m !== '')
+                ->countBy()
+                ->sortDesc()
+                ->take(3)
+                ->map(fn ($c, $m) => $c . '× ' . $m)
+                ->values()
+                ->all();
+
+            $severity = ($n >= 8 || ($n >= 5 && $share >= 40)) ? 'critical'
+                : (($n >= 5 || $share >= 35) ? 'high'
+                : (($n >= 3 || $share >= 20) ? 'moderate' : 'low'));
+
             $sugg = $this->interventionForCategory((string) $cat, (int) $n, $share, $catWindow, $catNight, $street, $peakDay, $total);
+            $sugg['severity'] = $severity;
+            if ($severity === 'critical') {
+                $sugg['priority'] = 'high';
+            }
+            $sugg['details']['evidence'] = [
+                'cases'       => (int) $n,
+                'share'       => $share,
+                'unresolved'  => $catUnresolved,
+                'modus'       => $modus,
+                'busiest_day' => $catDay,
+                'latest'      => $latestLabel,
+                'severity'    => $severity,
+            ];
 
             $categories[] = [
-                'category'   => (string) $cat,
-                'count'      => (int) $n,
-                'share'      => $share,
-                'peak_hours' => $catHours->take(2)->keys()->map(fn ($h) => $this->hour12((int) $h))->values()->all(),
-                'suggestion' => $sugg,
+                'category'        => (string) $cat,
+                'count'           => (int) $n,
+                'share'           => $share,
+                'severity'        => $severity,
+                'unresolved'      => $catUnresolved,
+                'modus_breakdown' => $modus,
+                'busiest_day'     => $catDay,
+                'latest_date'     => $latestLabel,
+                'peak_hours'      => $catHours->take(2)->keys()->map(fn ($h) => $this->hour12((int) $h))->values()->all(),
+                'suggestion'      => $sugg,
             ];
             $suggestions[] = $sugg + ['category' => (string) $cat];
         }
@@ -939,7 +976,7 @@ PROMPT;
             ->when($days > 0, fn ($q) => $q->where('incident_date', '>=', now()->subDays($days)))
             ->get([
                 'incident_date', 'incident_time', 'category_name', 'record_type',
-                'address_details', 'status', 'clearance_status',
+                'address_details', 'status', 'clearance_status', 'modus_operandi',
             ])
             ->map(function ($i) {
                 $date = $i->incident_date instanceof Carbon
@@ -962,6 +999,7 @@ PROMPT;
                     'category' => $i->category_name ?: 'Uncategorized',
                     'street'   => $street !== '' ? $street : null,
                     'status'   => $i->status,
+                    'modus'    => trim((string) $i->modus_operandi),
                 ];
             })
             ->values();
