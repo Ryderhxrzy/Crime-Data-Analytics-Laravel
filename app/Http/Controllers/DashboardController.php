@@ -1297,15 +1297,15 @@ class DashboardController extends Controller
     }
 
     /**
-     * AI-powered pattern analysis of San Agustin incidents via Gemini.
-     *
-     * Heavily cached (see GeminiPatternAnalysisService) so repeated runs on
-     * the same data never spend API quota.
+     * Pattern analysis of San Agustin incidents. Default engine is the instant
+     * rule-based one (per street, per crime category — same engine as the
+     * crime-mapping street modal); Gemini remains available via ?ai=1.
      */
     public function aiPatternAnalysis(Request $request, \App\Services\GeminiPatternAnalysisService $ai)
     {
         try {
-            $result = $ai->analyze((int) $request->input('days', 180));
+            $days = (int) $request->input('days', 180);
+            $result = $request->boolean('ai') ? $ai->analyze($days) : $ai->analyzeRuleBased($days);
 
             $status = ($result['success'] ?? false) ? 200 : 422;
 
