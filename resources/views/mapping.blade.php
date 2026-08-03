@@ -2065,6 +2065,26 @@ if (request()->query('token')) {
                         ((ev.busiest_day || ev.latest) ? row('fa-calendar-day',
                             (ev.busiest_day ? 'Most cases fall on <b>' + escStreet(ev.busiest_day) + 's</b>. ' : '') +
                             (ev.latest ? 'Most recent case: <b>' + escStreet(ev.latest) + '</b>.' : '')) : '') +
+                        caseLog(ev.cases_list) +
+                    '</div>';
+                };
+                // Every recorded case with its date, day and exact time
+                const caseLog = function (cases) {
+                    if (!cases || !cases.length) return '';
+                    const MAX = 8;
+                    const rows = cases.slice(0, MAX).map(function (c) {
+                        return '<div style="display:flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;font-size:10.5px;color:#78350f;border-top:1px dashed #fde68a;padding:3px 0;">' +
+                            '<span style="font-weight:800;">' + escStreet(c.date || '') + '</span>' +
+                            (c.day ? '<span>(' + escStreet(c.day) + ')</span>' : '') +
+                            (c.time ? '<span style="font-weight:700;color:#b45309;"><i class="fas fa-clock" style="margin-right:2px;"></i>' + escStreet(c.time) + '</span>' : '') +
+                            (c.modus ? '<span style="color:#92400e;">— ' + escStreet(c.modus) + '</span>' : '') +
+                            '<span style="margin-left:auto;font-weight:800;color:' + (c.resolved ? '#15803d' : '#b91c1c') + ';">' + (c.resolved ? 'RESOLVED' : 'UNRESOLVED') + '</span>' +
+                        '</div>';
+                    }).join('');
+                    return '<div style="margin-top:5px;">' +
+                        '<div style="font-size:9.5px;font-weight:800;color:#92400e;text-transform:uppercase;"><i class="fas fa-list-ul mr-1"></i>Case log (date · day · time)</div>' +
+                        rows +
+                        (cases.length > MAX ? '<div style="font-size:10px;color:#b45309;padding-top:3px;">+' + (cases.length - MAX) + ' more — press "View crimes" above for the full list.</div>' : '') +
                     '</div>';
                 };
 
