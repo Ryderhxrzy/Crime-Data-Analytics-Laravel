@@ -285,7 +285,7 @@ class GeminiPatternAnalysisService
         // Data fingerprint in the key → the cache refreshes the moment the
         // incident table changes (migrations, new records), never serving
         // stale street counts.
-        $cacheKey = 'street_rules_v6_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
+        $cacheKey = 'street_rules_v7_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($streets, $days) {
             // ALL records, no date cutoff — the street modal lists every crime
@@ -361,7 +361,7 @@ class GeminiPatternAnalysisService
     {
         $days = max(30, min(730, $days));
 
-        $cacheKey = 'pattern_rules_v2_' . md5($days . '|' . $this->tableFingerprint());
+        $cacheKey = 'pattern_rules_v3_' . md5($days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($days) {
             // ALL records — street sections must match the street modal lists
@@ -589,20 +589,33 @@ class GeminiPatternAnalysisService
             $catDay = $catInc->countBy('dow')->sortDesc()->keys()->first();
             $latest = $catInc->max('date');
             $latestLabel = $latest ? Carbon::parse($latest)->format('M j, Y') : null;
-            $modus = $catInc->pluck('modus')
+            $modusCounts = $catInc->pluck('modus')
                 ->filter(fn ($m) => is_string($m) && $m !== '')
                 ->countBy()
-                ->sortDesc()
-                ->take(3)
+                ->sortDesc();
+            $modus = $modusCounts->take(3)
                 ->map(fn ($c, $m) => $c . '× ' . $m)
                 ->values()
                 ->all();
+            $modusNames = $modusCounts->take(3)->keys()->values()->all();
+
+            // Every recorded case with its date, day and exact time — the raw
+            // material the barangay / police study, and what the steps and
+            // tips below are derived from
+            $doneStatuses = ['solved', 'resolved', 'closed', 'cleared'];
+            $casesList = $catInc->sortByDesc('date')->values()->map(fn ($i) => [
+                'date'     => Carbon::parse($i['date'])->format('M j, Y'),
+                'day'      => $i['dow'],
+                'time'     => $i['time12'] ?? null,
+                'modus'    => ($i['modus'] ?? '') !== '' ? $i['modus'] : null,
+                'resolved' => in_array(mb_strtolower((string) $i['status']), $doneStatuses, true),
+            ])->all();
 
             $severity = ($n >= 8 || ($n >= 5 && $share >= 40)) ? 'critical'
                 : (($n >= 5 || $share >= 35) ? 'high'
                 : (($n >= 3 || $share >= 20) ? 'moderate' : 'low'));
 
-            $sugg = $this->interventionForCategory((string) $cat, (int) $n, $share, $catWindow, $catNight, $street, $peakDay, $total);
+            $sugg = $this->interventionForCategory((string) $cat, (int) $n, $share, $catWindow, $catNight, $street, $peakDay, $total, $modusNames);
             $sugg['severity'] = $severity;
             if ($severity === 'critical') {
                 $sugg['priority'] = 'high';
@@ -615,6 +628,7 @@ class GeminiPatternAnalysisService
                 'busiest_day' => $catDay,
                 'latest'      => $latestLabel,
                 'severity'    => $severity,
+                'cases_list'  => $casesList,
             ];
 
             $categories[] = [
@@ -725,7 +739,7 @@ class GeminiPatternAnalysisService
      * ONE tailored intervention per crime type (fixed menu shared with pattern
      * detection, research effect sizes), with steps, coverage and a target.
      */
-    private function interventionForCategory(string $cat, int $n, int $share, string $window, bool $night, string $street, ?string $peakDay, int $total): array
+    private function interventionForCategory(string $cat, int $n, int $share, string $window, bool $night, string $street, ?string $peakDay, int $total, array $modusNames = []): array
     {
         $c = mb_strtolower($cat);
 
@@ -832,11 +846,11 @@ class GeminiPatternAnalysisService
             'details'     => [
                 'coverage'  => 'Cover ' . $street . ' during ' . $window
                     . ($peakDay ? ', with extra attention on ' . $peakDay . 's (its busiest day)' : '') . '.',
-                'steps'     => self::ACTION_STEPS[$action] ?? [],
+                'steps'     => $this->stepsFor($action, $street, $window, $peakDay, $cat, $modusNames),
                 'resources' => $info['resources'] ?? null,
                 'lead'      => $info['lead'] ?? null,
                 'timeline'  => $info['timeline'] ?? null,
-                'tips'      => $tips,
+                'tips'      => $this->tipsFor($cat, $modusNames, $window, $peakDay, $street, $tips),
                 'kpi'       => 'Target: roughly ' . $prevented . ' fewer ' . $cat . ' case' . ($prevented === 1 ? '' : 's')
                     . ' on this street over the same period if sustained.',
             ],
@@ -847,6 +861,142 @@ class GeminiPatternAnalysisService
             ],
             'priority' => $share >= 40 ? 'high' : ($share >= 20 ? 'medium' : 'low'),
         ];
+    }
+
+    /**
+     * Modus keyword → concrete resident tip. Only tips whose keyword matches a
+     * modus ACTUALLY RECORDED on the street/category make it into the output,
+     * so every tip answers something that really happened there.
+     */
+    private const MODUS_TIP_RULES = [
+        'snatch'            => 'Hold phones and bags on the building side, away from the road edge — snatchers here strike from the roadside.',
+        'pickpocket'        => 'In crowds, keep wallets and phones in front pockets or zipped inner compartments — pickpocketing was recorded here.',
+        'slash'             => 'Carry bags in front of the body along this stretch — bag-slashing cases were recorded here.',
+        'shoplift'          => 'Store owners: keep small items visible from the counter and add mirrors at blind corners — shoplifting was recorded here.',
+        'riding in tandem'  => 'Watch for motorcycles slowing beside pedestrians — riding-in-tandem robbery was recorded here; step away from the curb toward lit, busy spots.',
+        'hold-up'           => 'If held up, do not resist — hand over valuables, then note faces, clothing and escape direction and call the barangay/PNP at once.',
+        'knife'             => 'If threatened with a weapon, do not fight back — distance first, details later, report immediately.',
+        'forced door'       => 'Reinforce door jambs and use deadbolts — recorded break-ins here forced the main door.',
+        'window'            => 'Install window grills and locks — recorded break-ins here entered through windows.',
+        'roof'              => 'Check and secure roof and ceiling access points — a recorded break-in here came through the roof.',
+        'hotwiring'         => 'Use a steering lock or ignition kill-switch — motorcycles here were stolen by hotwiring.',
+        'street parking'    => 'Avoid leaving motorcycles in open street parking overnight — that is exactly how vehicles were stolen here; use a locked or guarded area.',
+        'carnap'            => 'Install a GPS tracker and alarm, and park only in lit, visible spots — carnapping was recorded here.',
+        'online'            => 'Verify online sellers (profiles, reviews, cash-on-delivery only) — online-selling scams were recorded here.',
+        'investment'        => 'Check any investment offer against SEC advisories before paying — investment scams were recorded here.',
+        'budol'             => 'Ignore strangers offering instant winnings or too-good deals — budol-budol scams were recorded here.',
+        'drunken'           => 'Walk away from heated arguments where drinking sessions run late — recorded injuries here started as drunken altercations.',
+        'dispute'           => 'Bring neighbor disputes to the barangay Lupon early for mediation — recorded violence here escalated from disputes.',
+        'intimate partner'  => 'Victims can request a Barangay Protection Order the same day at the VAW desk — it is free and confidential.',
+        'lascivious'        => 'Report harassment immediately to the VAW desk, and walk in pairs along this stretch at night.',
+        'harass'            => 'Report harassment immediately to the VAW desk, and walk in pairs along this stretch at night.',
+        'stab'              => 'Report armed individuals or brewing confrontations straight to the PNP hotline — never intervene personally.',
+        'gunshot'           => 'Report armed individuals or gunfire straight to the PNP hotline and stay indoors — never investigate personally.',
+    ];
+
+    /**
+     * Implementation steps written around THIS street's recorded cases: the
+     * exact hours, the busiest day, and the modus actually used — not a
+     * generic checklist.
+     */
+    private function stepsFor(string $action, string $street, string $window, ?string $peakDay, string $cat, array $modusNames): array
+    {
+        $modusBrief = implode('; ', array_slice($modusNames, 0, 3));
+        $dayClause = $peakDay ? ', with extra passes on ' . $peakDay . 's (when most cases here fall)' : '';
+
+        switch ($action) {
+            case 'Deploy roving tanod patrol (ronda)':
+                return array_values(array_filter([
+                    'Assign at least 2 tanods to pass through ' . $street . ' every 30-45 minutes during ' . $window . $dayClause . '.',
+                    $modusBrief !== ''
+                        ? 'Brief every shift on the modus recorded here — ' . $modusBrief . ' — so patrols know exactly what to watch for.'
+                        : 'Vary pass times slightly so the pattern stays unpredictable.',
+                    'Log every pass and observation, and review the logbook weekly against new ' . $cat . ' reports on this street.',
+                ]));
+
+            case 'Install streetlights':
+                return array_values(array_filter([
+                    'Walk ' . $street . ' during ' . $window . ' and list every dark segment, corner and alley mouth near where the recorded ' . $cat . ' cases happened.',
+                    'File lamppost and bulb-replacement requests for those exact spots with the City Engineering Office; replace busted bulbs within the week.',
+                    $modusBrief !== ''
+                        ? 'Prioritize the spots the recorded modus (' . $modusBrief . ') depends on darkness to work, and assign a resident per block to report outages.'
+                        : 'Assign a resident per block to report new outages to the barangay.',
+                ]));
+
+            case 'Install CCTV':
+                return array_values(array_filter([
+                    'Mount cameras covering both ends of ' . $street . ' and the mid-block spots where the recorded ' . $cat . ' cases cluster.',
+                    'Angle entry/exit cameras to capture faces and plate numbers clearly during ' . $window . ' — the hours these cases happen.',
+                    'Post CCTV signage, review footage after every new report, and turn over clips to the PNP handling the unresolved cases here.',
+                ]));
+
+            case 'Organize community watch':
+                return array_values(array_filter([
+                    'Recruit 5-10 volunteers living on ' . $street . ' and link them with the tanod team in one group chat.',
+                    $modusBrief !== ''
+                        ? 'Orient members on the modus recorded here — ' . $modusBrief . ' — and the ' . $window . ' window when cases happen.'
+                        : 'Orient members on the ' . $window . ' window when cases happen here.',
+                    'Schedule member look-outs around ' . $window . ($peakDay ? ' on ' . $peakDay . 's' : '') . ' and report sightings straight to the tanod chat.',
+                ]));
+
+            case 'Set up checkpoint':
+                return array_values(array_filter([
+                    'Position the checkpoint at the ' . $street . ' entry during ' . $window . ', when the recorded ' . $cat . ' cases happen.',
+                    $modusBrief !== ''
+                        ? 'Brief personnel to flag vehicles and behavior matching the recorded modus: ' . $modusBrief . '.'
+                        : 'Rotate the schedule so it stays unpredictable.',
+                    'Rotate nights unpredictably and coordinate joint spot checks with the local PNP station.',
+                ]));
+
+            case 'Run crime-awareness drive':
+                return array_values(array_filter([
+                    'Distribute advisories to every household and store on ' . $street . ' describing the actual recorded cases — '
+                        . ($modusBrief !== '' ? $modusBrief : $cat) . ' — and the ' . $window . ' risk window.',
+                    'Announce reminders through the barangay PA system and social media page' . ($peakDay ? ', timed before ' . $peakDay . 's when cases peak' : '') . '.',
+                    'Hold a short seminar with a PNP resource speaker focused on ' . $cat . ' prevention and invite the residents of this street.',
+                ]));
+
+            default:
+                return self::ACTION_STEPS[$action] ?? [];
+        }
+    }
+
+    /**
+     * Resident tips grounded in this street's cases: a timing tip built from
+     * the real peak window/day, then modus-matched tips, topped up from the
+     * category fallback pool.
+     */
+    private function tipsFor(string $cat, array $modusNames, string $window, ?string $peakDay, string $street, array $fallback): array
+    {
+        $tips = [
+            'Be extra alert on ' . $street . ' around ' . $window
+                . ($peakDay ? ', especially on ' . $peakDay . 's' : '')
+                . ' — the recorded ' . $cat . ' cases here cluster in that window.',
+        ];
+
+        $modusLower = array_map('mb_strtolower', $modusNames);
+        foreach (self::MODUS_TIP_RULES as $needle => $tip) {
+            if (count($tips) >= 4) {
+                break;
+            }
+            foreach ($modusLower as $m) {
+                if (str_contains($m, $needle) && ! in_array($tip, $tips, true)) {
+                    $tips[] = $tip;
+                    break;
+                }
+            }
+        }
+
+        foreach ($fallback as $tip) {
+            if (count($tips) >= 4) {
+                break;
+            }
+            if (! in_array($tip, $tips, true)) {
+                $tips[] = $tip;
+            }
+        }
+
+        return $tips;
     }
 
     /**
@@ -984,8 +1134,10 @@ PROMPT;
                     : Carbon::parse($i->incident_date);
 
                 $hour = null;
-                if ($i->incident_time && preg_match('/^(\d{1,2}):/', (string) $i->incident_time, $m)) {
+                $time12 = null;
+                if ($i->incident_time && preg_match('/^(\d{1,2}):(\d{2})/', (string) $i->incident_time, $m)) {
                     $hour = (int) $m[1];
+                    $time12 = $this->hour12($hour, (int) $m[2]);
                 }
 
                 // "Susano Road, Barangay San Agustin, Quezon City" -> "Susano Road"
@@ -1000,6 +1152,7 @@ PROMPT;
                     'street'   => $street !== '' ? $street : null,
                     'status'   => $i->status,
                     'modus'    => trim((string) $i->modus_operandi),
+                    'time12'   => $time12,
                 ];
             })
             ->values();
