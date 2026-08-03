@@ -831,6 +831,27 @@
             ((ev.busiest_day || ev.latest) ? row('fa-calendar-day',
                 (ev.busiest_day ? 'Most cases fall on <b>' + esc(ev.busiest_day) + 's</b>. ' : '') +
                 (ev.latest ? 'Most recent case: <b>' + esc(ev.latest) + '</b>.' : '')) : '') +
+            pdCaseLog(ev.cases_list) +
+        '</div>';
+    }
+
+    // Every recorded case with its date, day and exact time — the raw material
+    // behind the suggestion, ready for the barangay / police to study
+    function pdCaseLog(cases) {
+        if (!cases || !cases.length) return '';
+        const MAX = 8;
+        const rows = cases.slice(0, MAX).map(c =>
+            '<div class="flex flex-wrap items-baseline gap-x-2 text-[10.5px] text-amber-900 border-t border-dashed border-amber-200 py-1">' +
+                '<span class="font-bold">' + esc(c.date || '') + '</span>' +
+                (c.day ? '<span>(' + esc(c.day) + ')</span>' : '') +
+                (c.time ? '<span class="font-semibold text-amber-700"><i class="fas fa-clock mr-0.5"></i>' + esc(c.time) + '</span>' : '') +
+                (c.modus ? '<span class="text-amber-800">— ' + esc(c.modus) + '</span>' : '') +
+                '<span class="ml-auto font-bold ' + (c.resolved ? 'text-green-700' : 'text-red-700') + '">' + (c.resolved ? 'RESOLVED' : 'UNRESOLVED') + '</span>' +
+            '</div>').join('');
+        return '<div class="mt-1.5">' +
+            '<div class="text-[9.5px] font-bold text-amber-800 uppercase tracking-wide"><i class="fas fa-list-ul mr-1"></i>Case log (date · day · time)</div>' +
+            rows +
+            (cases.length > MAX ? '<div class="text-[10px] text-amber-700 pt-1">+' + (cases.length - MAX) + ' more — press "View crimes" above for the full list.</div>' : '') +
         '</div>';
     }
 
