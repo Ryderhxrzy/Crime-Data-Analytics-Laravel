@@ -482,6 +482,7 @@
     const AI_SIMULATE_URL = @json(route('pattern-detection.ai-simulate'));
     const AI_SAVE_URL = @json(route('pattern-detection.ai-save'));
     const AI_REPORTS_URL = @json(route('pattern-detection.ai-reports'));
+    const STREET_DETAIL_URL = @json(route('pattern-detection.street-detail'));
     const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 
     let latest = null;
@@ -758,8 +759,8 @@
         if (a.streets && a.streets.length) {
             // Rule-engine shape: one section per street, one block per crime
             // type inside — same structure as the crime-mapping street modal
-            recWrap.className = 'space-y-4';
-            recWrap.innerHTML = a.streets.map(sec => pdStreetSection(sec, accent)).join('');
+            recWrap.className = 'space-y-3';
+            recWrap.innerHTML = a.streets.map((sec, i) => pdStreetSection(sec, i)).join('');
             return;
         }
 
@@ -845,8 +846,9 @@
         '</div>';
     }
 
-    function pdStreetSection(sec) {
+    function pdStreetSection(sec, idx) {
         const lvl = String(sec.risk_level || 'low').toLowerCase();
+        const open = idx === 0;   // first (busiest) street starts expanded
 
         let body;
         if (sec.categories && sec.categories.length) {
@@ -857,7 +859,11 @@
                         '<span class="text-[10px] font-bold text-white px-2 py-0.5 rounded-full" style="background:' + cc + ';">' + esc(cb.category) + '</span>' +
                         '<span class="text-[11px] font-bold text-gray-700">' + cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)</span>' +
                         (cb.peak_hours && cb.peak_hours.length ? '<span class="text-[10.5px] font-semibold text-violet-700"><i class="fas fa-clock mr-1"></i>Peak: ' + cb.peak_hours.map(esc).join(', ') + '</span>' : '') +
+                        '<button type="button" class="pd-cat-crimes ml-auto text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1 hover:bg-violet-100"' +
+                            ' data-street="' + esc(sec.street) + '" data-cat="' + esc(cb.category) + '">' +
+                            '<i class="fas fa-list mr-1"></i>View crimes</button>' +
                     '</div>' +
+                    '<div class="pd-cat-list hidden px-3 py-2 bg-white border-b border-gray-100"></div>' +
                     '<div class="p-2.5">' + pdSuggCard(cb.suggestion || {}) + '</div>' +
                 '</div>';
             }).join('');
@@ -866,16 +872,104 @@
                 || '<div class="text-xs text-gray-400">No suggestions.</div>';
         }
 
-        return '<div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4">' +
-            '<div class="flex flex-wrap items-center gap-2 mb-1.5">' +
+        return '<div class="rounded-xl border border-gray-200 bg-gray-50/50 overflow-hidden">' +
+            '<button type="button" class="pd-street-toggle w-full flex flex-wrap items-center gap-2 px-4 py-3 text-left hover:bg-gray-100/70">' +
                 '<span class="text-sm font-extrabold text-gray-900"><i class="fas fa-road text-gray-400 mr-1.5"></i>' + esc(sec.street) + '</span>' +
                 '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (PD_RISK_CHIP[lvl] || PD_RISK_CHIP.low) + '">' + lvl.toUpperCase() + ' RISK</span>' +
                 (typeof sec.total === 'number' ? '<span class="text-[11px] font-bold text-gray-500">' + sec.total + ' total crime' + (sec.total === 1 ? '' : 's') + '</span>' : '') +
+                '<i class="fas fa-chevron-' + (open ? 'up' : 'down') + ' pd-chev ml-auto text-gray-400 text-xs"></i>' +
+            '</button>' +
+            '<div class="pd-street-body px-4 pb-4' + (open ? '' : ' hidden') + '">' +
+                (sec.summary ? '<p class="text-xs text-gray-600 mb-3">' + esc(sec.summary) + '</p>' : '') +
+                '<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">' + body + '</div>' +
             '</div>' +
-            (sec.summary ? '<p class="text-xs text-gray-600 mb-3">' + esc(sec.summary) + '</p>' : '') +
-            '<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">' + body + '</div>' +
         '</div>';
     }
+
+    // ---------- crime details per category (lazy-loaded street detail) ----------
+    function fmt12h(t) {
+        const m = /^(\d{1,2}):(\d{2})/.exec(String(t || ''));
+        if (!m) return t || '';
+        const h = parseInt(m[1], 10);
+        return ((h % 12) || 12) + ':' + m[2] + ' ' + (h >= 12 ? 'PM' : 'AM');
+    }
+
+    const pdDetailCache = {};
+    async function pdStreetDetail(street) {
+        if (pdDetailCache[street]) return pdDetailCache[street];
+        const res = await fetch(STREET_DETAIL_URL + '?street=' + encodeURIComponent(street),
+            { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
+        pdDetailCache[street] = data;
+        return data;
+    }
+
+    function pdCrimeRow(i) {
+        const done = ['solved', 'resolved', 'closed', 'cleared'].includes(String(i.status || '').toLowerCase());
+        return '<div class="border-t border-dashed border-gray-100 py-1.5">' +
+            '<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">' +
+                '<span class="font-mono text-gray-400">' + esc(i.code) + '</span>' +
+                '<span class="font-semibold text-gray-900">' + esc(i.title || 'Crime') + '</span>' +
+                '<span class="text-gray-500">' + esc(i.date || '') + (i.time ? ' · ' + esc(fmt12h(i.time)) : '') + '</span>' +
+                '<span class="ml-auto font-bold ' + (done ? 'text-green-700' : 'text-amber-700') + '">' + esc(String(i.status || '').toUpperCase().replace(/_/g, ' ')) + '</span>' +
+            '</div>' +
+            '<div class="text-[10.5px] text-gray-500 mt-0.5">' +
+                [
+                    i.victim_count ? 'Victims: ' + i.victim_count : null,
+                    i.suspect_count ? 'Suspects: ' + i.suspect_count : null,
+                    i.weather ? 'Weather: ' + esc(i.weather) : null,
+                    i.assigned_officer ? 'Officer: ' + esc(i.assigned_officer) : null
+                ].filter(Boolean).join(' · ') +
+            '</div>' +
+            (i.description ? '<div class="text-[10.5px] text-gray-400 mt-0.5">' + esc(i.description) + '</div>' : '') +
+        '</div>';
+    }
+
+    // One delegated listener drives both the street accordions and the
+    // per-category "View crimes" toggles (survives innerHTML re-renders)
+    $('aiRecommendations').addEventListener('click', async e => {
+        const tog = e.target.closest('.pd-street-toggle');
+        if (tog) {
+            const box = tog.parentNode.querySelector('.pd-street-body');
+            const chev = tog.querySelector('.pd-chev');
+            const willOpen = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            if (chev) chev.className = 'fas fa-chevron-' + (willOpen ? 'up' : 'down') + ' pd-chev ml-auto text-gray-400 text-xs';
+            return;
+        }
+
+        const btn = e.target.closest('.pd-cat-crimes');
+        if (!btn) return;
+        const block = btn.closest('.rounded-lg');
+        const list = block ? block.querySelector('.pd-cat-list') : null;
+        if (!list) return;
+
+        if (!list.classList.contains('hidden')) {
+            list.classList.add('hidden');
+            btn.innerHTML = '<i class="fas fa-list mr-1"></i>View crimes';
+            return;
+        }
+
+        list.classList.remove('hidden');
+        btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>Hide crimes';
+        if (!list.dataset.loaded) {
+            list.innerHTML = '<div class="text-[11px] text-gray-400 py-1"><i class="fas fa-spinner fa-spin mr-1"></i>Loading crimes&hellip;</div>';
+            try {
+                const d = await pdStreetDetail(btn.dataset.street);
+                const incs = ((d && d.incidents) || []).filter(i => i.category === btn.dataset.cat);
+                list.innerHTML = incs.length
+                    ? '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">' +
+                          esc(btn.dataset.cat) + ' crimes on ' + esc(btn.dataset.street) + '</div>' +
+                      incs.map(pdCrimeRow).join('')
+                    : '<div class="text-[11px] text-gray-400 py-1">No recorded crimes found for this category.</div>';
+                list.dataset.loaded = '1';
+            } catch (err) {
+                console.error('Street detail failed:', err);
+                list.innerHTML = '<div class="text-[11px] text-red-600 py-1">Could not load the crime list — click again to retry.</div>';
+            }
+        }
+    });
 
     // ---------- save AI report to database (shared) ----------
     function resetSaveBtn(btnId, accent) {
