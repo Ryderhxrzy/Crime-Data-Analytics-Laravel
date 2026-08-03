@@ -285,7 +285,7 @@ class GeminiPatternAnalysisService
         // Data fingerprint in the key → the cache refreshes the moment the
         // incident table changes (migrations, new records), never serving
         // stale street counts.
-        $cacheKey = 'street_rules_v7_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
+        $cacheKey = 'street_rules_v8_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($streets, $days) {
             // ALL records, no date cutoff — the street modal lists every crime
@@ -295,6 +295,7 @@ class GeminiPatternAnalysisService
 
             $riskRank = ['low' => 0, 'medium' => 1, 'high' => 2];
             $sections = [];
+            $sectionsTl = [];
             $flat = [];
             $totalAll = 0;
             $worst = 'low';
@@ -305,6 +306,7 @@ class GeminiPatternAnalysisService
 
                 $section = $this->buildStreetSection($street, $inc, $midpoint);
                 $sections[] = $section;
+                $sectionsTl[] = $this->buildStreetSection($street, $inc, $midpoint, 'tl');
                 $totalAll += $section['total'];
                 if ($riskRank[$section['risk_level']] > $riskRank[$worst]) {
                     $worst = $section['risk_level'];
@@ -318,6 +320,9 @@ class GeminiPatternAnalysisService
                 . ' across ' . count($streets) . ' street' . (count($streets) === 1 ? '' : 's')
                 . '. Suggestions are per street, matched to the crime categories most'
                 . ' frequently committed there and their peak hours.';
+            $summaryTl = 'Sinuri ang lahat ng ' . $totalAll . ' naitalang krimen sa '
+                . count($streets) . ' kalye. Ang mga suhestiyon ay per kalye, batay sa mga'
+                . ' kategorya ng krimen na pinaka-madalas doon at sa kanilang peak hours.';
 
             return [
                 'success' => true,
@@ -337,7 +342,9 @@ class GeminiPatternAnalysisService
                 'analysis' => [
                     'risk_level' => $worst,
                     'summary'    => $summary,
+                    'summary_tl' => $summaryTl,
                     'streets'    => $sections,
+                    'streets_tl' => $sectionsTl,
                     // Flattened copy (with street names) so saving works the
                     // same way as every other AI report
                     'suggestions' => $flat,
@@ -361,7 +368,7 @@ class GeminiPatternAnalysisService
     {
         $days = max(30, min(730, $days));
 
-        $cacheKey = 'pattern_rules_v3_' . md5($days . '|' . $this->tableFingerprint());
+        $cacheKey = 'pattern_rules_v4_' . md5($days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($days) {
             // ALL records — street sections must match the street modal lists
@@ -400,16 +407,25 @@ class GeminiPatternAnalysisService
                     . ($direction === 'increase' ? 'keep rising' : ($direction === 'decrease' ? 'keep falling' : 'stay at about this level'))
                     . ' in the coming months. The street-by-street suggestions below target the exact'
                     . ' crime categories and hours behind these numbers.',
+                'summary_tl'              => 'Mula ' . $earlier . ' krimen sa unang kalahati, naging ' . $recent
+                    . ' sa huling kalahati ng nakaraang ' . $days . ' araw ('
+                    . ($pct > 0 ? '+' : '') . $pct . '%). Kung walang gagawin, malamang na '
+                    . ($direction === 'increase' ? 'tumaas pa' : ($direction === 'decrease' ? 'bumaba pa' : 'manatili sa ganitong lebel'))
+                    . ' ang krimen sa mga susunod na buwan. Ang mga suhestiyon per kalye sa ibaba ay'
+                    . ' tumutok sa eksaktong kategorya at oras sa likod ng mga numerong ito.',
             ];
 
             // Per-street sections (per-category blocks inside), busiest first
             $sections = [];
+            $sectionsTl = [];
             foreach ($all->whereNotNull('street')->groupBy('street')
                          ->sortByDesc(fn ($g) => $g->count())->take(15) as $street => $group) {
                 $sections[] = $this->buildStreetSection((string) $street, $group->values(), $midpoint);
+                $sectionsTl[] = $this->buildStreetSection((string) $street, $group->values(), $midpoint, 'tl');
             }
 
             $findings = $this->buildKeyFindings($all, $recent, $earlier, $sections);
+            $findingsTl = $this->buildKeyFindings($all, $recent, $earlier, $sections, 'tl');
 
             // Flat copy — Save writes one row per recommendation, and the
             // download/report path reads this same list
@@ -442,7 +458,9 @@ class GeminiPatternAnalysisService
                 'analysis' => [
                     'forecast'        => $forecast,
                     'key_findings'    => $findings,
+                    'key_findings_tl' => $findingsTl,
                     'streets'         => $sections,
+                    'streets_tl'      => $sectionsTl,
                     'recommendations' => array_slice($flat, 0, 24),
                 ],
             ];
@@ -450,17 +468,21 @@ class GeminiPatternAnalysisService
     }
 
     /** Computed, number-citing findings for the rule-based barangay analysis */
-    private function buildKeyFindings(Collection $all, int $recent, int $earlier, array $sections): array
+    private function buildKeyFindings(Collection $all, int $recent, int $earlier, array $sections, string $lang = 'en'): array
     {
+        $tl = $lang === 'tl';
         $total = $all->count();
         $findings = [];
 
         $streetCount = $all->whereNotNull('street')->groupBy('street')->count();
         if (! empty($sections)) {
             $top = $sections[0];
-            $findings[] = $total . ' crimes are recorded across ' . $streetCount . ' streets; the busiest is '
-                . $top['street'] . ' with ' . $top['total'] . ' ('
-                . (int) round($top['total'] / max(1, $total) * 100) . '% of all recorded crimes).';
+            $topPct = (int) round($top['total'] / max(1, $total) * 100);
+            $findings[] = $tl
+                ? $total . ' krimen ang naitala sa ' . $streetCount . ' kalye; pinaka-marami sa '
+                    . $top['street'] . ' na may ' . $top['total'] . ' (' . $topPct . '% ng lahat ng naitalang krimen).'
+                : $total . ' crimes are recorded across ' . $streetCount . ' streets; the busiest is '
+                    . $top['street'] . ' with ' . $top['total'] . ' (' . $topPct . '% of all recorded crimes).';
         }
 
         $cats = $all->countBy('category')->sortDesc();
@@ -468,32 +490,47 @@ class GeminiPatternAnalysisService
         if ($topCat) {
             $catHours = $all->where('category', $topCat)->whereNotNull('hour')->countBy('hour')->sortDesc();
             $peak = $catHours->keys()->first();
-            $findings[] = $topCat . ' is the most common crime (' . $cats->first() . ' of ' . $total . ')'
-                . ($peak !== null ? ', typically happening around ' . $this->hour12((int) $peak) : '') . '.';
+            $findings[] = $tl
+                ? $this->catLabel((string) $topCat, 'tl') . ' ang pinaka-madalas na krimen (' . $cats->first() . ' sa ' . $total . ')'
+                    . ($peak !== null ? ', kadalasang nangyayari bandang ' . $this->hour12((int) $peak) : '') . '.'
+                : $topCat . ' is the most common crime (' . $cats->first() . ' of ' . $total . ')'
+                    . ($peak !== null ? ', typically happening around ' . $this->hour12((int) $peak) : '') . '.';
         }
 
         $hours = $all->whereNotNull('hour');
         if ($hours->isNotEmpty()) {
             $evening = $hours->filter(fn ($i) => $i['hour'] >= 18)->count();
             $peakAll = $hours->countBy('hour')->sortDesc()->keys()->first();
-            $findings[] = (int) round($evening / max(1, $hours->count()) * 100)
-                . '% of crimes happen between 6:00 PM and 11:59 PM'
-                . ($peakAll !== null ? ', with the single busiest hour around ' . $this->hour12((int) $peakAll) : '') . '.';
+            $evPct = (int) round($evening / max(1, $hours->count()) * 100);
+            $findings[] = $tl
+                ? $evPct . '% ng mga krimen ay nangyayari sa pagitan ng 6:00 PM at 11:59 PM'
+                    . ($peakAll !== null ? ', at ang pinaka-abalang oras ay bandang ' . $this->hour12((int) $peakAll) : '') . '.'
+                : $evPct . '% of crimes happen between 6:00 PM and 11:59 PM'
+                    . ($peakAll !== null ? ', with the single busiest hour around ' . $this->hour12((int) $peakAll) : '') . '.';
         }
 
         $dows = $all->countBy('dow')->sortDesc();
         if ($dows->isNotEmpty()) {
-            $findings[] = $dows->keys()->first() . ' is the busiest day, with ' . $dows->first()
-                . ' recorded crimes — schedule extra patrol coverage accordingly.';
+            $findings[] = $tl
+                ? $this->dayLabel($dows->keys()->first(), 'tl') . ' ang pinaka-abalang araw na may ' . $dows->first()
+                    . ' naitalang krimen — dagdagan ang patrol coverage sa araw na iyon.'
+                : $dows->keys()->first() . ' is the busiest day, with ' . $dows->first()
+                    . ' recorded crimes — schedule extra patrol coverage accordingly.';
         }
 
         $unresolved = $all->whereNotIn('status', ['solved', 'resolved', 'closed', 'cleared'])->count();
-        $findings[] = $unresolved . ' of ' . $total . ' crimes ('
-            . (int) round($unresolved / max(1, $total) * 100) . '%) are still unresolved.';
+        $unPct = (int) round($unresolved / max(1, $total) * 100);
+        $findings[] = $tl
+            ? $unresolved . ' sa ' . $total . ' krimen (' . $unPct . '%) ang hindi pa naresolba.'
+            : $unresolved . ' of ' . $total . ' crimes (' . $unPct . '%) are still unresolved.';
 
-        $findings[] = 'The recent half of the period logged ' . $recent . ' crimes versus ' . $earlier
-            . ' in the earlier half — the trend is '
-            . ($recent > $earlier ? 'RISING' : ($recent < $earlier ? 'FALLING' : 'FLAT')) . '.';
+        $findings[] = $tl
+            ? 'Ang huling kalahati ng panahon ay may ' . $recent . ' krimen laban sa ' . $earlier
+                . ' sa unang kalahati — ang trend ay '
+                . ($recent > $earlier ? 'TUMATAAS' : ($recent < $earlier ? 'BUMABABA' : 'FLAT')) . '.'
+            : 'The recent half of the period logged ' . $recent . ' crimes versus ' . $earlier
+                . ' in the earlier half — the trend is '
+                . ($recent > $earlier ? 'RISING' : ($recent < $earlier ? 'FALLING' : 'FLAT')) . '.';
 
         return $findings;
     }
@@ -508,38 +545,57 @@ class GeminiPatternAnalysisService
     }
 
     /** One per-street section: risk, profile summary, and rule-based suggestions */
-    private function buildStreetSection(string $street, Collection $inc, string $midpoint): array
+    private function buildStreetSection(string $street, Collection $inc, string $midpoint, string $lang = 'en'): array
     {
         $total = $inc->count();
+        $tl = $lang === 'tl';
 
         if ($total === 0) {
+            $routineInfo = $tl ? self::ACTION_INFO_TL['Maintain routine patrol pass-through'] : self::ACTION_INFO['Maintain routine patrol pass-through'];
+
             return [
                 'street' => $street, 'risk_level' => 'low', 'total' => 0,
                 'top_categories' => [], 'peak_hours' => [], 'categories' => [],
-                'summary' => 'No crimes are recorded on ' . $street . ' — the street is cleared.',
+                'summary' => $tl
+                    ? 'Walang naitalang krimen sa ' . $street . ' — cleared ang kalyeng ito.'
+                    : 'No crimes are recorded on ' . $street . ' — the street is cleared.',
                 'suggestions' => [[
-                    'action'      => 'Maintain routine patrol pass-through',
+                    'action'      => $tl ? self::ACTION_TL['Maintain routine patrol pass-through'] : 'Maintain routine patrol pass-through',
                     'time_window' => '6:00 PM - 11:00 PM',
-                    'rationale'   => 'No recorded crimes here; an occasional evening pass keeps it that way.',
+                    'rationale'   => $tl
+                        ? 'Walang naitalang krimen dito; ang paminsan-minsang pagdaan sa gabi ang magpapanatili nito.'
+                        : 'No recorded crimes here; an occasional evening pass keeps it that way.',
                     'details'     => [
-                        'coverage'  => 'Light-touch coverage of ' . $street . ' during the evening.',
-                        'steps'     => [
+                        'coverage'  => $tl
+                            ? 'Magaan na bantay sa ' . $street . ' tuwing gabi.'
+                            : 'Light-touch coverage of ' . $street . ' during the evening.',
+                        'steps'     => $tl ? [
+                            'Isama ang kalyeng ito sa regular na ruta ng ronda isang beses kada shift.',
+                            'Hikayatin ang mga residente na i-report sa barangay hotline ang kahit anong kahina-hinala.',
+                        ] : [
                             'Include this street in the regular ronda route once per shift.',
                             'Ask residents to report anything suspicious to the barangay hotline.',
                         ],
-                        'resources' => self::ACTION_INFO['Maintain routine patrol pass-through']['resources'],
-                        'lead'      => self::ACTION_INFO['Maintain routine patrol pass-through']['lead'],
-                        'timeline'  => self::ACTION_INFO['Maintain routine patrol pass-through']['timeline'],
-                        'tips'      => [
+                        'resources' => $routineInfo['resources'],
+                        'lead'      => $routineInfo['lead'],
+                        'timeline'  => $routineInfo['timeline'],
+                        'tips'      => $tl ? [
+                            'Panatilihing nakabukas ang ilaw sa harap ng bahay at gate buong gabi.',
+                            'I-report agad sa barangay hotline ang kahit anong kahina-hinala.',
+                        ] : [
                             'Keep porch and gate lights on through the night.',
                             'Report anything suspicious to the barangay hotline right away.',
                         ],
-                        'kpi'       => 'Target: keep this street at zero recorded crimes.',
+                        'kpi'       => $tl
+                            ? 'Target: panatilihin sa zero ang naitalang krimen sa kalyeng ito.'
+                            : 'Target: keep this street at zero recorded crimes.',
                     ],
                     'expected_impact' => [
                         'direction' => 'stable',
                         'estimated_change_percent' => 0,
-                        'explanation' => 'Preventive presence sustains the current cleared state.',
+                        'explanation' => $tl
+                            ? 'Pinapanatili ng preventive presence ang kasalukuyang malinis na estado ng kalye.'
+                            : 'Preventive presence sustains the current cleared state.',
                     ],
                     'priority' => 'low',
                 ]],
@@ -561,12 +617,19 @@ class GeminiPatternAnalysisService
         }
 
         $topCat = $cats->keys()->first();
-        $summary = $total . ' crime' . ($total === 1 ? '' : 's') . ' recorded, mostly ' . $topCat
-            . ' (' . $cats->first() . ' of ' . $total . ')'
-            . ($peakHour !== null ? ', peaking around ' . $this->hour12((int) $peakHour) : '')
-            . ($peakDay ? ' and busiest on ' . $peakDay . 's' : '')
-            . '. The count is ' . ($rising ? 'RISING' : 'steady or falling')
-            . ' versus the earlier half of the period.';
+        $summary = $tl
+            ? $total . ' krimen ang naitala, karamihan ay ' . $this->catLabel((string) $topCat, 'tl')
+                . ' (' . $cats->first() . ' sa ' . $total . ')'
+                . ($peakHour !== null ? ', pumipeak bandang ' . $this->hour12((int) $peakHour) : '')
+                . ($peakDay ? ' at pinaka-madalas tuwing ' . $this->dayLabel($peakDay, 'tl') : '')
+                . '. Ang bilang ay ' . ($rising ? 'TUMATAAS' : 'steady o bumababa')
+                . ' kumpara sa unang kalahati ng panahon.'
+            : $total . ' crime' . ($total === 1 ? '' : 's') . ' recorded, mostly ' . $topCat
+                . ' (' . $cats->first() . ' of ' . $total . ')'
+                . ($peakHour !== null ? ', peaking around ' . $this->hour12((int) $peakHour) : '')
+                . ($peakDay ? ' and busiest on ' . $peakDay . 's' : '')
+                . '. The count is ' . ($rising ? 'RISING' : 'steady or falling')
+                . ' versus the earlier half of the period.';
 
         // EVERY crime type on the street gets its own block + suggestion, so
         // the per-type counts always add up to the street total (the merged
@@ -594,7 +657,7 @@ class GeminiPatternAnalysisService
                 ->countBy()
                 ->sortDesc();
             $modus = $modusCounts->take(3)
-                ->map(fn ($c, $m) => $c . '× ' . $m)
+                ->map(fn ($c, $m) => $c . '× ' . $this->modusLabel((string) $m, $lang))
                 ->values()
                 ->all();
             $modusNames = $modusCounts->take(3)->keys()->values()->all();
@@ -605,9 +668,9 @@ class GeminiPatternAnalysisService
             $doneStatuses = ['solved', 'resolved', 'closed', 'cleared'];
             $casesList = $catInc->sortByDesc('date')->values()->map(fn ($i) => [
                 'date'     => Carbon::parse($i['date'])->format('M j, Y'),
-                'day'      => $i['dow'],
+                'day'      => $this->dayLabel($i['dow'], $lang),
                 'time'     => $i['time12'] ?? null,
-                'modus'    => ($i['modus'] ?? '') !== '' ? $i['modus'] : null,
+                'modus'    => ($i['modus'] ?? '') !== '' ? $this->modusLabel($i['modus'], $lang) : null,
                 'resolved' => in_array(mb_strtolower((string) $i['status']), $doneStatuses, true),
             ])->all();
 
@@ -615,7 +678,7 @@ class GeminiPatternAnalysisService
                 : (($n >= 5 || $share >= 35) ? 'high'
                 : (($n >= 3 || $share >= 20) ? 'moderate' : 'low'));
 
-            $sugg = $this->interventionForCategory((string) $cat, (int) $n, $share, $catWindow, $catNight, $street, $peakDay, $total, $modusNames);
+            $sugg = $this->interventionForCategory((string) $cat, (int) $n, $share, $catWindow, $catNight, $street, $peakDay, $total, $modusNames, $lang);
             $sugg['severity'] = $severity;
             if ($severity === 'critical') {
                 $sugg['priority'] = 'high';
@@ -625,7 +688,7 @@ class GeminiPatternAnalysisService
                 'share'       => $share,
                 'unresolved'  => $catUnresolved,
                 'modus'       => $modus,
-                'busiest_day' => $catDay,
+                'busiest_day' => $this->dayLabel($catDay, $lang),
                 'latest'      => $latestLabel,
                 'severity'    => $severity,
                 'cases_list'  => $casesList,
@@ -633,6 +696,7 @@ class GeminiPatternAnalysisService
 
             $categories[] = [
                 'category'        => (string) $cat,
+                'category_label'  => $this->catLabel((string) $cat, $lang),
                 'count'           => (int) $n,
                 'share'           => $share,
                 'severity'        => $severity,
@@ -645,6 +709,11 @@ class GeminiPatternAnalysisService
             ];
             $suggestions[] = $sugg + ['category' => (string) $cat];
         }
+        // busiest_day inside each category block should match the language too
+        foreach ($categories as &$cbRef) {
+            $cbRef['busiest_day'] = $this->dayLabel($cbRef['busiest_day'], $lang);
+        }
+        unset($cbRef);
 
         return [
             'street'         => $street,
@@ -738,16 +807,25 @@ class GeminiPatternAnalysisService
     /**
      * ONE tailored intervention per crime type (fixed menu shared with pattern
      * detection, research effect sizes), with steps, coverage and a target.
+     * $lang 'en' or 'tl' (Taglish) — every text field comes out in that
+     * language; the underlying data and structure are identical.
      */
-    private function interventionForCategory(string $cat, int $n, int $share, string $window, bool $night, string $street, ?string $peakDay, int $total, array $modusNames = []): array
+    private function interventionForCategory(string $cat, int $n, int $share, string $window, bool $night, string $street, ?string $peakDay, int $total, array $modusNames = [], string $lang = 'en'): array
     {
         $c = mb_strtolower($cat);
+        $tl = $lang === 'tl';
 
         if (str_contains($c, 'vehicle') || str_contains($c, 'carnap')) {
             $action = 'Set up checkpoint';
             $pct = -13;
-            $explanation = 'Access control and checkpoints cut vehicle crime by ~13% (research).';
-            $tips = [
+            $explanation = $tl
+                ? 'Napapababa ng checkpoint at access control ang vehicle crime nang ~13% (research).'
+                : 'Access control and checkpoints cut vehicle crime by ~13% (research).';
+            $tips = $tl ? [
+                'Gumamit ng steering, wheel o disc lock at alarma sa mga nakaparadang motorsiklo at sasakyan.',
+                'Sa maliwanag at kitang-kita na lugar magparada — huwag iwanang magdamag ang sasakyan sa tabing-kalsada.',
+                'Ipalista sa barangay ang plaka ng sasakyan ninyo sa vehicle watch list.',
+            ] : [
                 'Use a steering, wheel or disc lock and an alarm on parked motorcycles and cars.',
                 'Park in lighted, visible spots — avoid leaving vehicles on the roadside overnight.',
                 'Ask the barangay to list your plate number in the vehicle watch list.',
@@ -755,8 +833,14 @@ class GeminiPatternAnalysisService
         } elseif (str_contains($c, 'theft')) {
             $action = 'Deploy roving tanod patrol (ronda)';
             $pct = -20;
-            $explanation = 'Hot-spot patrols cut street crime by ~15-25% (research).';
-            $tips = [
+            $explanation = $tl
+                ? 'Napapababa ng hot-spot patrol ang street crime nang ~15-25% (research).'
+                : 'Hot-spot patrols cut street crime by ~15-25% (research).';
+            $tips = $tl ? [
+                'Ilayo ang phone at bag sa gilid ng kalsada; gumamit ng crossbody bag na may zipper.',
+                'Iwasang gumamit ng phone habang naglalakad malapit sa kalsada, lalo na sa peak hours sa itaas.',
+                'Mga may-ari ng tindahan: ilayo ang maliliit na valuables sa entrada at sa counter malapit sa pinto.',
+            ] : [
                 'Keep phones and bags away from the roadside edge; use crossbody bags with zippers.',
                 'Avoid using your phone while walking near the road, especially at the peak hours above.',
                 'Store owners: keep small valuables away from entrances and counters near the door.',
@@ -764,10 +848,18 @@ class GeminiPatternAnalysisService
         } elseif (str_contains($c, 'robbery') || str_contains($c, 'holdap')) {
             $action = $night ? 'Install streetlights' : 'Deploy roving tanod patrol (ronda)';
             $pct = $night ? -20 : -22;
-            $explanation = $night
-                ? 'Improved lighting cuts night street crime by ~20% (research).'
-                : 'Visible patrols deter robbery during its peak hours.';
-            $tips = [
+            $explanation = $tl
+                ? ($night
+                    ? 'Napapababa ng mas maayos na ilaw ang night street crime nang ~20% (research).'
+                    : 'Naipipigil ng kitang-kitang patrolya ang holdap sa peak hours nito.')
+                : ($night
+                    ? 'Improved lighting cuts night street crime by ~20% (research).'
+                    : 'Visible patrols deter robbery during its peak hours.');
+            $tips = $tl ? [
+                'Iwasang maglakad nang mag-isa sa mga oras na madalas ang holdap; sa maliwanag na pangunahing ruta dumaan.',
+                'Huwag magsuot ng alahas o maglabas ng phone at pera sa gabi.',
+                'Kapag hinoldap, huwag lumaban — tandaan ang mukha, damit at plaka ng motorsiklo, saka agad mag-report.',
+            ] : [
                 'Avoid walking alone during the peak hold-up hours; take the lighted main routes.',
                 'Do not display jewelry, phones or cash late at night.',
                 'If held up, do not resist — note the suspects\' faces, clothing and any motorcycle plate, then report immediately.',
@@ -775,8 +867,14 @@ class GeminiPatternAnalysisService
         } elseif (str_contains($c, 'burglary') || str_contains($c, 'akyat')) {
             $action = 'Organize community watch';
             $pct = -16;
-            $explanation = 'Neighborhood watch reduces burglary by ~16% (research).';
-            $tips = [
+            $explanation = $tl
+                ? 'Napapababa ng neighborhood watch ang akyat-bahay nang ~16% (research).'
+                : 'Neighborhood watch reduces burglary by ~16% (research).';
+            $tips = $tl ? [
+                'I-doble-kandado ang pinto at siguruhin ang rehas ng bintana bago matulog o umalis ng bahay.',
+                'Magpabantay sa pinagkakatiwalaang kapitbahay at ipa-receive ang deliveries kapag wala kayo.',
+                'Lagyan ng ilaw ang mga pasukan at putulan ang mga halamang tumatakip sa pinto at bintana.',
+            ] : [
                 'Double-lock doors and secure window grills before sleeping or leaving the house.',
                 'Ask a trusted neighbor to watch the house and receive deliveries when you are away.',
                 'Add lighting over entry points and trim shrubs that hide doors and windows.',
@@ -784,8 +882,14 @@ class GeminiPatternAnalysisService
         } elseif (str_contains($c, 'assault') || str_contains($c, 'injur') || str_contains($c, 'homicide') || str_contains($c, 'murder')) {
             $action = 'Deploy roving tanod patrol (ronda)';
             $pct = -18;
-            $explanation = 'Patrol presence at peak hours interrupts violent confrontations.';
-            $tips = [
+            $explanation = $tl
+                ? 'Naaabala ng presensya ng patrol sa peak hours ang mga marahas na engkwentro.'
+                : 'Patrol presence at peak hours interrupts violent confrontations.';
+            $tips = $tl ? [
+                'Idulog agad sa barangay ang mga mainit na alitan — karamihan ng pananakit dito ay nagsimula sa away.',
+                'Mga may-ari ng tindahan at videoke: huwag nang pagbilhan ang halatang lasing at magsara sa tamang oras.',
+                'Umiwas sa mga nang-aasar; tumawag sa tanod hotline imbes na makipagharap.',
+            ] : [
                 'Report heated disputes to the barangay early — most injuries here start as arguments.',
                 'Store and videoke owners: stop serving obviously intoxicated customers and close on time.',
                 'Walk away from provocations; call the tanod hotline instead of confronting.',
@@ -793,8 +897,14 @@ class GeminiPatternAnalysisService
         } elseif (str_contains($c, 'sexual') || str_contains($c, 'rape')) {
             $action = 'Install streetlights';
             $pct = -20;
-            $explanation = 'Lighting removes the dark segments where offenders strike.';
-            $tips = [
+            $explanation = $tl
+                ? 'Inaalis ng ilaw ang madidilim na bahaging pinagtataguan ng mga salarin.'
+                : 'Lighting removes the dark segments where offenders strike.';
+            $tips = $tl ? [
+                'Magpares-pares o mag-grupo kung maglalakad sa gabi; i-share ang location sa pamilya.',
+                'I-report agad ang panghaharas — kumpidensyal ang barangay VAW desk sa mga reklamo.',
+                'Itala at i-report sa barangay ang madidilim o tagong bahagi ng kalyeng ito.',
+            ] : [
                 'Travel in pairs or groups at night where possible; share your location with family.',
                 'Report harassment at once — the barangay VAW desk handles complaints confidentially.',
                 'Note and report dark or hidden spots along this street to the barangay.',
@@ -802,8 +912,14 @@ class GeminiPatternAnalysisService
         } elseif (str_contains($c, 'fraud') || str_contains($c, 'estafa') || str_contains($c, 'scam')) {
             $action = 'Run crime-awareness drive';
             $pct = -10;
-            $explanation = 'Scam-awareness campaigns reduce fraud victimization.';
-            $tips = [
+            $explanation = $tl
+                ? 'Napapababa ng scam-awareness campaign ang bilang ng nabibiktima ng panloloko.'
+                : 'Scam-awareness campaigns reduce fraud victimization.';
+            $tips = $tl ? [
+                'I-verify muna ang seller at mga "investment" offer bago magbayad — sa barangay hall makipagkita para sa malalaking transaksyon.',
+                'Huwag ibigay kailanman ang OTP, PIN o bank details, kahit sa tumatawag na nagpapakilalang taga-bangko.',
+                'Kapag sobrang ganda ng alok para maging totoo, hindi iyon totoo — magtanong muna sa barangay desk bago magpadala ng pera.',
+            ] : [
                 'Verify sellers and "investment" offers before paying — meet at the barangay hall for big transactions.',
                 'Never share OTPs, PINs or bank details, even with callers claiming to be your bank.',
                 'If an offer sounds too good to be true, it is — ask the barangay desk before sending money.',
@@ -811,8 +927,14 @@ class GeminiPatternAnalysisService
         } elseif (str_contains($c, 'domestic') || str_contains($c, 'vawc')) {
             $action = 'Run crime-awareness drive';
             $pct = -10;
-            $explanation = 'VAWC awareness plus barangay protection-order info reaches victims early.';
-            $tips = [
+            $explanation = $tl
+                ? 'Naaabot nang maaga ang mga biktima sa pamamagitan ng VAWC awareness at protection-order info.'
+                : 'VAWC awareness plus barangay protection-order info reaches victims early.';
+            $tips = $tl ? [
+                'Pwedeng makakuha ang biktima ng Barangay Protection Order sa mismong araw — libre ang tulong ng VAW desk.',
+                'Mga kapitbahay: tumawag sa tanod hotline habang nangyayari ang gulo, hindi pagkatapos.',
+                'I-save sa phone ang numero ng VAW desk at PNP women\'s desk.',
+            ] : [
                 'Victims can get a Barangay Protection Order the same day — the VAW desk assists for free.',
                 'Neighbors: call the tanod hotline while a disturbance is ongoing, not after.',
                 'Keep the VAW desk and PNP women\'s desk numbers saved on your phone.',
@@ -820,39 +942,60 @@ class GeminiPatternAnalysisService
         } elseif (str_contains($c, 'drug')) {
             $action = 'Set up checkpoint';
             $pct = -13;
-            $explanation = 'Checkpoints disrupt the transport of illegal drugs.';
-            $tips = [
+            $explanation = $tl
+                ? 'Naaabala ng checkpoint ang transport ng iligal na droga.'
+                : 'Checkpoints disrupt the transport of illegal drugs.';
+            $tips = $tl ? [
+                'I-report nang anonymous ang pinaghihinalaang drug activity sa barangay drop box o hotline.',
+                'Mga magulang: alamin kung nasaan ang mga anak tuwing peak hours sa itaas.',
+            ] : [
                 'Report suspected drug activity anonymously through the barangay drop box or hotline.',
                 'Parents: know where your children are during the peak hours above.',
             ];
         } else {
             $action = 'Deploy roving tanod patrol (ronda)';
             $pct = -15;
-            $explanation = 'Hot-spot patrols reduce most street crime types.';
-            $tips = [
+            $explanation = $tl
+                ? 'Napapababa ng hot-spot patrol ang karamihan ng street crime.'
+                : 'Hot-spot patrols reduce most street crime types.';
+            $tips = $tl ? [
+                'I-report agad sa barangay hotline ang kahit anong kahina-hinala.',
+                'Panatilihing nakabukas ang ilaw sa harap ng bahay at gate buong gabi.',
+            ] : [
                 'Report anything suspicious to the barangay hotline right away.',
                 'Keep porch and gate lights on through the night.',
             ];
         }
 
         $prevented = max(1, (int) round($n * abs($pct) / 100));
-        $info = self::ACTION_INFO[$action] ?? [];
+        $info = ($tl ? self::ACTION_INFO_TL[$action] ?? null : null) ?? self::ACTION_INFO[$action] ?? [];
+        $catLabel = $tl ? (self::CATEGORY_TL[$cat] ?? $cat) : $cat;
+        $dayLabel = $peakDay ? ($tl ? (self::DAY_TL[$peakDay] ?? $peakDay) : $peakDay) : null;
 
         return [
-            'action'      => $action,
+            'action'      => $tl ? (self::ACTION_TL[$action] ?? $action) : $action,
             'time_window' => $window,
-            'rationale'   => $n . ' of the ' . $total . ' crimes here (' . $share . '%) are ' . $cat
-                . ($window ? ', concentrated around ' . $window : '') . ' on ' . $street . '.',
+            'rationale'   => $tl
+                ? $n . ' sa ' . $total . ' krimen dito (' . $share . '%) ay ' . $catLabel
+                    . ($window ? ', pumipeak bandang ' . $window : '') . ' sa ' . $street . '.'
+                : $n . ' of the ' . $total . ' crimes here (' . $share . '%) are ' . $cat
+                    . ($window ? ', concentrated around ' . $window : '') . ' on ' . $street . '.',
             'details'     => [
-                'coverage'  => 'Cover ' . $street . ' during ' . $window
-                    . ($peakDay ? ', with extra attention on ' . $peakDay . 's (its busiest day)' : '') . '.',
-                'steps'     => $this->stepsFor($action, $street, $window, $peakDay, $cat, $modusNames),
+                'coverage'  => $tl
+                    ? 'Bantayan ang ' . $street . ' tuwing ' . $window
+                        . ($dayLabel ? ', lalo na tuwing ' . $dayLabel . ' (pinaka-madalas na araw)' : '') . '.'
+                    : 'Cover ' . $street . ' during ' . $window
+                        . ($peakDay ? ', with extra attention on ' . $peakDay . 's (its busiest day)' : '') . '.',
+                'steps'     => $this->stepsFor($action, $street, $window, $peakDay, $cat, $modusNames, $lang),
                 'resources' => $info['resources'] ?? null,
                 'lead'      => $info['lead'] ?? null,
                 'timeline'  => $info['timeline'] ?? null,
-                'tips'      => $this->tipsFor($cat, $modusNames, $window, $peakDay, $street, $tips),
-                'kpi'       => 'Target: roughly ' . $prevented . ' fewer ' . $cat . ' case' . ($prevented === 1 ? '' : 's')
-                    . ' on this street over the same period if sustained.',
+                'tips'      => $this->tipsFor($cat, $modusNames, $window, $peakDay, $street, $tips, $lang),
+                'kpi'       => $tl
+                    ? 'Target: humigit-kumulang ' . $prevented . ' na mas kaunting ' . $catLabel . ' case'
+                        . ' sa kalyeng ito sa parehong panahon kung tuloy-tuloy.'
+                    : 'Target: roughly ' . $prevented . ' fewer ' . $cat . ' case' . ($prevented === 1 ? '' : 's')
+                        . ' on this street over the same period if sustained.',
             ],
             'expected_impact' => [
                 'direction' => 'decrease',
@@ -894,67 +1037,275 @@ class GeminiPatternAnalysisService
         'gunshot'           => 'Report armed individuals or gunfire straight to the PNP hotline and stay indoors — never investigate personally.',
     ];
 
+    /** Taglish twin of MODUS_TIP_RULES — same keys, same triggers */
+    private const MODUS_TIP_RULES_TL = [
+        'snatch'            => 'Hawakan ang phone at bag sa gawing gusali, malayo sa gilid ng kalsada — sa tabing-daan nang-aagaw ang mga snatcher dito.',
+        'pickpocket'        => 'Sa matataong lugar, ilagay ang wallet at phone sa harap na bulsa o naka-zip na bag — may naitalang pandudukot dito.',
+        'slash'             => 'Ibitbit ang bag sa harap ng katawan sa bahaging ito — may naitalang paglaslas ng bag dito.',
+        'shoplift'          => 'Mga may-ari ng tindahan: ilagay ang maliliit na paninda kung saan kita mula sa counter at magdagdag ng salamin sa mga blind corner — may naitalang shoplifting dito.',
+        'riding in tandem'  => 'Mag-ingat sa mga motorsiklong bumabagal sa tabi ng naglalakad — may naitalang riding-in-tandem dito; lumayo sa gilid ng kalsada papunta sa maliwanag at mataong lugar.',
+        'hold-up'           => 'Kapag hinoldap, huwag lumaban — ibigay ang gamit, tandaan ang mukha, damit at direksyon ng pagtakas, saka agad tumawag sa barangay/PNP.',
+        'knife'             => 'Kapag tinutukan ng patalim, huwag makipagbuno — lumayo muna, itala ang detalye pagkatapos, at agad mag-report.',
+        'forced door'       => 'Palakasin ang hamba ng pinto at gumamit ng deadbolt — pilit na binuksan ang pinto sa mga naitalang akyat-bahay dito.',
+        'window'            => 'Maglagay ng rehas at kandado sa bintana — sa bintana pumasok ang mga naitalang akyat-bahay dito.',
+        'roof'              => 'Suriin at siguruhin ang bubong at kisame — may naitalang pagpasok sa bubong dito.',
+        'hotwiring'         => 'Gumamit ng steering lock o ignition kill-switch — hinotwire ang mga motorsiklong ninakaw dito.',
+        'street parking'    => 'Huwag iwanang magdamag ang motorsiklo sa open street parking — ganyan mismo ninakaw ang mga sasakyan dito; sa naka-kandado o may bantay na lugar magparada.',
+        'carnap'            => 'Maglagay ng GPS tracker at alarma, at sa maliwanag at kitang-kita na lugar lang magparada — may naitalang carnapping dito.',
+        'online'            => 'I-verify ang online seller (profile, reviews, cash-on-delivery lang) — may naitalang online-selling scam dito.',
+        'investment'        => 'I-check muna sa SEC advisories ang kahit anong investment offer bago magbayad — may naitalang investment scam dito.',
+        'budol'             => 'Huwag pansinin ang mga estranghero na nag-aalok ng instant na panalo o sobrang gandang deal — may naitalang budol-budol dito.',
+        'drunken'           => 'Umiwas sa mainit na pagtatalo lalo na kung may inuman — nagsimula sa away ng lasing ang mga naitalang pananakit dito.',
+        'dispute'           => 'Idulog agad sa Lupon ng barangay ang away-kapitbahay para sa mediation — umeskalada mula sa alitan ang naitalang karahasan dito.',
+        'intimate partner'  => 'Pwedeng kumuha ang biktima ng Barangay Protection Order sa mismong araw sa VAW desk — libre at kumpidensyal.',
+        'lascivious'        => 'I-report agad ang panghaharas sa VAW desk, at magpares-pares kung maglalakad dito sa gabi.',
+        'harass'            => 'I-report agad ang panghaharas sa VAW desk, at magpares-pares kung maglalakad dito sa gabi.',
+        'stab'              => 'I-report agad sa PNP hotline ang mga armadong tao o papalalang gulo — huwag makialam nang mag-isa.',
+        'gunshot'           => 'I-report agad sa PNP hotline ang putok ng baril at manatili sa loob ng bahay — huwag mag-imbestiga nang mag-isa.',
+    ];
+
+    /** Taglish labels for the fixed intervention menu (display only — the EN
+     * name stays the canonical value in flat/saved recommendations) */
+    private const ACTION_TL = [
+        'Deploy roving tanod patrol (ronda)'  => 'Mag-ronda ang mga tanod (roving patrol)',
+        'Install CCTV'                        => 'Maglagay ng CCTV',
+        'Install streetlights'                => 'Maglagay ng ilaw sa kalye (streetlights)',
+        'Organize community watch'            => 'Mag-organisa ng community watch',
+        'Set up checkpoint'                   => 'Maglagay ng checkpoint',
+        'Run crime-awareness drive'           => 'Magsagawa ng crime-awareness drive',
+        'Maintain routine patrol pass-through' => 'Ipagpatuloy ang regular na ronda',
+    ];
+
+    /** Taglish twin of ACTION_INFO */
+    private const ACTION_INFO_TL = [
+        'Deploy roving tanod patrol (ronda)' => [
+            'resources' => '2-4 tanod kada shift, patrol logbook, flashlight, at two-way radio o group chat ng patrol.',
+            'lead'      => 'Barangay Peace and Order Committee (tanod team).',
+            'timeline'  => 'Pwedeng simulan ngayong linggo; i-review ang logbook at bilang ng krimen pagkatapos ng 30 araw.',
+        ],
+        'Install CCTV' => [
+            'resources' => '2-4 CCTV na may night vision, DVR na may 30-araw na storage, at warning signage.',
+            'lead'      => 'Barangay council, katuwang ang city CCTV program.',
+            'timeline'  => 'Bili at kabit sa loob ng 4-6 na linggo; ayusin ang footage-review protocol mula unang araw.',
+        ],
+        'Install streetlights' => [
+            'resources' => 'LED lamppost o kapalit na bombilya para sa bawat madilim na bahaging nakita sa night walk-through.',
+            'lead'      => 'Barangay council kasama ang City Engineering Office.',
+            'timeline'  => 'I-file ang request ngayong linggo; palit-bombilya sa loob ng ilang araw, bagong poste sa loob ng 1-2 buwan.',
+        ],
+        'Organize community watch' => [
+            'resources' => '5-10 residenteng volunteer, ID lanyard, pito o alarma, at group chat na konektado sa tanod team.',
+            'lead'      => 'Kapitan ng barangay kasama ang homeowners/residents association.',
+            'timeline'  => 'Mag-recruit at mag-orient sa loob ng 2 linggo; unang coordination meeting sa loob ng buwan.',
+        ],
+        'Set up checkpoint' => [
+            'resources' => 'Mesa at signage ng checkpoint, early-warning device, at least 2 tanod at 1 pulis kada shift.',
+            'lead'      => 'Tanod team ng barangay, katuwang ang lokal na PNP station.',
+            'timeline'  => 'Makipag-ugnayan sa PNP ngayong linggo; patakbuhin sa random na mga gabi pagkatapos.',
+        ],
+        'Run crime-awareness drive' => [
+            'resources' => 'Printed na advisory, PA system at social media page ng barangay, at PNP resource speaker.',
+            'lead'      => 'Barangay information officer kasama ang Peace and Order Committee.',
+            'timeline'  => 'Unang advisory ngayong linggo; seminar sa loob ng buwan; ulitin kada quarter.',
+        ],
+        'Maintain routine patrol pass-through' => [
+            'resources' => '1-2 tanod sa kasalukuyang ruta ng ronda.',
+            'lead'      => 'Tanod team ng barangay.',
+            'timeline'  => 'Tuloy-tuloy — isama ang kalyeng ito sa kasalukuyang ruta ng ronda.',
+        ],
+    ];
+
+    /** Display labels for crime categories (raw DB value stays canonical) */
+    private const CATEGORY_TL = [
+        'Theft'             => 'Pagnanakaw',
+        'Robbery'           => 'Holdap',
+        'Assault'           => 'Pananakit',
+        'Burglary'          => 'Akyat-Bahay',
+        'Vehicle Theft'     => 'Carnapping / Nakaw na Sasakyan',
+        'Domestic Violence' => 'Karahasan sa Tahanan',
+        'Fraud'             => 'Panloloko / Scam',
+        'Sexual Offense'    => 'Seksuwal na Pang-aabuso',
+        'Homicide'          => 'Pagpatay',
+    ];
+
+    private const DAY_TL = [
+        'Monday' => 'Lunes', 'Tuesday' => 'Martes', 'Wednesday' => 'Miyerkules',
+        'Thursday' => 'Huwebes', 'Friday' => 'Biyernes', 'Saturday' => 'Sabado', 'Sunday' => 'Linggo',
+    ];
+
+    /** Known generated modus strings → Taglish (unknown text passes through) */
+    private const MODUS_TL = [
+        'Pickpocketing in a crowded area'              => 'Pandudukot sa mataong lugar',
+        'Snatching from pedestrian'                    => 'Pag-agaw (snatching) sa naglalakad',
+        'Shoplifting from a store'                     => 'Pagnanakaw sa tindahan (shoplifting)',
+        'Bag slashing'                                 => 'Paglaslas ng bag',
+        'Armed hold-up of pedestrian'                  => 'Armadong holdap sa naglalakad',
+        'Motorcycle-riding suspects (riding in tandem)' => 'Riding-in-tandem na mga suspek',
+        'Knife-point robbery'                          => 'Holdap sa tulis ng kutsilyo',
+        'Store hold-up'                                => 'Holdap sa tindahan',
+        'Drunken altercation escalated'                => 'Away ng lasing na umeskalada',
+        'Neighborhood dispute turned physical'         => 'Away-kapitbahay na nauwi sa suntukan',
+        'Street brawl'                                 => 'Bugbugan sa kalye',
+        'Forced door entry while occupants away'       => 'Pilit na pagbukas ng pinto habang walang tao',
+        'Window entry at unoccupied house'             => 'Pagpasok sa bintana ng bakanteng bahay',
+        'Roof/ceiling entry'                           => 'Pagpasok sa bubong/kisame',
+        'Motorcycle stolen from street parking'        => 'Motorsiklong ninakaw sa street parking',
+        'Carnapping of parked vehicle'                 => 'Carnapping ng nakaparadang sasakyan',
+        'Broken ignition / hotwiring'                  => 'Sinirang ignition / hotwiring',
+        'Domestic dispute'                             => 'Away sa loob ng tahanan',
+        'Intimate partner violence'                    => 'Karahasan mula sa kinakasama',
+        'Online sale scam / bogus seller'              => 'Scam sa online selling / pekeng seller',
+        'Investment scam'                              => 'Investment scam',
+        'Budol-budol / confidence scam'                => 'Budol-budol',
+        'Acts of lasciviousness against passerby'      => 'Pambabastos sa dumadaan',
+        'Harassment of commuter'                       => 'Panghaharas sa commuter',
+        'Stabbing during altercation'                  => 'Pananaksak habang may away',
+        'Gunshot by unidentified assailant'            => 'Pamamaril ng di-kilalang salarin',
+    ];
+
+    private function modusLabel(string $modus, string $lang): string
+    {
+        return $lang === 'tl' ? (self::MODUS_TL[$modus] ?? $modus) : $modus;
+    }
+
+    private function dayLabel(?string $day, string $lang): ?string
+    {
+        return $day === null ? null : ($lang === 'tl' ? (self::DAY_TL[$day] ?? $day) : $day);
+    }
+
+    private function catLabel(string $cat, string $lang): string
+    {
+        return $lang === 'tl' ? (self::CATEGORY_TL[$cat] ?? $cat) : $cat;
+    }
+
     /**
      * Implementation steps written around THIS street's recorded cases: the
      * exact hours, the busiest day, and the modus actually used — not a
      * generic checklist.
      */
-    private function stepsFor(string $action, string $street, string $window, ?string $peakDay, string $cat, array $modusNames): array
+    private function stepsFor(string $action, string $street, string $window, ?string $peakDay, string $cat, array $modusNames, string $lang = 'en'): array
     {
-        $modusBrief = implode('; ', array_slice($modusNames, 0, 3));
+        $tl = $lang === 'tl';
+        $modusBrief = implode('; ', array_map(
+            fn ($m) => $this->modusLabel($m, $lang),
+            array_slice($modusNames, 0, 3)
+        ));
+        $catLabel = $this->catLabel($cat, $lang);
+        $day = $this->dayLabel($peakDay, $lang);
+
+        if ($tl) {
+            $dayClause = $day ? ', may dagdag na round tuwing ' . $day . ' (kung kailan madalas ang kaso)' : '';
+
+            switch ($action) {
+                case 'Deploy roving tanod patrol (ronda)':
+                    return [
+                        'Magtalaga ng hindi bababa sa 2 tanod na dadaan sa ' . $street . ' kada 30-45 minuto tuwing ' . $window . $dayClause . '.',
+                        $modusBrief !== ''
+                            ? 'I-brief ang bawat shift sa modus na naitala dito — ' . $modusBrief . ' — para alam ng patrol ang eksaktong babantayan.'
+                            : 'Pag-ibahin nang bahagya ang oras ng pagdaan para hindi mahulaan ang pattern.',
+                        'Itala ang bawat pagdaan at obserbasyon, at i-review ang logbook linggo-linggo laban sa mga bagong ' . $catLabel . ' na report sa kalyeng ito.',
+                    ];
+
+                case 'Install streetlights':
+                    return [
+                        'Lakarin ang ' . $street . ' tuwing ' . $window . ' at ilista ang bawat madilim na bahagi, kanto at bunganga ng eskinita malapit sa mga naitalang ' . $catLabel . ' case.',
+                        'I-file sa City Engineering Office ang request ng poste at palit-bombilya para sa mga eksaktong lugar na iyon; palitan ang sirang bombilya sa loob ng isang linggo.',
+                        $modusBrief !== ''
+                            ? 'Unahin ang mga lugar na kailangan ng dilim ng naitalang modus (' . $modusBrief . '), at magtalaga ng residente kada block na mag-uulat ng sirang ilaw.'
+                            : 'Magtalaga ng residente kada block na mag-uulat sa barangay ng bagong sirang ilaw.',
+                    ];
+
+                case 'Install CCTV':
+                    return [
+                        'Magkabit ng camera sa magkabilang dulo ng ' . $street . ' at sa mga gitnang bahagi kung saan nagkukumpulan ang mga naitalang ' . $catLabel . ' case.',
+                        'I-angulo ang entry/exit camera para malinaw ang mukha at plaka tuwing ' . $window . ' — ang mga oras kung kailan nangyayari ang mga kasong ito.',
+                        'Maglagay ng CCTV signage, i-review ang footage tuwing may bagong report, at ibigay ang clips sa PNP na humahawak sa mga hindi pa naresolbang kaso dito.',
+                    ];
+
+                case 'Organize community watch':
+                    return [
+                        'Mag-recruit ng 5-10 volunteer na nakatira sa ' . $street . ' at ikonekta sila sa tanod team sa iisang group chat.',
+                        $modusBrief !== ''
+                            ? 'I-orient ang mga miyembro sa modus na naitala dito — ' . $modusBrief . ' — at sa ' . $window . ' na oras kung kailan nangyayari ang mga kaso.'
+                            : 'I-orient ang mga miyembro sa ' . $window . ' na oras kung kailan nangyayari ang mga kaso dito.',
+                        'Mag-iskedyul ng bantay ng mga miyembro bandang ' . $window . ($day ? ' tuwing ' . $day : '') . ' at diretsong i-report sa tanod chat ang mga napapansin.',
+                    ];
+
+                case 'Set up checkpoint':
+                    return [
+                        'Ilagay ang checkpoint sa entrada ng ' . $street . ' tuwing ' . $window . ', kung kailan nangyayari ang mga naitalang ' . $catLabel . ' case.',
+                        $modusBrief !== ''
+                            ? 'I-brief ang mga tauhan na bantayan ang mga sasakyan at kilos na tumutugma sa naitalang modus: ' . $modusBrief . '.'
+                            : 'I-rotate ang iskedyul para hindi mahulaan.',
+                        'I-rotate ang mga gabi nang random at makipag-coordinate sa lokal na PNP station para sa joint spot checks.',
+                    ];
+
+                case 'Run crime-awareness drive':
+                    return [
+                        'Mamigay ng advisory sa bawat bahay at tindahan sa ' . $street . ' na naglalarawan ng mga aktwal na naitalang kaso — '
+                            . ($modusBrief !== '' ? $modusBrief : $catLabel) . ' — at ng ' . $window . ' na delikadong oras.',
+                        'Mag-anunsyo ng paalala sa barangay PA system at social media page' . ($day ? ', bago sumapit ang ' . $day . ' kung kailan pumipeak ang mga kaso' : '') . '.',
+                        'Magsagawa ng maikling seminar kasama ang PNP resource speaker tungkol sa pag-iwas sa ' . $catLabel . ' at imbitahan ang mga residente ng kalyeng ito.',
+                    ];
+
+                default:
+                    return self::ACTION_STEPS[$action] ?? [];
+            }
+        }
+
         $dayClause = $peakDay ? ', with extra passes on ' . $peakDay . 's (when most cases here fall)' : '';
 
         switch ($action) {
             case 'Deploy roving tanod patrol (ronda)':
-                return array_values(array_filter([
+                return [
                     'Assign at least 2 tanods to pass through ' . $street . ' every 30-45 minutes during ' . $window . $dayClause . '.',
                     $modusBrief !== ''
                         ? 'Brief every shift on the modus recorded here — ' . $modusBrief . ' — so patrols know exactly what to watch for.'
                         : 'Vary pass times slightly so the pattern stays unpredictable.',
                     'Log every pass and observation, and review the logbook weekly against new ' . $cat . ' reports on this street.',
-                ]));
+                ];
 
             case 'Install streetlights':
-                return array_values(array_filter([
+                return [
                     'Walk ' . $street . ' during ' . $window . ' and list every dark segment, corner and alley mouth near where the recorded ' . $cat . ' cases happened.',
                     'File lamppost and bulb-replacement requests for those exact spots with the City Engineering Office; replace busted bulbs within the week.',
                     $modusBrief !== ''
                         ? 'Prioritize the spots the recorded modus (' . $modusBrief . ') depends on darkness to work, and assign a resident per block to report outages.'
                         : 'Assign a resident per block to report new outages to the barangay.',
-                ]));
+                ];
 
             case 'Install CCTV':
-                return array_values(array_filter([
+                return [
                     'Mount cameras covering both ends of ' . $street . ' and the mid-block spots where the recorded ' . $cat . ' cases cluster.',
                     'Angle entry/exit cameras to capture faces and plate numbers clearly during ' . $window . ' — the hours these cases happen.',
                     'Post CCTV signage, review footage after every new report, and turn over clips to the PNP handling the unresolved cases here.',
-                ]));
+                ];
 
             case 'Organize community watch':
-                return array_values(array_filter([
+                return [
                     'Recruit 5-10 volunteers living on ' . $street . ' and link them with the tanod team in one group chat.',
                     $modusBrief !== ''
                         ? 'Orient members on the modus recorded here — ' . $modusBrief . ' — and the ' . $window . ' window when cases happen.'
                         : 'Orient members on the ' . $window . ' window when cases happen here.',
                     'Schedule member look-outs around ' . $window . ($peakDay ? ' on ' . $peakDay . 's' : '') . ' and report sightings straight to the tanod chat.',
-                ]));
+                ];
 
             case 'Set up checkpoint':
-                return array_values(array_filter([
+                return [
                     'Position the checkpoint at the ' . $street . ' entry during ' . $window . ', when the recorded ' . $cat . ' cases happen.',
                     $modusBrief !== ''
                         ? 'Brief personnel to flag vehicles and behavior matching the recorded modus: ' . $modusBrief . '.'
                         : 'Rotate the schedule so it stays unpredictable.',
                     'Rotate nights unpredictably and coordinate joint spot checks with the local PNP station.',
-                ]));
+                ];
 
             case 'Run crime-awareness drive':
-                return array_values(array_filter([
+                return [
                     'Distribute advisories to every household and store on ' . $street . ' describing the actual recorded cases — '
                         . ($modusBrief !== '' ? $modusBrief : $cat) . ' — and the ' . $window . ' risk window.',
                     'Announce reminders through the barangay PA system and social media page' . ($peakDay ? ', timed before ' . $peakDay . 's when cases peak' : '') . '.',
                     'Hold a short seminar with a PNP resource speaker focused on ' . $cat . ' prevention and invite the residents of this street.',
-                ]));
+                ];
 
             default:
                 return self::ACTION_STEPS[$action] ?? [];
@@ -966,16 +1317,24 @@ class GeminiPatternAnalysisService
      * the real peak window/day, then modus-matched tips, topped up from the
      * category fallback pool.
      */
-    private function tipsFor(string $cat, array $modusNames, string $window, ?string $peakDay, string $street, array $fallback): array
+    private function tipsFor(string $cat, array $modusNames, string $window, ?string $peakDay, string $street, array $fallback, string $lang = 'en'): array
     {
+        $tl = $lang === 'tl';
+        $day = $this->dayLabel($peakDay, $lang);
+
         $tips = [
-            'Be extra alert on ' . $street . ' around ' . $window
-                . ($peakDay ? ', especially on ' . $peakDay . 's' : '')
-                . ' — the recorded ' . $cat . ' cases here cluster in that window.',
+            $tl
+                ? 'Mag-doble-ingat sa ' . $street . ' bandang ' . $window
+                    . ($day ? ', lalo na tuwing ' . $day : '')
+                    . ' — dito pumipeak ang mga naitalang ' . $this->catLabel($cat, $lang) . ' case.'
+                : 'Be extra alert on ' . $street . ' around ' . $window
+                    . ($peakDay ? ', especially on ' . $peakDay . 's' : '')
+                    . ' — the recorded ' . $cat . ' cases here cluster in that window.',
         ];
 
+        $rules = $tl ? self::MODUS_TIP_RULES_TL : self::MODUS_TIP_RULES;
         $modusLower = array_map('mb_strtolower', $modusNames);
-        foreach (self::MODUS_TIP_RULES as $needle => $tip) {
+        foreach ($rules as $needle => $tip) {
             if (count($tips) >= 4) {
                 break;
             }
