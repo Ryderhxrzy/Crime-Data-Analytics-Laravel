@@ -41,28 +41,16 @@ Route::get('/alerts/api/active-data', [AlertsController::class, 'activeData'])
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-// The password-based login flow only exists for local development. In production,
-// auth happens on the centralized portal, which redirects back with a ?token= JWT
-// that ValidateJWTViaAPI consumes. The 'login' route name stays registered in both
-// environments because the landing nav/footer and the auth redirects resolve it.
-if (app()->environment('local')) {
-    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
-    Route::get('/unlock-account/{token}', [AuthController::class, 'unlockAccount'])->name('unlock-account');
+// Password-based login handled by this app in every environment — no redirect
+// to the centralized portal. The ?token= JWT flow in ValidateJWTViaAPI still
+// works if a token is passed, but is no longer the entry point.
+Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+Route::get('/unlock-account/{token}', [AuthController::class, 'unlockAccount'])->name('unlock-account');
 
-    // OTP verification routes
-    Route::get('/verify-otp', [AuthController::class, 'showVerifyOtp'])->name('verify.otp.show');
-    Route::post('/verify-otp', [AuthController::class, 'verifyOtp'])->name('verify.otp');
-    Route::post('/otp/resend', [AuthController::class, 'resendOtp'])->name('otp.resend');
-
-    // Google login routes
-    Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('login.google');
-    Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
-} else {
-    Route::get('/login', function () {
-        return redirect()->away(config('services.central_auth.login_url'));
-    })->name('login');
-}
+// Google login routes
+Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('login.google');
+Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
 
 // Authenticated routes with JWT API middleware
 Route::middleware('jwt.api')->group(function () {
