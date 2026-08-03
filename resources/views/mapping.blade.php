@@ -2056,6 +2056,15 @@ if (request()->query('token')) {
                                 return '<div style="display:flex;gap:6px;font-size:11px;color:#4b5563;line-height:1.5;margin-top:2px;">' +
                                     '<span style="flex-shrink:0;font-weight:800;color:#7c3aed;">' + (i2 + 1) + '.</span><span>' + escStreet(st) + '</span></div>';
                             }).join('') + '</div>' : '') +
+                        (d.resources ? '<div style="font-size:11px;color:#4b5563;margin-top:5px;"><i class="fas fa-toolbox mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">Needs:</span> ' + escStreet(d.resources) + '</div>' : '') +
+                        (d.lead ? '<div style="font-size:11px;color:#4b5563;margin-top:3px;"><i class="fas fa-user-shield mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">Lead:</span> ' + escStreet(d.lead) + '</div>' : '') +
+                        (d.timeline ? '<div style="font-size:11px;color:#4b5563;margin-top:3px;"><i class="fas fa-calendar-check mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">Timeline:</span> ' + escStreet(d.timeline) + '</div>' : '') +
+                        (d.tips && d.tips.length ? '<div style="margin-top:6px;padding:8px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;">' +
+                            '<div style="font-size:9.5px;font-weight:800;color:#0369a1;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-people-roof mr-1"></i>Prevention tips for residents</div>' +
+                            d.tips.map(function (tp) {
+                                return '<div style="display:flex;gap:6px;font-size:11px;color:#0c4a6e;line-height:1.5;margin-top:2px;">' +
+                                    '<i class="fas fa-check" style="color:#0284c7;margin-top:2px;flex-shrink:0;"></i><span>' + escStreet(tp) + '</span></div>';
+                            }).join('') + '</div>' : '') +
                         (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:6px;">' +
                             '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
                             'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer crimes' : 'stable') +
