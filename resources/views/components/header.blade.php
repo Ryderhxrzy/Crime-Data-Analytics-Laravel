@@ -394,7 +394,7 @@ if (connectSampleBtn) {
             console.error('CSRF token not found');
             console.log('Clearing client-side storage and redirecting to login');
             // Fallback: redirect to login
-            window.location.href = '{{ app()->environment() === "production" ? "https://login.alertaraqc.com" : "/login" }}';
+            window.location.href = '/login';
             return;
         }
 
@@ -423,8 +423,7 @@ if (connectSampleBtn) {
             console.error('Logout error:', error);
             console.log('Logout failed, but clearing client-side storage anyway');
             // Fallback: redirect to login based on environment
-            const redirectUrl = '{{ app()->environment() === "production" ? "https://login.alertaraqc.com" : "/login" }}';
-            window.location.href = redirectUrl;
+            window.location.href = '/login';
         });
     }
 
