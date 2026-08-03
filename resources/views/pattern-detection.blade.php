@@ -803,6 +803,36 @@
         'Burglary': '#7c3aed', 'Vehicle Theft': '#0891b2', 'Domestic Violence': '#be185d',
         'Fraud': '#ca8a04', 'Sexual Offense': '#9333ea', 'Homicide': '#111827'
     };
+    const PD_SEV_CHIP = {
+        critical: 'bg-red-900 text-white border-red-900',
+        high:     'bg-red-100 text-red-800 border-red-200',
+        moderate: 'bg-amber-100 text-amber-800 border-amber-200',
+        low:      'bg-gray-100 text-gray-600 border-gray-200'
+    };
+    function pdSeverityChip(sev) {
+        const s = String(sev || '').toLowerCase();
+        if (!PD_SEV_CHIP[s]) return '';
+        return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ' + PD_SEV_CHIP[s] + '">' + s.toUpperCase() + '</span>';
+    }
+
+    // "Basis — recorded crimes": what actually happened, how, and how bad —
+    // so the barangay / police station can study the area, not just the advice
+    function pdEvidenceBlock(ev) {
+        if (!ev || !ev.cases) return '';
+        const row = (icon, html) =>
+            '<div class="flex gap-1.5 text-[11px] text-amber-900 leading-relaxed"><i class="fas ' + icon + ' text-amber-600 mt-0.5 flex-shrink-0"></i><span>' + html + '</span></div>';
+        return '<div class="mt-2 rounded-lg bg-amber-50 border border-amber-200 p-2.5">' +
+            '<div class="text-[9.5px] font-bold text-amber-800 uppercase tracking-wide mb-1"><i class="fas fa-magnifying-glass mr-1"></i>Basis — recorded crimes</div>' +
+            row('fa-hashtag', '<b>' + ev.cases + ' recorded case' + (ev.cases === 1 ? '' : 's') + '</b> (' + ev.share + '% of this street\'s crimes) — severity assessed as <b>' + esc(String(ev.severity || '').toUpperCase()) + '</b>.') +
+            (ev.modus && ev.modus.length ? row('fa-user-ninja', 'How they were committed: ' + ev.modus.map(esc).join('; ') + '.') : '') +
+            (typeof ev.unresolved === 'number' ? row('fa-folder-open', (ev.unresolved > 0
+                ? '<b>' + ev.unresolved + ' of ' + ev.cases + ' still unresolved</b> — follow up with the assigned officers.'
+                : 'All ' + ev.cases + ' cases already resolved.')) : '') +
+            ((ev.busiest_day || ev.latest) ? row('fa-calendar-day',
+                (ev.busiest_day ? 'Most cases fall on <b>' + esc(ev.busiest_day) + 's</b>. ' : '') +
+                (ev.latest ? 'Most recent case: <b>' + esc(ev.latest) + '</b>.' : '')) : '') +
+        '</div>';
+    }
 
     function pdSuggCard(s) {
         const imp = s.expected_impact || {};
@@ -825,6 +855,7 @@
             '</div>' +
             (s.time_window ? '<div class="text-[11px] font-semibold text-violet-700 mt-1"><i class="fas fa-clock mr-1"></i>' + esc(s.time_window) + '</div>' : '') +
             (s.rationale ? '<p class="text-xs text-gray-600 mt-1">' + esc(s.rationale) + '</p>' : '') +
+            pdEvidenceBlock(d.evidence) +
             (d.coverage ? '<div class="text-[11px] text-gray-700 mt-1.5"><i class="fas fa-location-crosshairs mr-1 text-violet-500"></i>' + esc(d.coverage) + '</div>' : '') +
             (d.steps && d.steps.length ? '<div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-2.5">' +
                 '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">How to implement</div>' +
@@ -854,9 +885,10 @@
         if (sec.categories && sec.categories.length) {
             body = sec.categories.map(cb => {
                 const cc = PD_CAT_COLORS[cb.category] || '#64748b';
-                return '<div class="rounded-lg border border-gray-200 overflow-hidden">' +
+                return '<div class="pd-cat-block rounded-lg border border-gray-200 overflow-hidden">' +
                     '<div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50">' +
                         '<span class="text-[10px] font-bold text-white px-2 py-0.5 rounded-full" style="background:' + cc + ';">' + esc(cb.category) + '</span>' +
+                        pdSeverityChip(cb.severity) +
                         '<span class="text-[11px] font-bold text-gray-700">' + cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)</span>' +
                         (cb.peak_hours && cb.peak_hours.length ? '<span class="text-[10.5px] font-semibold text-violet-700"><i class="fas fa-clock mr-1"></i>Peak: ' + cb.peak_hours.map(esc).join(', ') + '</span>' : '') +
                         '<button type="button" class="pd-cat-crimes ml-auto text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1 hover:bg-violet-100"' +
@@ -905,6 +937,37 @@
         return data;
     }
 
+    // Compact stats bar above the crime list — mirrors the mapping modal's
+    // street summary (count, unresolved, peak hours, busiest day)
+    function pdCrimeSummary(incs) {
+        const DONE = ['solved', 'resolved', 'closed', 'cleared'];
+        const unresolved = incs.filter(i => !DONE.includes(String(i.status || '').toLowerCase())).length;
+
+        const hourCounts = {};
+        const dayCounts = {};
+        incs.forEach(i => {
+            const m = /^(\d{1,2}):/.exec(String(i.time || ''));
+            if (m) hourCounts[parseInt(m[1], 10)] = (hourCounts[parseInt(m[1], 10)] || 0) + 1;
+            if (i.date) {
+                const day = new Date(i.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+                dayCounts[day] = (dayCounts[day] || 0) + 1;
+            }
+        });
+        const topHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1]).slice(0, 2)
+            .map(e => fmt12h(e[0] + ':00'));
+        const topDay = (Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0] || [])[0];
+
+        const stat = (icon, html) =>
+            '<span class="inline-flex items-center gap-1"><i class="fas ' + icon + ' text-gray-400"></i>' + html + '</span>';
+
+        return '<div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 mb-1.5">' +
+            stat('fa-hashtag', incs.length + ' crime' + (incs.length === 1 ? '' : 's')) +
+            stat('fa-folder-open', '<span class="' + (unresolved > 0 ? 'text-amber-700' : 'text-green-700') + '">' + unresolved + ' unresolved</span>') +
+            (topHours.length ? stat('fa-clock', 'Peak: ' + topHours.map(esc).join(', ')) : '') +
+            (topDay ? stat('fa-calendar-day', 'Busiest: ' + esc(topDay) + 's') : '') +
+        '</div>';
+    }
+
     function pdCrimeRow(i) {
         const done = ['solved', 'resolved', 'closed', 'cleared'].includes(String(i.status || '').toLowerCase());
         return '<div class="border-t border-dashed border-gray-100 py-1.5">' +
@@ -941,7 +1004,7 @@
 
         const btn = e.target.closest('.pd-cat-crimes');
         if (!btn) return;
-        const block = btn.closest('.rounded-lg');
+        const block = btn.closest('.pd-cat-block');
         const list = block ? block.querySelector('.pd-cat-list') : null;
         if (!list) return;
 
@@ -961,6 +1024,7 @@
                 list.innerHTML = incs.length
                     ? '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">' +
                           esc(btn.dataset.cat) + ' crimes on ' + esc(btn.dataset.street) + '</div>' +
+                      pdCrimeSummary(incs) +
                       incs.map(pdCrimeRow).join('')
                     : '<div class="text-[11px] text-gray-400 py-1">No recorded crimes found for this category.</div>';
                 list.dataset.loaded = '1';
