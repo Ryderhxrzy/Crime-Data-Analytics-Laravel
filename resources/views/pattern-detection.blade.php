@@ -58,7 +58,7 @@
     <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-1">
             <h2 class="text-lg font-bold text-gray-900">
-                <i class="fas fa-robot mr-2 text-violet-600"></i>AI Analysis &mdash; Real Data
+                <i class="fas fa-shield-halved mr-2 text-violet-600"></i>Crime Analysis &amp; Prevention Suggestions &mdash; Real Data
                 <span class="ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 align-middle">REAL</span>
             </h2>
             <div class="flex items-center gap-2">
@@ -71,18 +71,18 @@
                 </button>
             </div>
         </div>
-        <p class="text-xs text-gray-500 mb-4">Gemini analyzes recorded San Agustin crimes, forecasts whether crime will rise or fall, and suggests interventions with their projected effect.</p>
+        <p class="text-xs text-gray-500 mb-4">The system reviews recorded San Agustin crimes street by street, forecasts whether crime will rise or fall, and suggests what to do per street — with a detailed suggestion for every crime type committed there. Instant, no AI quota used.</p>
 
         <!-- placeholder -->
         <div id="aiPlaceholder" class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
             <i class="fas fa-wand-magic-sparkles text-violet-400 text-xl mb-2 block"></i>
-            Click <span class="font-semibold text-blue-700">Analyze Real Data</span> to generate the AI forecast and recommendations from recorded crimes.
+            Click <span class="font-semibold text-blue-700">Analyze Real Data</span> to generate the forecast and per-street prevention suggestions from recorded crimes.
         </div>
 
         <!-- loading -->
         <div id="aiLoading" class="hidden rounded-lg bg-violet-50 border border-violet-200 p-6 text-center">
             <i class="fas fa-spinner fa-spin text-2xl text-violet-600 mb-2"></i>
-            <div class="text-sm font-semibold text-violet-900">Gemini is analyzing San Agustin crimes&hellip;</div>
+            <div class="text-sm font-semibold text-violet-900">Analyzing San Agustin crimes street by street&hellip;</div>
         </div>
 
         <!-- error -->
@@ -117,7 +117,7 @@
 
             <!-- Recommendations -->
             <div>
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-clipboard-check mr-1"></i>Recommended Interventions &amp; Projected Effect</h3>
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-clipboard-check mr-1"></i>Prevention Suggestions &mdash; Per Street, Per Crime Type</h3>
                 <div id="aiRecommendations" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
             </div>
 
@@ -754,7 +754,17 @@
             low:    'bg-gray-100 text-gray-700 border-gray-200'
         };
 
-        $(p + 'Recommendations').innerHTML = (a.recommendations || []).map(r => {
+        const recWrap = $(p + 'Recommendations');
+        if (a.streets && a.streets.length) {
+            // Rule-engine shape: one section per street, one block per crime
+            // type inside — same structure as the crime-mapping street modal
+            recWrap.className = 'space-y-4';
+            recWrap.innerHTML = a.streets.map(sec => pdStreetSection(sec, accent)).join('');
+            return;
+        }
+
+        recWrap.className = 'grid grid-cols-1 lg:grid-cols-2 gap-3';
+        recWrap.innerHTML = (a.recommendations || []).map(r => {
             const imp = r.expected_impact || {};
             const impDir = String(imp.direction || '').toLowerCase();
             const impPct = Number(imp.estimated_change_percent);
@@ -779,6 +789,92 @@
                 '</div>' +
             '</div>';
         }).join('') || '<p class="text-sm text-gray-500">No recommendations returned.</p>';
+    }
+
+    // ---------- per-street / per-crime-type renderer (rule engine) ----------
+    const PD_RISK_CHIP = {
+        high:   'bg-red-100 text-red-800 border-red-200',
+        medium: 'bg-amber-100 text-amber-800 border-amber-200',
+        low:    'bg-green-100 text-green-800 border-green-200'
+    };
+    const PD_CAT_COLORS = {
+        'Theft': '#2563eb', 'Robbery': '#dc2626', 'Assault': '#ea580c',
+        'Burglary': '#7c3aed', 'Vehicle Theft': '#0891b2', 'Domestic Violence': '#be185d',
+        'Fraud': '#ca8a04', 'Sexual Offense': '#9333ea', 'Homicide': '#111827'
+    };
+
+    function pdSuggCard(s) {
+        const imp = s.expected_impact || {};
+        const d = s.details || {};
+        const pct = Number(imp.estimated_change_percent);
+        const pr = String(s.priority || 'low').toLowerCase();
+        const prio = {
+            high:   'bg-red-100 text-red-800 border-red-200',
+            medium: 'bg-amber-100 text-amber-800 border-amber-200',
+            low:    'bg-gray-100 text-gray-700 border-gray-200'
+        };
+        const infoRow = (icon, label, text) => text
+            ? '<div class="text-[11px] text-gray-600 mt-1"><i class="fas ' + icon + ' mr-1 text-violet-500"></i><span class="font-semibold text-gray-700">' + label + ':</span> ' + esc(text) + '</div>'
+            : '';
+
+        return '<div class="rounded-lg border border-gray-200 bg-white p-3">' +
+            '<div class="flex items-start justify-between gap-2">' +
+                '<div class="text-sm font-bold text-gray-900"><i class="fas fa-shield-halved text-violet-600 mr-1"></i>' + esc(s.action) + '</div>' +
+                '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (prio[pr] || prio.low) + '">' + pr.toUpperCase() + '</span>' +
+            '</div>' +
+            (s.time_window ? '<div class="text-[11px] font-semibold text-violet-700 mt-1"><i class="fas fa-clock mr-1"></i>' + esc(s.time_window) + '</div>' : '') +
+            (s.rationale ? '<p class="text-xs text-gray-600 mt-1">' + esc(s.rationale) + '</p>' : '') +
+            (d.coverage ? '<div class="text-[11px] text-gray-700 mt-1.5"><i class="fas fa-location-crosshairs mr-1 text-violet-500"></i>' + esc(d.coverage) + '</div>' : '') +
+            (d.steps && d.steps.length ? '<div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-2.5">' +
+                '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">How to implement</div>' +
+                d.steps.map((st, i) => '<div class="flex gap-1.5 text-[11px] text-gray-600 leading-relaxed"><span class="font-bold text-violet-600 flex-shrink-0">' + (i + 1) + '.</span><span>' + esc(st) + '</span></div>').join('') +
+            '</div>' : '') +
+            infoRow('fa-toolbox', 'Needs', d.resources) +
+            infoRow('fa-user-shield', 'Lead', d.lead) +
+            infoRow('fa-calendar-check', 'Timeline', d.timeline) +
+            (d.tips && d.tips.length ? '<div class="mt-2 rounded-lg bg-sky-50 border border-sky-200 p-2.5">' +
+                '<div class="text-[9.5px] font-bold text-sky-700 uppercase tracking-wide mb-1"><i class="fas fa-people-roof mr-1"></i>Prevention tips for residents</div>' +
+                d.tips.map(t => '<div class="flex gap-1.5 text-[11px] text-sky-900 leading-relaxed"><i class="fas fa-check text-sky-500 mt-0.5 flex-shrink-0"></i><span>' + esc(t) + '</span></div>').join('') +
+            '</div>' : '') +
+            (isFinite(pct) ? '<div class="text-[11px] font-bold mt-2 ' + (pct < 0 ? 'text-green-700' : 'text-gray-700') + '">' +
+                '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
+                'If implemented: ' + (pct < 0 ? '~' + Math.abs(pct) + '% fewer crimes' : 'stable') +
+                (imp.explanation ? ' <span class="font-normal text-gray-500">— ' + esc(imp.explanation) + '</span>' : '') +
+            '</div>' : '') +
+            (d.kpi ? '<div class="text-[11px] font-semibold text-green-700 mt-1"><i class="fas fa-bullseye mr-1"></i>' + esc(d.kpi) + '</div>' : '') +
+        '</div>';
+    }
+
+    function pdStreetSection(sec) {
+        const lvl = String(sec.risk_level || 'low').toLowerCase();
+
+        let body;
+        if (sec.categories && sec.categories.length) {
+            body = sec.categories.map(cb => {
+                const cc = PD_CAT_COLORS[cb.category] || '#64748b';
+                return '<div class="rounded-lg border border-gray-200 overflow-hidden">' +
+                    '<div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50">' +
+                        '<span class="text-[10px] font-bold text-white px-2 py-0.5 rounded-full" style="background:' + cc + ';">' + esc(cb.category) + '</span>' +
+                        '<span class="text-[11px] font-bold text-gray-700">' + cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)</span>' +
+                        (cb.peak_hours && cb.peak_hours.length ? '<span class="text-[10.5px] font-semibold text-violet-700"><i class="fas fa-clock mr-1"></i>Peak: ' + cb.peak_hours.map(esc).join(', ') + '</span>' : '') +
+                    '</div>' +
+                    '<div class="p-2.5">' + pdSuggCard(cb.suggestion || {}) + '</div>' +
+                '</div>';
+            }).join('');
+        } else {
+            body = (sec.suggestions || []).map(s => pdSuggCard(s)).join('')
+                || '<div class="text-xs text-gray-400">No suggestions.</div>';
+        }
+
+        return '<div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4">' +
+            '<div class="flex flex-wrap items-center gap-2 mb-1.5">' +
+                '<span class="text-sm font-extrabold text-gray-900"><i class="fas fa-road text-gray-400 mr-1.5"></i>' + esc(sec.street) + '</span>' +
+                '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (PD_RISK_CHIP[lvl] || PD_RISK_CHIP.low) + '">' + lvl.toUpperCase() + ' RISK</span>' +
+                (typeof sec.total === 'number' ? '<span class="text-[11px] font-bold text-gray-500">' + sec.total + ' total crime' + (sec.total === 1 ? '' : 's') + '</span>' : '') +
+            '</div>' +
+            (sec.summary ? '<p class="text-xs text-gray-600 mb-3">' + esc(sec.summary) + '</p>' : '') +
+            '<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">' + body + '</div>' +
+        '</div>';
     }
 
     // ---------- save AI report to database (shared) ----------
