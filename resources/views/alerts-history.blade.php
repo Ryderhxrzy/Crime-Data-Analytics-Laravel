@@ -149,22 +149,54 @@
                         </div>
                     </div>
                 </div>
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-end gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Period</label>
+                        <select id="filterDays" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                            <option value="0">All time</option>
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Severity</label>
+                        <select id="filterSeverity" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                            <option value="">All severities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Street</label>
+                        <select id="filterStreet" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white min-w-[180px]">
+                            <option value="">All streets</option>
+                        </select>
+                    </div>
+                    <button id="resetHistoryFilters" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-100">
+                        Reset
+                    </button>
+                </div>
+
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead>
                             <tr class="bg-gray-50 border-b border-gray-200">
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Alert ID</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Type</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Location</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Triggered</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Resolved</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Duration</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Street</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Rule</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Crimes</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Raised</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Closed</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Open for</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Outcome</th>
                             </tr>
                         </thead>
                         <tbody id="historyTableBody" class="divide-y divide-gray-200">
                             <tr>
-                                <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">Loading history...</td>
+                                <td colspan="8" class="px-6 py-8 text-center text-sm text-gray-500">Loading history...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -175,10 +207,9 @@
                         <div id="historySummaryText" class="text-sm text-gray-700">
                             Loading...
                         </div>
-                        <div class="flex gap-2">
-                            <button class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">Previous</button>
-                            <button class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">Next</button>
-                        </div>
+                        <a href="{{ route('alerts.active') }}" class="text-sm font-semibold text-alertara-700 hover:text-alertara-900">
+                            Back to open alerts <i class="fas fa-arrow-right ml-1"></i>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -208,41 +239,65 @@
             return `${hours}h ${mins}m`;
         }
 
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
+
         function renderHistoryTable(alerts) {
             const tbody = document.getElementById('historyTableBody');
+
             if (!alerts.length) {
-                tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">No historical alerts yet.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="px-6 py-10 text-center text-sm text-gray-500">
+                    Nothing closed yet for these filters. Alerts land here once they are resolved,
+                    dismissed as a false alarm, or closed automatically when their condition passes.
+                </td></tr>`;
                 return;
             }
 
             tbody.innerHTML = alerts.map(alert => {
                 const status = STATUS_STYLES[alert.status] || STATUS_STYLES.resolved;
+
                 return `
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${alert.alert_id}</td>
-                        <td class="px-6 py-4 text-sm text-gray-900">${alert.rule_type ?? ''}</td>
-                        <td class="px-6 py-4 text-sm text-gray-900">${alert.area_name ?? ''}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(alert.triggered_at)}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(alert.resolved_at)}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${formatDuration(alert.triggered_at, alert.resolved_at)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${status.badge}">
-                                <i class="fas ${status.icon} mr-1"></i> ${status.label}
-                            </span>
+                    <tr class="hover:bg-gray-50 align-top">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${escapeHtml(alert.alert_id)}</td>
+                        <td class="px-6 py-4 text-sm text-gray-900">${escapeHtml(alert.street ?? alert.area_name ?? '—')}</td>
+                        <td class="px-6 py-4 text-sm text-gray-700 max-w-xs">
+                            ${escapeHtml(alert.rule_name ?? '')}
+                            <div class="text-xs text-gray-500">${escapeHtml(alert.condition ?? '')}</div>
                         </td>
-                    </tr>
-                `;
+                        <td class="px-6 py-4 text-sm text-gray-700">${alert.incident_count}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">${formatDateTime(alert.triggered_at)}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">${formatDateTime(alert.resolved_at)}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">${formatDuration(alert.triggered_at, alert.resolved_at)}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 inline-flex text-xs font-bold rounded-full ${status.badge}">
+                                <i class="fas ${status.icon} mr-1"></i>${status.label}
+                            </span>
+                            ${alert.resolution_notes ? `<div class="text-[11px] text-gray-500 mt-1 max-w-xs">${escapeHtml(alert.resolution_notes)}</div>` : ''}
+                        </td>
+                    </tr>`;
             }).join('');
         }
 
+        let historyStreetsLoaded = false;
+
         async function loadAlertHistory() {
             const tbody = document.getElementById('historyTableBody');
-            tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">Loading history...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="px-6 py-8 text-center text-sm text-gray-500">Loading history...</td></tr>`;
+
+            const params = new URLSearchParams({
+                days: document.getElementById('filterDays').value,
+                severity: document.getElementById('filterSeverity').value,
+                street: document.getElementById('filterStreet').value
+            });
 
             try {
-                const res = await fetch('{{ route('alerts.history-data') }}', {
+                const res = await fetch(`{{ route('alerts.history-data') }}?${params}`, {
                     headers: { 'Accept': 'application/json' }
                 });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
 
                 document.getElementById('statTotalResolved').textContent = data.stats.total_resolved;
@@ -252,15 +307,38 @@
                         ? `${(data.stats.avg_resolution_minutes / 60).toFixed(1)}h`
                         : `${data.stats.avg_resolution_minutes}m`;
                 document.getElementById('statFalseAlarms').textContent = data.stats.false_alarms;
-                document.getElementById('historySummaryText').textContent =
-                    `Showing ${data.alerts.length} of ${data.alerts.length} historical alerts`;
+
+                // Street filter is filled once, from every street that has ever
+                // had an alert - not just the ones in the current result.
+                if (!historyStreetsLoaded && data.streets) {
+                    const select = document.getElementById('filterStreet');
+                    select.innerHTML = '<option value="">All streets</option>'
+                        + data.streets.map(s => `<option value="${s}">${s}</option>`).join('');
+                    historyStreetsLoaded = true;
+                }
+
+                document.getElementById('historySummaryText').textContent = data.alerts.length
+                    ? `${data.alerts.length} closed alert(s)`
+                      + (data.stats.busiest_street ? ` · most from ${data.stats.busiest_street} (${data.stats.busiest_street_count})` : '')
+                    : 'No closed alerts for these filters';
 
                 renderHistoryTable(data.alerts);
             } catch (e) {
-                tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-sm text-red-500">Failed to load alert history.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="px-6 py-8 text-center text-sm text-red-500">
+                    Failed to load alert history. ${e.message}</td></tr>`;
                 console.error(e);
             }
         }
+
+        ['filterDays', 'filterSeverity', 'filterStreet'].forEach(id =>
+            document.getElementById(id).addEventListener('change', loadAlertHistory));
+
+        document.getElementById('resetHistoryFilters').addEventListener('click', () => {
+            document.getElementById('filterDays').value = '0';
+            document.getElementById('filterSeverity').value = '';
+            document.getElementById('filterStreet').value = '';
+            loadAlertHistory();
+        });
 
         document.addEventListener('DOMContentLoaded', loadAlertHistory);
     </script>
