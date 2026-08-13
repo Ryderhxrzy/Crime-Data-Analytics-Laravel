@@ -330,7 +330,8 @@
                                   ? '<div style="color:#c4b5fd;">Peak hours: ' + st.peak_hours.map(escStreet).join(', ') + '</div>' : '')
                             : '<div>No recorded crimes — cleared</div>') +
                         (SA_WITH_SUGGESTIONS
-                            ? '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> Click for full details &amp; prevention advice</div>'
+                            ? '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> ' +
+                              (window.SA_CLICK_HINT || 'Click for full details &amp; prevention advice') + '</div>'
                             : '');
 
                     // No bringToFront() here on purpose: raising the SVG path
@@ -410,7 +411,15 @@
                             highlight(false);
                             hideConnectors();
                             streetGroup.closeTooltip();
-                            openStreetModal(name, g);
+
+                            // The host page decides what a street click does —
+                            // Crime Hotspots focuses the street and fills its
+                            // analysis panel; without a hook, open the modal.
+                            if (typeof window.onSanAgustinStreetClick === 'function') {
+                                window.onSanAgustinStreetClick(name, g);
+                            } else {
+                                openStreetModal(name, g);
+                            }
                         });
                     }
                 });
@@ -457,6 +466,44 @@
                     saHostMap.invalidateSize();
                     saHostMap.fitBounds(bounds.pad(0.08), { animate: true });
                 }
+            });
+        }
+
+        // Frame ONE street on the host map (used when a street is selected
+        // from the map or from a ranked list).
+        function saStreetsFitStreet(name) {
+            if (!saHostMap) return;
+
+            ensureSanAgustinStreets().then(function () {
+                const g = (saStreetGroupsAll || {})[name];
+                if (!g || !saHostMap) return;
+
+                const bounds = L.latLngBounds([]);
+                g.inner.forEach(function (line) { bounds.extend(line.getBounds()); });
+
+                if (bounds.isValid()) {
+                    saHostMap.invalidateSize();
+                    saHostMap.fitBounds(bounds.pad(0.45), { maxZoom: 18, animate: true });
+                }
+            });
+        }
+
+        // Draw attention to one street: full-strength line, everything else
+        // back to its normal weight.
+        function saStreetsHighlight(name) {
+            ensureSanAgustinStreets().then(function () {
+                Object.keys(saStreetGroupsAll || {}).forEach(function (key) {
+                    const g = saStreetGroupsAll[key];
+                    const on = key === name;
+                    g.casing.forEach(function (l) {
+                        l.setStyle(on ? { weight: 9, color: '#111827', opacity: 0.9 }
+                                      : { weight: 5, color: '#1e293b', opacity: 0.3 });
+                    });
+                    g.inner.forEach(function (l) {
+                        l.setStyle(on ? { weight: 5, color: g.color, opacity: 1 }
+                                      : { weight: 2.5, color: g.color, opacity: 0.6 });
+                    });
+                });
             });
         }
 
