@@ -46,4 +46,11 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
     ],
 
+    // Alertara Reports system — read-only crime feed behind the crime map's
+    // "Import from Reports" tool. No credentials: the endpoint is public.
+    'alertara_reports' => [
+        'url' => env('REPORTS_API_URL', 'https://report.alertaraqc.com/api/api.php'),
+        'timeout' => env('REPORTS_API_TIMEOUT', 20),
+    ],
+
 ];
