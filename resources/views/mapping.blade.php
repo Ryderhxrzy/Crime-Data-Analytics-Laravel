@@ -1,4 +1,9 @@
 @php
+    // Per-user defaults from Settings; falls back to the shipped values.
+    $prefs = ($preferences ?? null) ?: \App\Models\UserPreference::DEFAULTS;
+@endphp
+
+@php
 // Handle JWT token from centralized login URL
 if (request()->query('token')) {
     session(['jwt_token' => request()->query('token')]);
@@ -301,9 +306,9 @@ if (request()->query('token')) {
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">View Mode</label>
                             <select id="visualizationMode" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                                <option value="markers" selected>Individual Markers</option>
-                                <option value="heatmap">Heat Map</option>
-                                <option value="clusters">Cluster View</option>
+                                <option value="markers" @selected($prefs['default_view_mode'] === 'markers')>Individual Markers</option>
+                                <option value="heatmap" @selected($prefs['default_view_mode'] === 'heatmap')>Heat Map</option>
+                                <option value="clusters" @selected($prefs['default_view_mode'] === 'clusters')>Cluster View</option>
                             </select>
                         </div>
 
@@ -311,10 +316,10 @@ if (request()->query('token')) {
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">Time Period</label>
                             <select id="timePeriod" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                                <option value="30">Last 30 Days</option>
-                                <option value="90">Last 90 Days</option>
-                                <option value="180">Last 6 Months</option>
-                                <option value="all" selected>All Time</option>
+                                <option value="30" @selected((string) $prefs['default_time_period'] === '30')>Last 30 Days</option>
+                                <option value="90" @selected((string) $prefs['default_time_period'] === '90')>Last 90 Days</option>
+                                <option value="180" @selected((string) $prefs['default_time_period'] === '180')>Last 6 Months</option>
+                                <option value="all" @selected((string) $prefs['default_time_period'] === 'all')>All Time</option>
                             </select>
                         </div>
 
@@ -777,7 +782,7 @@ if (request()->query('token')) {
         let barangayRenderer = null;    // renderer bound to the low-z barangay pane
 
         // Barangay the map opens on
-        const DEFAULT_BARANGAY = 'San Agustin';
+        const DEFAULT_BARANGAY = @json($prefs['default_barangay'] ?: 'San Agustin');
         // Tight padding when a single barangay is isolated. No minimum-zoom floor:
         // 13 of the 142 barangays are large enough that forcing a closer zoom would
         // crop them, and fitBounds already gives the closest view that still shows
@@ -795,7 +800,7 @@ if (request()->query('token')) {
         let selectedIncidentCoords = null;
 
         // Pagination state variables
-        const MAX_VISIBLE_INCIDENTS = 100;
+        const MAX_VISIBLE_INCIDENTS = @json((int) $prefs['rows_per_page']);
         let currentListData = [];
         let currentListPage = 1;
         let searchTimeout = null;
