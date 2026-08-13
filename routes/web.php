@@ -168,7 +168,12 @@ Route::middleware('jwt.api')->group(function () {
         // Note: 'alerts.active-data' is registered publicly above, outside this group.
         Route::get('/api/history-data', [AlertsController::class, 'historyData'])->name('history-data');
         Route::post('/api/evaluate', [AlertsController::class, 'evaluate'])->name('evaluate');
-        Route::post('/api/{id}/resolve', [AlertsController::class, 'resolve'])->name('resolve');
+        Route::post('/api/preview-rule', [AlertsController::class, 'previewRule'])->name('preview-rule');
+
+        // Alert workflow. The parameter is the alert_code (ALT-2026-001), not an id.
+        Route::post('/api/{code}/acknowledge', [AlertsController::class, 'acknowledge'])->name('acknowledge');
+        Route::post('/api/{code}/resolve', [AlertsController::class, 'resolve'])->name('resolve');
+        Route::post('/api/{code}/dismiss', [AlertsController::class, 'dismiss'])->name('dismiss');
     });
 });
 
