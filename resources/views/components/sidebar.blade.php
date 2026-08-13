@@ -241,13 +241,13 @@
 
                 <!-- Account Section -->
                 <div class="nav-section">
-                    <a href="#profile"
-                       class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
+                    <a href="{{ authUrl('profile') }}"
+                       class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('profile*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                         <i class="fas fa-user w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Profile</span>
                     </a>
-                    <a href="#settings"
-                       class="tree-node flex items-center px-3 py-2 rounded text-sm text-alertara-800 hover:bg-alertara-200 transition-colors">
+                    <a href="{{ authUrl('settings') }}"
+                       class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('settings*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
                         <i class="fas fa-sliders-h w-4 h-4 mr-3 flex-shrink-0"></i>
                         <span>Settings</span>
                     </a>
