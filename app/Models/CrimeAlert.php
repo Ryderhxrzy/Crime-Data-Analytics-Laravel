@@ -18,6 +18,7 @@ class CrimeAlert extends Model
         'alert_type',
         'severity',
         'barangay_id',
+        'street_name',
         'crime_category_id',
         'center_latitude',
         'center_longitude',
