@@ -901,6 +901,29 @@
             if (loaded < modalStreets.length) {
                 pills.push('<span class="sm-pill"><i class="fas fa-spinner fa-spin"></i> Loading…</span>');
             }
+
+            // Per-category counts for the selected street(s), so the header
+            // reads as a breakdown and not just a total
+            const catEntries = Object.keys(cats).sort(function (a, b) { return cats[b] - cats[a]; });
+            catEntries.slice(0, 4).forEach(function (name) {
+                pills.push('<span class="sm-pill"><span style="width:9px;height:9px;border-radius:50%;background:' +
+                    colorForCategory(name) + ';display:inline-block;"></span>' +
+                    escStreet(name) + ': ' + cats[name] + '</span>');
+            });
+            if (catEntries.length > 4) {
+                const others = catEntries.slice(4).reduce(function (sum, n) { return sum + cats[n]; }, 0);
+                pills.push('<span class="sm-pill"><span style="width:9px;height:9px;border-radius:50%;background:#9ca3af;display:inline-block;"></span>Others: ' + others + '</span>');
+            }
+
+            // The host page can add its own badges (peak hours, trend, risk...)
+            if (modalStreets.length === 1 && typeof window.saExtraStreetPills === 'function') {
+                try {
+                    pills.push(window.saExtraStreetPills(modalStreets[0]) || '');
+                } catch (e) {
+                    console.warn('Extra street pills failed:', e);
+                }
+            }
+
             document.getElementById('streetModalPills').innerHTML = pills.join('');
         }
 
