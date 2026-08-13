@@ -359,8 +359,11 @@ if (connectSampleBtn) {
 
                     <!-- Dropdown Menu -->
                     <div id="profileMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                        <a href="#profile" class="block px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
+                        <a href="{{ authUrl('profile') }}" class="block px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
                             <i class="fas fa-user-circle mr-2"></i>My Profile
+                        </a>
+                        <a href="{{ authUrl('settings') }}" class="block px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
+                            <i class="fas fa-sliders-h mr-2"></i>Settings
                         </a>
                         <button onclick="performLogout()" class="w-full text-left px-4 py-2 text-sm text-alertara-700 hover:bg-alertara-50 transition-colors">
                             <i class="fas fa-sign-out-alt mr-2"></i>Logout
