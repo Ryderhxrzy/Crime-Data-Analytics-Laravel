@@ -28,7 +28,8 @@ class LandingController extends Controller
      */
     public function mapping()
     {
-        return view('mapping');
+        // The map opens on whatever the user chose in Settings
+        return view('mapping', ['preferences' => \App\Models\UserPreference::current()]);
     }
 
     /**
