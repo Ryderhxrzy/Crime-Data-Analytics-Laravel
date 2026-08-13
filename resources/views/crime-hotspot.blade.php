@@ -22,18 +22,18 @@ if (request()->query('token')) {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
     <style>
-        /* Barangay name sitting on the polygon, same idea as the crime map */
-        .brgy-label {
-            background: rgba(255,255,255,0.9);
-            border: 1px solid #274d4c;
-            color: #274d4c;
+        /* Barangay name on the polygon - same treatment as the crime map */
+        .brgy-label-selected {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            color: #123332;
+            font-size: 13px;
             font-weight: 800;
-            font-size: 11px;
-            padding: 2px 10px;
-            border-radius: 9999px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+            text-shadow: 0 0 4px #fff, 0 0 8px #fff, 0 1px 2px #fff;
+            white-space: nowrap;
         }
-        .brgy-label::before { display: none; }
+        .brgy-label-selected::before { display: none; }
     </style>
 
     <!-- Leaflet Heatmap Plugin -->
@@ -89,9 +89,8 @@ if (request()->query('token')) {
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">View Mode</label>
                             <select id="visualizationMode" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                                <option value="heatmap" selected>Heat Map (density)</option>
-                                <option value="zones">Hotspot Zones</option>
-                                <option value="markers">Individual Markers</option>
+                                <option value="markers" selected>Individual Markers</option>
+                                <option value="heatmap">Heat Map (density)</option>
                             </select>
                         </div>
 
@@ -150,8 +149,8 @@ if (request()->query('token')) {
                     <i class="fas fa-shield-halved text-purple-700"></i>
                     <p class="flex-1 text-sm text-purple-900">
                         <span class="font-bold">Click a street to analyse it.</span>
-                        The map zooms to it and the panel on the right breaks down its crime count by type,
-                        peak hours, trend and risk level — with prevention suggestions one click further.
+                        Its modal opens with the crime breakdown, peak hours, trend and risk level, the crimes
+                        themselves and prevention suggestions — and the map zooms to that street behind it.
                     </p>
                     <button type="button" id="zoomToStreetsBtn"
                             class="px-3 py-1.5 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors text-xs font-bold flex items-center gap-2">
@@ -441,19 +440,28 @@ if (request()->query('token')) {
         }
 
         // Boundaries, drawn exactly like the crime map: a thin unfilled outline
-        // for Quezon City, and the San Agustin polygon marked out inside it.
-        // Both are non-interactive and sit in a pane BELOW the street lines, so
-        // they can never swallow a street hover or click.
-        const STYLE_QC_OUTLINE = { color: '#274d4c', weight: 2, opacity: 0.9, fill: false };
-        const STYLE_BARANGAY   = { color: '#274d4c', weight: 2.5, opacity: 1, fillColor: '#9ed4cb', fillOpacity: 0.18 };
+        // for Quezon City, every one of its 142 barangays outlined thinly for
+        // context, and San Agustin marked active on top. All of it is
+        // non-interactive and lives in a pane BELOW the street lines, so it can
+        // never swallow a street hover or click.
+        const STYLE_QC_OUTLINE  = { color: '#274d4c', weight: 2,   opacity: 0.9, fill: false };
+        const STYLE_BRGY_IDLE   = { color: '#5b8f8c', weight: 1,   opacity: 0.8, fillColor: '#e8f5f3', fillOpacity: 0.15 };
+        const STYLE_BRGY_ACTIVE = { color: '#274d4c', weight: 2.5, opacity: 1,   fillColor: '#9ed4cb', fillOpacity: 0.22 };
 
-        let barangayLayer = null;
+        const ACTIVE_BARANGAY = 'san agustin';
+
+        let barangayBoundaryLayer = null;
+        let barangayRenderer = null;
+        let activeBarangayLayer = null;
+        let activeBarangayLabel = null;
         let barangayBounds = null;
 
         async function loadQCBoundary() {
             const timestamp = Date.now();
+            barangayRenderer = barangayRenderer || L.svg({ pane: 'boundaryPane' });
 
-            // 1. Whole-QC outline (PSGC city outline, lines up with the barangays)
+            // 1. Whole-QC outline. fullmapqc.geojson is the PSGC city outline, so
+            //    it lines up exactly with the PSGC barangay polygons below.
             try {
                 const response = await fetch(`/fullmapqc.geojson?t=${timestamp}`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -463,7 +471,8 @@ if (request()->query('token')) {
                 boundaryLayer = L.geoJSON(data, {
                     style: STYLE_QC_OUTLINE,
                     interactive: false,
-                    pane: 'boundaryPane'
+                    pane: 'boundaryPane',
+                    renderer: barangayRenderer
                 }).addTo(map);
 
                 qcBounds = boundaryLayer.getBounds();
@@ -472,32 +481,47 @@ if (request()->query('token')) {
                 qcBounds = L.latLngBounds(L.latLng(14.50, 120.90), L.latLng(14.80, 121.20));
             }
 
-            // 2. Barangay San Agustin — every recorded incident sits inside it
+            // 2. The 142 Quezon City barangays. They stay on the map for context
+            //    exactly as on the crime map; San Agustin is the active one.
             try {
                 const response = await fetch(`/qc_barangays.geojson?t=${timestamp}`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
 
-                const feature = (data.features || []).find(f =>
-                    String((f.properties || {}).name || '').trim().toLowerCase() === 'san agustin');
+                if (barangayBoundaryLayer) map.removeLayer(barangayBoundaryLayer);
+                barangayBoundaryLayer = L.geoJSON(data, {
+                    style: (feature) => Object.assign({},
+                        String((feature.properties || {}).name || '').trim().toLowerCase() === ACTIVE_BARANGAY
+                            ? STYLE_BRGY_ACTIVE
+                            : STYLE_BRGY_IDLE),
+                    interactive: false,
+                    pane: 'boundaryPane',
+                    renderer: barangayRenderer,
+                    onEachFeature: (feature, layer) => {
+                        const name = String((feature.properties || {}).name || '').trim();
+                        if (name.toLowerCase() !== ACTIVE_BARANGAY) return;
 
-                if (feature) {
-                    barangayLayer = L.geoJSON(feature, {
-                        style: STYLE_BARANGAY,
-                        interactive: false,
-                        pane: 'boundaryPane'
-                    }).addTo(map);
+                        activeBarangayLayer = layer;
+                        barangayBounds = layer.getBounds();
 
-                    barangayBounds = barangayLayer.getBounds();
+                        // Name sits on the polygon, same as the crime map
+                        activeBarangayLabel = L.marker(barangayBounds.getCenter(), {
+                            interactive: false,
+                            icon: L.divIcon({ className: '', html: '' })
+                        }).addTo(map);
+                        activeBarangayLabel.bindTooltip(name, {
+                            permanent: true,
+                            direction: 'center',
+                            className: 'brgy-label-selected'
+                        }).openTooltip();
+                    }
+                }).addTo(map);
 
-                    barangayLayer.bindTooltip('Barangay San Agustin', {
-                        permanent: true,
-                        direction: 'center',
-                        className: 'brgy-label'
-                    });
-                }
+                // Ordering only shuffles layers inside 'boundaryPane'; the street
+                // lines and incident markers sit in higher panes regardless.
+                if (activeBarangayLayer) activeBarangayLayer.bringToFront();
             } catch (error) {
-                console.error('Error loading barangay boundary:', error);
+                console.error('Error loading barangay boundaries:', error);
             }
 
             map.invalidateSize();
@@ -549,8 +573,6 @@ if (request()->query('token')) {
                     // Display based on selected mode
                     if (visualizationMode === 'heatmap') {
                         displayHeatmap(hotspotsData);
-                    } else if (visualizationMode === 'zones') {
-                        displayHotspotZones(data.hotspots || []);
                     } else {
                         displayMarkers(hotspotsData);
                     }
@@ -637,59 +659,6 @@ if (request()->query('token')) {
                 `);
 
                 marker.addTo(markerLayer);
-            });
-
-            markerLayer.addTo(map);
-        }
-
-        // Hotspot zones: one circle per ranked street, sized by incident count
-        // and coloured by risk level. This is the "where are the hotspots"
-        // view — no individual crime detail, by design.
-        function displayHotspotZones(hotspots) {
-            markerLayer = L.featureGroup();
-
-            const ZONE_COLORS = {
-                CRITICAL: '#7f1d1d', HIGH: '#dc2626', MEDIUM: '#f59e0b', LOW: '#16a34a'
-            };
-            const maxCount = Math.max(...hotspots.map(h => h.incident_count), 1);
-
-            hotspots.forEach(h => {
-                const color = ZONE_COLORS[h.risk_level] || '#6b7280';
-                // 60-260 m radius, scaled by share of the busiest street
-                const radius = 60 + (h.incident_count / maxCount) * 200;
-
-                const circle = L.circle([h.latitude, h.longitude], {
-                    radius: radius,
-                    color: color,
-                    weight: 2,
-                    opacity: 0.9,
-                    fillColor: color,
-                    fillOpacity: 0.25
-                });
-
-                circle.bindTooltip(`
-                    <div style="font-weight:700;">#${h.rank} ${h.area_name}</div>
-                    <div>${h.incident_count} incidents · ${h.risk_level} risk</div>
-                    <div>Mostly ${h.top_category ?? 'n/a'}${h.peak_period ? ' · peak ' + h.peak_period : ''}</div>
-                    <div style="color:#93c5fd;font-weight:600;margin-top:2px;">Click to analyse</div>
-                `, { sticky: true, direction: 'top' });
-
-                circle.on('click', () => selectHotspot(h.area_name, h));
-
-                circle.addTo(markerLayer);
-
-                // Rank badge at the centre of the zone
-                L.marker([h.latitude, h.longitude], {
-                    interactive: false,
-                    icon: L.divIcon({
-                        className: '',
-                        iconSize: null,
-                        html: `<div style="transform:translate(-50%,-50%);background:${color};color:#fff;
-                                font-size:11px;font-weight:800;padding:2px 7px;border-radius:9999px;
-                                border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4);white-space:nowrap;">
-                                #${h.rank} · ${h.incident_count}</div>`
-                    })
-                }).addTo(markerLayer);
             });
 
             markerLayer.addTo(map);
@@ -1078,7 +1047,7 @@ if (request()->query('token')) {
             if (typeof saStreetsHighlight === 'function') saStreetsHighlight(null);
         }
 
-        function selectHotspot(name, hotspot) {
+        function selectHotspot(name, hotspot, scrollIntoView = true) {
             try {
                 hotspot = hotspot || hotspotByStreet(name);
 
@@ -1182,7 +1151,7 @@ if (request()->query('token')) {
                 `;
 
                 wireStreetPanelButtons();
-                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                if (scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } catch (error) {
                 console.error('Error selecting hotspot:', error);
             }
@@ -1198,11 +1167,48 @@ if (request()->query('token')) {
             });
         }
 
-        // A street clicked on the map analyses it here rather than jumping
-        // straight into the suggestions modal.
-        window.SA_CLICK_HINT = 'Click to analyse this street';
-        window.onSanAgustinStreetClick = function (street) {
-            selectHotspot(street, hotspotByStreet(street));
+        // Clicking a street opens its modal - the crimes, the badges and the
+        // prevention suggestions - and also fills the side panel, so the
+        // breakdown is still there after the modal is closed.
+        window.SA_CLICK_HINT = 'Click for the full breakdown &amp; prevention advice';
+        window.onSanAgustinStreetClick = function (street, group) {
+            selectHotspot(street, hotspotByStreet(street), false);
+            if (typeof openStreetModal === 'function') openStreetModal(street, group);
+        };
+
+        // Extra badges for the modal header, pulled from this page's hotspot
+        // ranking. The partial calls this if the host page defines it.
+        window.saExtraStreetPills = function (street) {
+            const h = hotspotByStreet(street);
+            if (!h) return '';
+
+            const pill = (html, style) =>
+                `<span class="sm-pill"${style ? ` style="${style}"` : ''}>${html}</span>`;
+
+            const pills = [];
+            if (h.peak_period) {
+                pills.push(pill(`<i class="fas fa-clock"></i>Peak ${h.peak_period}`, 'background:#ede9fe;color:#5b21b6;'));
+            }
+
+            const pc = h.trend_percent;
+            const trendStyle = pc > 0 ? 'background:#fee2e2;color:#b91c1c;'
+                             : pc < 0 ? 'background:#dcfce7;color:#15803d;'
+                             : 'background:#f3f4f6;color:#374151;';
+            const trendIcon = pc > 0 ? 'fa-arrow-up' : pc < 0 ? 'fa-arrow-down' : 'fa-arrows-left-right';
+            pills.push(pill(`<i class="fas ${trendIcon}"></i>${pc > 0 ? '+' : ''}${pc}% vs previous`, trendStyle));
+
+            pills.push(pill(`<i class="fas fa-location-dot"></i>${h.affected_locations} affected location${h.affected_locations === 1 ? '' : 's'}`));
+
+            if (h.density_per_100m !== null) {
+                pills.push(pill(`<i class="fas fa-compress"></i>${h.density_per_100m} per 100 m`));
+            }
+
+            const riskStyle = { CRITICAL: 'background:#7f1d1d;color:#fff;', HIGH: 'background:#fee2e2;color:#b91c1c;',
+                                MEDIUM: 'background:#fef3c7;color:#b45309;', LOW: 'background:#dcfce7;color:#15803d;' };
+            pills.push(pill(`<i class="fas fa-gauge-high"></i>${h.risk_level} risk · score ${h.risk_score}`,
+                            riskStyle[h.risk_level] || ''));
+
+            return pills.join('');
         };
 
         function loadCrimeCategories() {
