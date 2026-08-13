@@ -77,7 +77,10 @@ class HotspotAnalyticsService
             'barangay_name' => $crime->barangay?->barangay_name ?? 'Unknown',
             'barangay_id' => $crime->barangay_id,
             'crime_category_id' => $crime->crime_category_id,
-            'category_name' => $crime->category?->category_name ?? 'Unknown',
+            // The row's own category_name is the source of truth on this table;
+            // the relation is only a fallback, and is null for imported rows
+            // whose crime_category_id was never matched.
+            'category_name' => $crime->category_name ?: ($crime->category?->category_name ?? 'Unknown'),
             'color_code' => $crime->category?->color_code ?? '#274d4c',
             'clearance_status' => $crime->clearance_status,
             'location' => $crime->address_details,
@@ -297,7 +300,9 @@ class HotspotAnalyticsService
 
     protected function typeDistribution(Collection $incidents): array
     {
-        $counts = $incidents->countBy(fn ($i) => $i->category->category_name ?? 'Unknown')->sortDesc();
+        $counts = $incidents
+            ->countBy(fn ($i) => $i->category_name ?: ($i->category->category_name ?? 'Unknown'))
+            ->sortDesc();
 
         return [
             'labels' => $counts->keys()->values()->toArray(),

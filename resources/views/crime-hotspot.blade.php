@@ -130,83 +130,6 @@ if (request()->query('token')) {
                     </div>
                 </div>
 
-                <!-- Hotspot Forecast Filters -->
-                <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 mb-6 border border-purple-200">
-                    <div class="mb-4 pb-4 border-b border-purple-200">
-                        <h3 class="text-sm font-bold text-gray-900">
-                            <i class="fas fa-chart-line mr-2 text-purple-700"></i>Hotspot Forecast
-                            <span class="ml-2 text-xs font-normal text-purple-700">(trend projection from weekly incident history)</span>
-                        </h3>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <!-- Historical Data Range -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-calendar mr-1 text-purple-600"></i>Historical Range
-                            </label>
-                            <select id="historicalRange" class="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-sm">
-                                <option value="30">Last 30 Days</option>
-                                <option value="60">Last 60 Days</option>
-                                <option value="90" selected>Last 90 Days</option>
-                                <option value="180">Last 6 Months</option>
-                            </select>
-                        </div>
-
-                        <!-- Forecast Period -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-forward mr-1 text-purple-600"></i>Forecast Period
-                            </label>
-                            <select id="forecastPeriod" class="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-sm">
-                                <option value="7">Next 7 Days</option>
-                                <option value="14" selected>Next 14 Days</option>
-                                <option value="30">Next 30 Days</option>
-                            </select>
-                        </div>
-
-                        <!-- Crime Type Filter (Prediction) -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-filter mr-1 text-purple-600"></i>Crime Type
-                            </label>
-                            <select id="predictionCrimeType" class="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-sm">
-                                <option value="">All Types</option>
-                            </select>
-                        </div>
-
-                        <!-- Barangay Filter (Prediction) -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-map-pin mr-1 text-purple-600"></i>Barangay
-                            </label>
-                            <select id="predictionBarangay" class="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-sm">
-                                <option value="">All Areas</option>
-                            </select>
-                        </div>
-
-                        <!-- Generate Forecast Button -->
-                        <div class="flex items-end">
-                            <button id="runPredictionBtn" class="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-semibold flex items-center justify-center gap-2 text-sm">
-                                <i class="fas fa-chart-line"></i>
-                                <span>Run Forecast</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Map Toggle Controls -->
-                <div class="flex gap-2 mb-4" id="mapToggleControls">
-                    <button class="map-toggle-btn active px-4 py-2 bg-alertara-700 text-white rounded-lg text-sm font-semibold transition-all" data-view="current">
-                        <i class="fas fa-map mr-2"></i>Current Hotspots
-                    </button>
-                    <button class="map-toggle-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-all" data-view="predicted" style="display: none;">
-                        <i class="fas fa-wand-magic-sparkles mr-2"></i>Predicted Hotspots
-                    </button>
-                    <button class="map-toggle-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-all" data-view="compare" style="display: none;">
-                        <i class="fas fa-code-compare mr-2"></i>Compare View
-                    </button>
-                </div>
-
                 <!-- Street-level prevention advice lives on this page: clicking a
                      street opens its crimes and generates suggestions for it. -->
                 <div class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-purple-200 bg-purple-50 p-3">
@@ -285,73 +208,24 @@ if (request()->query('token')) {
                             </div>
                         </div>
 
-                        <!-- Patrol Action Section -->
-                        <div id="patrolSection" class="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg overflow-hidden shadow-sm" style="display: none;">
-                            <div style="padding: 14px 16px;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: #1e40af; margin: 0 0 10px;">
-                                    <i class="fas fa-car mr-2"></i>Patrol Deployment
-                                </h3>
-                                <button id="patrolRequestBtn" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center justify-center gap-2" disabled>
-                                    <i class="fas fa-phone-alt"></i>
-                                    <span>Request Patrol Deployment</span>
-                                </button>
-                                <p style="font-size: 11px; color: #1e40af; margin-top: 8px; margin: 8px 0 0 0;">
-                                    <i class="fas fa-info-circle mr-1"></i>Available for medium/high-risk areas only
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Professional Features -->
+                        <!-- Export -->
                         <div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                             <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
                                 <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0;">
-                                    <i class="fas fa-download mr-2 text-green-600"></i>Professional Features
+                                    <i class="fas fa-download mr-2 text-green-600"></i>Export
                                 </h3>
                             </div>
                             <div style="padding: 12px;">
-                                <button id="exportPdfBtn" class="w-full px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-semibold flex items-center justify-center gap-2 mb-2">
-                                    <i class="fas fa-file-pdf"></i>
-                                    <span>Export Report (PDF)</span>
-                                </button>
-                                <button id="printMapBtn" class="w-full px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-semibold flex items-center justify-center gap-2 mb-2">
-                                    <i class="fas fa-print"></i>
-                                    <span>Print Map</span>
-                                </button>
                                 <button id="downloadCsvBtn" class="w-full px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-semibold flex items-center justify-center gap-2">
                                     <i class="fas fa-download"></i>
                                     <span>Download CSV</span>
                                 </button>
+                                <p style="font-size: 11px; color: #6b7280; margin: 8px 0 0;">
+                                    Every incident behind the current map view, as filtered.
+                                </p>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Forecasted High-Risk Areas Table -->
-            <div class="bg-white border border-gray-200 rounded-lg shadow-sm mt-6" id="predictedAreasSection" style="display: none;">
-                <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-900">
-                        <i class="fas fa-chart-line mr-2 text-purple-700"></i>Forecasted High-Risk Areas
-                    </h3>
-                    <p class="text-sm text-gray-600 mt-1">Trend projection for the next <span id="forecastDaysDisplay">14</span> days — <span id="forecastMethodNote" class="italic">linear regression over weekly incident counts</span></p>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50 border-b border-gray-200">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Rank</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Area</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Historical</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Forecast</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Trend</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Risk Level</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Confidence</th>
-                            </tr>
-                        </thead>
-                        <tbody id="predictedAreasTable">
-                            <!-- Populated by JavaScript -->
-                        </tbody>
-                    </table>
                 </div>
             </div>
 
@@ -508,6 +382,13 @@ if (request()->query('token')) {
                 maxZoom: 19
             }).addTo(map);
 
+            // The QC boundary is a filled polygon covering the whole city. In the
+            // default overlay pane it sits ON TOP of the street lines and eats
+            // every hover and click meant for them, so it gets its own pane
+            // below the streets (360) and the incident markers (400).
+            map.createPane('boundaryPane');
+            map.getPane('boundaryPane').style.zIndex = 350;
+
             // San Agustin streets, colour-coded by crime level. Clicking one
             // opens its crimes and the prevention suggestions for that street.
             if (typeof saStreetsAttach === 'function') {
@@ -556,6 +437,7 @@ if (request()->query('token')) {
                     }
 
                     boundaryLayer = L.geoJSON(data, {
+                        pane: 'boundaryPane',
                         style: {
                             color: '#274d4c',
                             weight: 3,
@@ -602,6 +484,10 @@ if (request()->query('token')) {
                     }
 
                     // Load other data
+                    // Every recorded incident is in San Agustin, and the street
+                    // lines are unusable at whole-city zoom, so open there.
+                    if (typeof saStreetsFitBounds === 'function') saStreetsFitBounds();
+
                     loadCrimeCategories();
                     loadBarangays();
                     setupFilterListeners();
@@ -628,6 +514,10 @@ if (request()->query('token')) {
                     } else {
                         map.setView([14.6349, 121.0446], 12);
                     }
+
+                    // Every recorded incident is in San Agustin, and the street
+                    // lines are unusable at whole-city zoom, so open there.
+                    if (typeof saStreetsFitBounds === 'function') saStreetsFitBounds();
 
                     loadCrimeCategories();
                     loadBarangays();
@@ -698,10 +588,6 @@ if (request()->query('token')) {
             if (markerClusterGroup) {
                 map.removeLayer(markerClusterGroup);
                 markerClusterGroup = null;
-            }
-            if (predictedMarkersLayer) {
-                map.removeLayer(predictedMarkersLayer);
-                predictedMarkersLayer = null;
             }
         }
 
@@ -1147,12 +1033,9 @@ if (request()->query('token')) {
             const statsDiv = document.getElementById('areaStats');
             const riskCard = document.getElementById('riskClassification');
             const riskBadge = document.getElementById('riskBadge');
-            const patrolSection = document.getElementById('patrolSection');
-            const patrolBtn = document.getElementById('patrolRequestBtn');
 
             statsCard.style.display = 'block';
             riskCard.style.display = 'block';
-            patrolSection.style.display = 'block';
 
             const style = RISK_STYLES[hotspot.risk_level] || RISK_STYLES.LOW;
             const riskDescriptions = {
@@ -1161,7 +1044,6 @@ if (request()->query('token')) {
                 MEDIUM: 'Monitor and increase patrols as needed',
                 LOW: 'Stable crime levels, routine patrols',
             };
-            patrolBtn.disabled = hotspot.risk_level === 'LOW';
 
             const pc = hotspot.trend_percent;
             const changeIcon = pc > 0 ? '📈' : pc < 0 ? '📉' : '➖';
@@ -1221,17 +1103,11 @@ if (request()->query('token')) {
                 .then(response => response.json())
                 .then(data => {
                     const select = document.getElementById('crimeType');
-                    const predictionSelect = document.getElementById('predictionCrimeType');
                     data.forEach(category => {
-                        const option1 = document.createElement('option');
-                        option1.value = category.id;
-                        option1.textContent = category.category_name;
-                        select.appendChild(option1);
-
-                        const option2 = document.createElement('option');
-                        option2.value = category.id;
-                        option2.textContent = category.category_name;
-                        predictionSelect.appendChild(option2);
+                        const option = document.createElement('option');
+                        option.value = category.id;
+                        option.textContent = category.category_name;
+                        select.appendChild(option);
                     });
                 })
                 .catch(error => console.error('Error loading crime categories:', error));
@@ -1242,17 +1118,11 @@ if (request()->query('token')) {
                 .then(response => response.json())
                 .then(data => {
                     const select = document.getElementById('barangay');
-                    const predictionSelect = document.getElementById('predictionBarangay');
                     data.forEach(barangay => {
-                        const option1 = document.createElement('option');
-                        option1.value = barangay.id;
-                        option1.textContent = barangay.barangay_name;
-                        select.appendChild(option1);
-
-                        const option2 = document.createElement('option');
-                        option2.value = barangay.id;
-                        option2.textContent = barangay.barangay_name;
-                        predictionSelect.appendChild(option2);
+                        const option = document.createElement('option');
+                        option.value = barangay.id;
+                        option.textContent = barangay.barangay_name;
+                        select.appendChild(option);
                     });
                 })
                 .catch(error => console.error('Error loading barangays:', error));
@@ -1274,245 +1144,41 @@ if (request()->query('token')) {
                 selectedHotspot = null;
                 document.getElementById('areaStatsCard').style.display = 'none';
                 document.getElementById('riskClassification').style.display = 'none';
-                document.getElementById('patrolSection').style.display = 'none';
                 loadHotspotData();
             });
 
-            // Professional features
-            document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
-            document.getElementById('printMapBtn').addEventListener('click', printMap);
             document.getElementById('downloadCsvBtn').addEventListener('click', downloadCSV);
 
-            // Patrol request
-            document.getElementById('patrolRequestBtn').addEventListener('click', requestPatrol);
-
-            // Prediction controls
-            document.getElementById('forecastPeriod').addEventListener('change', function() {
-                document.getElementById('forecastDaysDisplay').textContent = this.value;
-            });
-
-            document.getElementById('runPredictionBtn').addEventListener('click', runAIPrediction);
-
-            // Map toggle buttons
-            document.querySelectorAll('.map-toggle-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const view = this.dataset.view;
-                    switchMapView(view);
-                    document.querySelectorAll('.map-toggle-btn').forEach(b => {
-                        b.classList.remove('bg-alertara-700', 'text-white');
-                        b.classList.add('bg-gray-200', 'text-gray-700');
-                    });
-                    this.classList.remove('bg-gray-200', 'text-gray-700');
-                    this.classList.add('bg-alertara-700', 'text-white');
-                });
-            });
         }
 
-        // Global variable to store prediction data
-        let currentPredictionData = null;
-        let currentMapView = 'current';
-        let predictedMarkersLayer = null;
-
-        // Run trend-based forecast against the backend regression endpoint
-        function runAIPrediction() {
-            const historicalRange = document.getElementById('historicalRange').value;
-            const forecastPeriod = document.getElementById('forecastPeriod').value;
-            const crimeType = document.getElementById('predictionCrimeType').value;
-            const barangay = document.getElementById('predictionBarangay').value;
-
-            showMapLoading(true);
-
-            const params = new URLSearchParams({
-                historical_days: historicalRange,
-                forecast_days: forecastPeriod,
-                crime_type: crimeType,
-                barangay: barangay
-            });
-
-            fetch(`/api/crime-hotspot-forecast?${params}`)
-                .then(response => response.json())
-                .then(data => {
-                    currentPredictionData = data.predictions || [];
-
-                    document.getElementById('forecastMethodNote').textContent = data.method || '';
-                    document.getElementById('predictedAreasSection').style.display = 'block';
-                    document.querySelector('[data-view="predicted"]').style.display = 'inline-block';
-                    document.querySelector('[data-view="compare"]').style.display = 'inline-block';
-
-                    displayPredictedHotspots(currentPredictionData);
-                    displayPredictionTable(currentPredictionData);
-
-                    showMapLoading(false);
-                })
-                .catch(error => {
-                    console.error('Error running forecast:', error);
-                    showMapLoading(false);
-                    alert('Failed to generate forecast. Please try again.');
-                });
-        }
-
-        // Display forecast markers at the REAL barangay coordinates
-        function displayPredictedHotspots(predictions) {
-            if (predictedMarkersLayer) {
-                map.removeLayer(predictedMarkersLayer);
-                predictedMarkersLayer = null;
-            }
-
-            predictedMarkersLayer = L.featureGroup();
-
-            predictions.forEach(p => {
-                if (!p.latitude || !p.longitude) return;
-
-                const riskColor = p.risk_level === 'HIGH' ? '#dc2626' : p.risk_level === 'MEDIUM' ? '#ea580c' : '#22c55e';
-
-                const circle = L.circleMarker([p.latitude, p.longitude], {
-                    radius: Math.min(18, 6 + p.predicted_count * 2),
-                    fillColor: riskColor,
-                    color: riskColor,
-                    weight: 2,
-                    opacity: 0.6,
-                    fillOpacity: 0.5,
-                    dashArray: '5, 5'
-                });
-
-                circle.bindPopup(`
-                    <div style="font-size: 12px; width: 220px;">
-                        <strong>${p.area_name}</strong><br>
-                        <strong>Forecast: ~${p.predicted_count} incident(s)</strong><br>
-                        Last ${document.getElementById('historicalRange').value} days: ${p.historical_count} (avg ${p.weekly_average}/week)<br>
-                        Trend: ${p.trend} | Confidence: ${p.confidence}%
-                    </div>
-                `);
-
-                circle.addTo(predictedMarkersLayer);
-            });
-
-            predictedMarkersLayer.addTo(map);
-        }
-
-        // Display forecast table
-        function displayPredictionTable(predictions) {
-            const tableBody = document.getElementById('predictedAreasTable');
-
-            if (!predictions.length) {
-                tableBody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">Not enough historical data to generate a forecast for the selected filters.</td></tr>';
-                return;
-            }
-
-            const trendBadge = (t, changePercent) => {
-                if (t === 'rising') return `<span class="px-2 py-1 rounded-full bg-red-100 text-red-700 font-semibold text-sm"><i class="fas fa-arrow-up mr-1"></i>${changePercent > 0 ? '+' : ''}${changePercent}%</span>`;
-                if (t === 'falling') return `<span class="px-2 py-1 rounded-full bg-green-100 text-green-700 font-semibold text-sm"><i class="fas fa-arrow-down mr-1"></i>${changePercent}%</span>`;
-                return `<span class="px-2 py-1 rounded-full bg-gray-100 text-gray-600 font-semibold text-sm"><i class="fas fa-arrows-left-right mr-1"></i>flat</span>`;
-            };
-
-            tableBody.innerHTML = predictions.map((p, idx) => `
-                <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                    <td class="px-6 py-4 text-sm font-bold text-gray-900">${idx + 1}</td>
-                    <td class="px-6 py-4 text-sm text-gray-700">${p.area_name}</td>
-                    <td class="px-6 py-4 text-sm text-gray-700">${p.historical_count} <span class="text-xs text-gray-400">(${p.weekly_average}/wk)</span></td>
-                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">~${p.predicted_count}</td>
-                    <td class="px-6 py-4">${trendBadge(p.trend, p.change_percent)}</td>
-                    <td class="px-6 py-4">
-                        <span class="text-sm font-bold px-2 py-1 rounded-full ${p.risk_level === 'HIGH' ? 'bg-red-100 text-red-700' : p.risk_level === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">
-                            ${p.risk_level === 'HIGH' ? '🔴' : p.risk_level === 'MEDIUM' ? '🟡' : '🟢'} ${p.risk_level}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4">
-                        <div class="flex items-center gap-2">
-                            <div class="w-24 bg-gray-200 rounded-full h-2">
-                                <div class="bg-blue-600 h-2 rounded-full" style="width: ${p.confidence}%"></div>
-                            </div>
-                            <span class="text-xs font-bold text-gray-700">${p.confidence}%</span>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        // Switch map view
-        function switchMapView(view) {
-            currentMapView = view;
-            console.log('Switching to view:', view);
-
-            // Always clear all layers first to prevent overlap
-            clearCurrentVisualization();
-
-            if (view === 'current') {
-                const visualizationMode = document.getElementById('visualizationMode').value;
-                if (visualizationMode === 'heatmap') {
-                    displayHeatmap(hotspotsData);
-                } else if (visualizationMode === 'markers') {
-                    displayMarkers(hotspotsData);
-                } else if (visualizationMode === 'clusters') {
-                    displayClusters(hotspotsData);
-                }
-            } else if (view === 'predicted') {
-                if (currentPredictionData) {
-                    displayPredictedHotspots(currentPredictionData);
-                } else {
-                    alert('Please run AI Analysis first to view predictions');
-                    // Switch back to current view
-                    document.querySelector('[data-view="current"]').click();
-                }
-            } else if (view === 'compare') {
-                if (currentPredictionData) {
-                    // Display both current and predicted
-                    const visualizationMode = document.getElementById('visualizationMode').value;
-                    if (visualizationMode === 'heatmap') {
-                        displayHeatmap(hotspotsData);
-                    } else if (visualizationMode === 'markers') {
-                        displayMarkers(hotspotsData);
-                    } else if (visualizationMode === 'clusters') {
-                        displayClusters(hotspotsData);
-                    }
-                    // Then add predicted hotspots on top
-                    displayPredictedHotspots(currentPredictionData);
-                } else {
-                    alert('Please run AI Analysis first to compare predictions');
-                    // Switch back to current view
-                    document.querySelector('[data-view="current"]').click();
-                }
-            }
-        }
-
-        function requestPatrol() {
-            if (selectedHotspot) {
-                alert(`Patrol deployment request submitted for ${selectedHotspot.area_name}\n\nThis feature will be implemented in the next phase.`);
-            }
-        }
-
-        function exportPDF() {
-            alert('PDF export feature coming soon.');
-        }
-
-        function printMap() {
-            window.print();
-        }
-
+        // Export the incidents behind the current map view, as filtered
         function downloadCSV() {
-            if (hotspotsData.length === 0) {
+            if (!hotspotsData.length) {
                 alert('No data available to download.');
                 return;
             }
 
+            const cell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+            const street = (address) => String(address || '').split(',')[0].trim();
+
             const csv = [
-                ['Latitude', 'Longitude', 'Barangay', 'Category', 'Clearance Status', 'Date'].join(','),
+                ['Date', 'Title', 'Category', 'Street', 'Barangay', 'Clearance', 'Latitude', 'Longitude']
+                    .map(cell).join(','),
                 ...hotspotsData.map(crime => [
-                    crime.latitude,
-                    crime.longitude,
-                    crime.barangay_name || 'N/A',
-                    crime.category_name || 'N/A',
-                    crime.clearance_status || 'N/A',
-                    crime.incident_date || 'N/A'
-                ].join(','))
+                    crime.incident_date, crime.incident_title, crime.category_name,
+                    street(crime.location), crime.barangay_name, crime.clearance_status,
+                    crime.latitude, crime.longitude
+                ].map(cell).join(','))
             ].join('\n');
 
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'crime-hotspots.csv';
-            a.click();
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `crime-hotspots-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
         }
 
         function showMapLoading(show) {
