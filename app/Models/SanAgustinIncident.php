@@ -23,6 +23,9 @@ class SanAgustinIncident extends Model
         'record_type',
         'category_name',
         'barangay_name',
+        // Plain integers, no foreign keys — see 2026_07_22_000005
+        'crime_category_id',
+        'barangay_id',
         'incident_title',
         'incident_description',
         'incident_date',
