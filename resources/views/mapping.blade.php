@@ -95,6 +95,149 @@ if (request()->query('token')) {
             z-index: 1200;
         }
 
+        /* ------------------------------------------------------------------
+           Map overlays. Everything that floats on the map shares one look:
+           a white card, a hairline border, a soft shadow and compact type -
+           so the map reads as one surface instead of stacked widgets.
+           ------------------------------------------------------------------ */
+        .map-streets-card {
+            width: 218px;
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.18);
+            overflow: hidden;
+            font-family: inherit;
+            backdrop-filter: blur(2px);
+        }
+        .map-streets-card .msc-head {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 10px;
+            background: #f8fafc;
+            border-bottom: 1px solid #eef2f7;
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #111827;
+        }
+        .map-streets-card .msc-head i { color: #274d4c; }
+        .map-streets-card .msc-title { flex: 1; }
+        .map-streets-card .msc-count {
+            background: #274d4c;
+            color: #fff;
+            border-radius: 9999px;
+            padding: 1px 7px;
+            font-size: 10px;
+            font-weight: 800;
+        }
+        .map-streets-card .msc-toggle {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 0 2px;
+            font-size: 10px;
+        }
+        .map-streets-card .msc-toggle:hover { color: #111827; }
+
+        .map-streets-card .msc-body {
+            max-height: 232px;
+            overflow-y: auto;
+        }
+        .map-streets-card .msc-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: none;
+            border: none;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            text-align: left;
+            font-size: 11.5px;
+            color: #374151;
+        }
+        .map-streets-card .msc-row:hover { background: #f8fafc; }
+        .map-streets-card .msc-row.is-active {
+            background: #eef7f6;
+            border-left-color: #274d4c;
+            font-weight: 700;
+            color: #111827;
+        }
+        .map-streets-card .msc-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 9999px;
+            flex-shrink: 0;
+        }
+        .map-streets-card .msc-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .map-streets-card .msc-badge {
+            color: #fff;
+            border-radius: 9999px;
+            min-width: 22px;
+            padding: 1px 6px;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+        .map-streets-card .msc-empty {
+            padding: 14px 10px;
+            text-align: center;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        .map-streets-card .msc-clear {
+            width: 100%;
+            padding: 7px;
+            background: #f8fafc;
+            border: none;
+            border-top: 1px solid #eef2f7;
+            color: #6b7280;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .map-streets-card .msc-clear:hover { color: #b91c1c; background: #fef2f2; }
+
+        /* Leaflet's own furniture, matched to the cards above */
+        #map .leaflet-control-zoom a,
+        #map .leaflet-bar a {
+            border-radius: 8px !important;
+            border: 1px solid #e5e7eb !important;
+            color: #274d4c;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.10);
+        }
+        #map .leaflet-bar { border: none; box-shadow: none; }
+        #map .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            box-shadow: 0 8px 26px rgba(15, 23, 42, 0.22);
+        }
+        #map .leaflet-popup-tip { box-shadow: none; }
+        #map .leaflet-tooltip {
+            border-radius: 8px;
+            border: none;
+            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.22);
+            font-size: 11px;
+        }
+        #map .leaflet-container { font-family: inherit; }
+
+        /* Cluster bubbles: no boxy background behind the pill */
+        .cluster-marker { background: none !important; border: none !important; }
+
+        @media (max-width: 900px) {
+            .map-streets-card { width: 168px; }
+            .map-streets-card .msc-body { max-height: 168px; }
+        }
+
         #exitFullscreenBtn { display: none; }
     </style>
 </head>
@@ -243,21 +386,6 @@ if (request()->query('token')) {
 
                     <!-- RIGHT: Statistics and Incident List -->
                     <div class="w-full lg:w-2/5 flex flex-col gap-4">
-                        <!-- Streets that actually have crime, top of the panel -->
-                        <div id="streetsPanel" style="background: rgba(255,255,255,0.98); border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                            <div style="padding: 12px 14px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; display: flex; align-items: center; gap: 8px;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0; flex: 1;">
-                                    <i class="fas fa-road mr-2" style="color: #274d4c;"></i>Streets with crime
-                                    <span id="streetsPanelCount" style="color: #9ca3af; font-weight: 600;"></span>
-                                </h3>
-                                <button type="button" id="clearStreetFocusBtn"
-                                        style="display: none; font-size: 11px; font-weight: 700; color: #6b7280; background: none; border: none; cursor: pointer; text-decoration: underline;">
-                                    Clear
-                                </button>
-                            </div>
-                            <div id="streetsList" style="max-height: 230px; overflow-y: auto;"></div>
-                        </div>
-
                         <!-- Statistics Cards -->
                         <div class="grid grid-cols-2 gap-3">
                             <div class="bg-gradient-to-br from-alertara-700 to-alertara-600 text-white p-4 rounded-lg shadow-sm">
@@ -625,10 +753,9 @@ if (request()->query('token')) {
         </div>
     </div>
 
-    {{-- San Agustin street layer. This page is the map, so streets are drawn
-         and hovered here; their crimes and prevention suggestions live on the
-         Crime Hotspots page, which includes the same partial with the modal. --}}
-    @include('partials.san-agustin-streets')
+    {{-- No street layer on this page: the map shows barangay boundaries and the
+         crimes themselves. Street lines, their crime levels and the prevention
+         suggestions all live on the Crime Hotspots page. --}}
 
     <script>
         // State variables
@@ -659,9 +786,9 @@ if (request()->query('token')) {
 
         // Thin borders, light fills. The active barangay is marked by its border and a
         // faint tint — a heavy fill would wash out the incident circles sitting on it.
-        const STYLE_BRGY_IDLE   = { color: '#5b8f8c', weight: 1,   opacity: 0.8, fillColor: '#e8f5f3', fillOpacity: 0.15, dashArray: null };
+        const STYLE_BRGY_IDLE   = { color: '#8fb3b0', weight: 0.8, opacity: 0.7, fillColor: '#f2f9f8', fillOpacity: 0.10, dashArray: null };
         const STYLE_BRGY_HOVER  = { color: '#274d4c', weight: 1.5, opacity: 1,   fillColor: '#bde5dd', fillOpacity: 0.30, dashArray: null };
-        const STYLE_BRGY_ACTIVE = { color: '#274d4c', weight: 2.5, opacity: 1,   fillColor: '#9ed4cb', fillOpacity: 0.22, dashArray: null };
+        const STYLE_BRGY_ACTIVE = { color: '#274d4c', weight: 2.5, opacity: 1,   fillColor: '#bfe5de', fillOpacity: 0.16, dashArray: null };
         let currentData = [];
         let selectedIncidentId = null;
         let pointerMarker = null;
@@ -684,6 +811,10 @@ if (request()->query('token')) {
         let analysisRadius = 500; // Customizable analysis radius in meters
         let analysisCircle = null;
         let analysisMarker = null;
+
+        // HTML-escape for anything interpolated into map markup
+        const escStreet = value => String(value ?? '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
         // Loading overlay functions
         function showMapLoading() {
@@ -762,15 +893,6 @@ if (request()->query('token')) {
             map.createPane('barangayPane');
             map.getPane('barangayPane').style.zIndex = 350;
             barangayRenderer = L.svg({ pane: 'barangayPane' });
-
-            // Street outlines sit above the barangay fills but below the incident
-            // circles (overlayPane, 400), so markers stay visible and clickable.
-            map.createPane('streetPane');
-            map.getPane('streetPane').style.zIndex = 360;
-
-            // Hand the map to the San Agustin street partial; the barangay
-            // filter decides when its layer is shown.
-            if (typeof saStreetsAttach === 'function') saStreetsAttach(map);
 
             // Ensure map size is calculated, then load boundary
             setTimeout(() => {
@@ -974,19 +1096,6 @@ if (request()->query('token')) {
                 map.fitBounds(qcBounds, { padding: [20, 20], animate });
             }
 
-            updateSanAgustinStreetVisibility();
-        }
-
-        // Streets are only meaningful while San Agustin is the isolated
-        // barangay; the layer itself is owned by the street partial.
-        function updateSanAgustinStreetVisibility() {
-            const select = document.getElementById('barangay');
-            if (!select || typeof saStreetsSetVisible !== 'function') return;
-
-            const label = (nameByPsgcCode[select.value] ||
-                (select.selectedOptions[0] || {}).textContent || '').trim().toLowerCase();
-
-            saStreetsSetVisible(Boolean(select.value) && label === 'san agustin');
         }
 
         // Frame a single barangay as closely as possible while keeping all of it visible
@@ -1433,55 +1542,92 @@ if (request()->query('token')) {
         // ------------------------------------------------------------------
         let selectedStreet = null;
 
+        let streetsControl = null;
+        let streetsControlEl = null;
+        let streetsPanelOpen = true;
+
+        // The panel lives ON the map, in the same visual language as the other
+        // map overlays: white card, soft shadow, compact type.
+        function ensureStreetsControl() {
+            if (streetsControl) return;
+
+            streetsControl = L.control({ position: 'bottomright' });
+            streetsControl.onAdd = function () {
+                const div = L.DomUtil.create('div', 'map-streets-card');
+                L.DomEvent.disableClickPropagation(div);
+                L.DomEvent.disableScrollPropagation(div);
+                streetsControlEl = div;
+                return div;
+            };
+            streetsControl.addTo(map);
+        }
+
         function renderStreetPanel() {
-            const list = document.getElementById('streetsList');
-            const countEl = document.getElementById('streetsPanelCount');
-            const clearBtn = document.getElementById('clearStreetFocusBtn');
-            if (!list) return;
+            ensureStreetsControl();
+            if (!streetsControlEl) return;
 
             const groups = groupIncidentsByStreet(currentData || []);
 
-            countEl.textContent = groups.length ? `(${groups.length})` : '';
-            clearBtn.style.display = selectedStreet ? 'inline' : 'none';
+            if (selectedStreet && !groups.some(g => g.name === selectedStreet)) {
+                selectedStreet = null;
+                if (streetFocusRing) {
+                    map.removeLayer(streetFocusRing);
+                    streetFocusRing = null;
+                }
+            }
 
-            if (!groups.length) {
-                list.innerHTML = '<div style="padding:16px;text-align:center;color:#9ca3af;font-size:12px;">No streets with recorded crime for these filters.</div>';
+            const header = `
+                <div class="msc-head">
+                    <i class="fas fa-road"></i>
+                    <span class="msc-title">Streets with crime</span>
+                    <span class="msc-count">${groups.length}</span>
+                    <button type="button" class="msc-toggle" title="${streetsPanelOpen ? 'Collapse' : 'Expand'}">
+                        <i class="fas fa-chevron-${streetsPanelOpen ? 'up' : 'down'}"></i>
+                    </button>
+                </div>`;
+
+            if (!streetsPanelOpen) {
+                streetsControlEl.innerHTML = header;
+                wireStreetsControl(groups);
                 return;
             }
 
-            list.innerHTML = groups.map(g => {
-                const active = g.name === selectedStreet;
-                const color = getClusterColor(g.count);
-                const cleared = g.stats.cleared;
+            const body = groups.length
+                ? groups.map(g => {
+                    const active = g.name === selectedStreet;
+                    const color = getClusterColor(g.count);
+                    return `
+                        <button type="button" class="msc-row${active ? ' is-active' : ''}" data-street="${escStreet(g.name)}">
+                            <span class="msc-dot" style="background:${color};"></span>
+                            <span class="msc-name" title="${escStreet(g.name)}">${escStreet(g.name)}</span>
+                            <span class="msc-badge" style="background:${color};">${g.count}</span>
+                        </button>`;
+                  }).join('')
+                : '<div class="msc-empty">No streets with recorded crime.</div>';
 
-                return `
-                    <div class="street-item" data-street="${escStreet(g.name)}" style="
-                        padding: 9px 12px;
-                        border-bottom: 1px solid #f1f5f9;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        gap: 10px;
-                        background: ${active ? '#eef7f6' : 'transparent'};
-                        border-left: 3px solid ${active ? '#274d4c' : 'transparent'};
-                    ">
-                        <span style="width:10px;height:10px;border-radius:9999px;background:${color};flex-shrink:0;"></span>
-                        <div style="flex:1;min-width:0;">
-                            <div style="font-size:12.5px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                                ${escStreet(g.name)}
-                            </div>
-                            <div style="font-size:10.5px;color:#6b7280;margin-top:1px;">
-                                mostly ${escStreet(g.stats.mostCommon)} · ${cleared} cleared
-                            </div>
-                        </div>
-                        <span style="background:${color};color:#fff;border-radius:9999px;min-width:26px;padding:2px 7px;text-align:center;font-size:11px;font-weight:800;flex-shrink:0;">
-                            ${g.count}
-                        </span>
-                    </div>`;
-            }).join('');
+            streetsControlEl.innerHTML = header +
+                `<div class="msc-body">${body}</div>` +
+                (selectedStreet
+                    ? '<button type="button" class="msc-clear"><i class="fas fa-xmark mr-1"></i>Clear selection</button>'
+                    : '');
 
-            list.querySelectorAll('.street-item').forEach(item => {
-                item.addEventListener('click', function () {
+            wireStreetsControl(groups);
+        }
+
+        function wireStreetsControl(groups) {
+            const el = streetsControlEl;
+            if (!el) return;
+
+            const toggle = el.querySelector('.msc-toggle');
+            if (toggle) {
+                toggle.addEventListener('click', () => {
+                    streetsPanelOpen = !streetsPanelOpen;
+                    renderStreetPanel();
+                });
+            }
+
+            el.querySelectorAll('.msc-row').forEach(row => {
+                row.addEventListener('click', function () {
                     const name = this.dataset.street;
                     const group = groups.find(g => g.name === name);
                     if (selectedStreet === name) {
@@ -1491,9 +1637,11 @@ if (request()->query('token')) {
                     }
                 });
             });
+
+            const clear = el.querySelector('.msc-clear');
+            if (clear) clear.addEventListener('click', clearStreetFocus);
         }
 
-        document.getElementById('clearStreetFocusBtn').addEventListener('click', clearStreetFocus);
 
         // ------------------------------------------------------------------
         // Crime counts sitting on the barangays themselves, so the map reads
@@ -2178,11 +2326,21 @@ if (request()->query('token')) {
                 const marker = L.circleMarker([incident.latitude, incident.longitude], {
                     radius: markerRadiusForZoom(),
                     fillColor: markerColor,
-                    color: markerColor,
+                    color: '#ffffff',
                     weight: markerWeightForZoom(),
-                    opacity: 0.8,
-                    fillOpacity: 0.7
+                    opacity: 0.95,
+                    fillOpacity: 0.92
                 });
+
+                // Street and time up front, so hovering a dot already answers
+                // "what happened here" without opening anything
+                marker.bindTooltip(
+                    '<span style="font-weight:700;">' + escStreet(incident.category_name || 'Crime') + '</span>' +
+                    (incident.street ? '<br>' + escStreet(incident.street) : '') +
+                    '<br><span style="opacity:.8;">' + escStreet(incident.incident_date || '') +
+                    (incident.incident_time ? ' · ' + escStreet(incident.incident_time) : '') + '</span>',
+                    { direction: 'top', opacity: 0.95 }
+                );
 
                 // Open modal on click
                 marker.on('click', function() {
@@ -2282,30 +2440,53 @@ if (request()->query('token')) {
                 .sort((a, b) => b.count - a.count);
         }
 
-        // Highlight the street ON THE MAP and frame it, then narrow the list
+        // Frame a street's crimes and mark them out on the map. With no street
+        // lines drawn, the highlight is a ring around the crimes themselves.
+        let streetFocusRing = null;
+
         function focusStreet(name, incidents) {
             selectedStreet = name;
+            incidents = incidents && incidents.length
+                ? incidents
+                : (currentData || []).filter(i => (i.street || 'Unnamed location') === name);
 
-            // The highlight lands on the street line itself, so make sure the
-            // street layer is on the map even if the barangay filter had hidden it
-            if (typeof saStreetsSetVisible === 'function') saStreetsSetVisible(true);
-            if (typeof saStreetsHighlight === 'function') saStreetsHighlight(name);
-            if (typeof saStreetsFitStreet === 'function') {
-                saStreetsFitStreet(name);
-            } else if (incidents && incidents.length) {
-                map.fitBounds(L.latLngBounds(incidents.map(i => [i.latitude, i.longitude])).pad(0.4),
-                              { maxZoom: 18 });
+            if (streetFocusRing) {
+                map.removeLayer(streetFocusRing);
+                streetFocusRing = null;
             }
 
-            if (incidents && incidents.length) {
+            if (incidents.length) {
+                streetFocusRing = L.layerGroup(
+                    incidents.map(i => L.circleMarker([i.latitude, i.longitude], {
+                        radius: 13,
+                        color: '#111827',
+                        weight: 2,
+                        opacity: 0.9,
+                        fillColor: '#facc15',
+                        fillOpacity: 0.25,
+                        interactive: false
+                    }))
+                ).addTo(map);
+
+                map.fitBounds(
+                    L.latLngBounds(incidents.map(i => [i.latitude, i.longitude])).pad(0.6),
+                    { maxZoom: 18 }
+                );
+
                 showClusterIncidents(incidents, name);
             }
+
             renderStreetPanel();
         }
 
         function clearStreetFocus() {
             selectedStreet = null;
-            if (typeof saStreetsHighlight === 'function') saStreetsHighlight(null);
+
+            if (streetFocusRing) {
+                map.removeLayer(streetFocusRing);
+                streetFocusRing = null;
+            }
+
             renderStreetPanel();
             updateIncidentList(currentData);
         }
