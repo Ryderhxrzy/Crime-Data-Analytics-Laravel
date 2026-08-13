@@ -53,31 +53,48 @@ if (request()->query('token')) {
         }
         .brgy-label-selected::before { display: none; }
 
-        /* Filters float over the map while it is enlarged */
+        /* Fullscreen: the MAP ALONE fills the whole screen, through the browser's
+           own fullscreen mode. Nothing else comes with it - no filters, no
+           panels - so the map really is the full screen. */
+        #mapContainer:fullscreen,
+        #mapContainer:-webkit-full-screen {
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+            border: none;
+            background: #fff;
+        }
+        #mapContainer:fullscreen #map,
+        #mapContainer:-webkit-full-screen #map { height: 100vh !important; }
+
+        #mapContainer:fullscreen #exitFullscreenBtn,
+        #mapContainer:-webkit-full-screen #exitFullscreenBtn {
+            display: flex;
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 1200;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Fallback for browsers that refuse the Fullscreen API */
         #mapContainer.map-fullscreen {
             position: fixed;
-            top: 0;
-            left: 0;
+            inset: 0;
             width: 100vw;
             height: 100vh;
             z-index: 99998;
             border-radius: 0;
         }
         #mapContainer.map-fullscreen #map { height: 100vh !important; }
-
-        #mapContainer.map-fullscreen #filtersSection {
+        #mapContainer.map-fullscreen #exitFullscreenBtn {
+            display: flex;
             position: absolute;
             top: 12px;
-            left: 12px;
-            right: 68px;
-            z-index: 99999;
-            max-height: calc(100vh - 24px);
-            overflow-y: auto;
-            margin: 0;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            right: 12px;
+            z-index: 1200;
         }
 
-        #mapContainer.map-fullscreen #exitFullscreenBtn { display: flex; }
         #exitFullscreenBtn { display: none; }
     </style>
 </head>
@@ -226,6 +243,21 @@ if (request()->query('token')) {
 
                     <!-- RIGHT: Statistics and Incident List -->
                     <div class="w-full lg:w-2/5 flex flex-col gap-4">
+                        <!-- Streets that actually have crime, top of the panel -->
+                        <div id="streetsPanel" style="background: rgba(255,255,255,0.98); border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                            <div style="padding: 12px 14px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; display: flex; align-items: center; gap: 8px;">
+                                <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0; flex: 1;">
+                                    <i class="fas fa-road mr-2" style="color: #274d4c;"></i>Streets with crime
+                                    <span id="streetsPanelCount" style="color: #9ca3af; font-weight: 600;"></span>
+                                </h3>
+                                <button type="button" id="clearStreetFocusBtn"
+                                        style="display: none; font-size: 11px; font-weight: 700; color: #6b7280; background: none; border: none; cursor: pointer; text-decoration: underline;">
+                                    Clear
+                                </button>
+                            </div>
+                            <div id="streetsList" style="max-height: 230px; overflow-y: auto;"></div>
+                        </div>
+
                         <!-- Statistics Cards -->
                         <div class="grid grid-cols-2 gap-3">
                             <div class="bg-gradient-to-br from-alertara-700 to-alertara-600 text-white p-4 rounded-lg shadow-sm">
@@ -362,18 +394,6 @@ if (request()->query('token')) {
                             </div>
                         </div>
 
-                        <!-- BARANGAYS PANEL (for cluster mode) -->
-                        <div id="barangaysPanel" style="background: rgba(255, 255, 255, 0.98); border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; display: none; flex-direction: column; flex-grow: 1;">
-                            <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0 0 10px;">
-                                    <i class="fas fa-map-marker-alt mr-2" style="color: #274d4c;"></i>Barangays
-                                </h3>
-                                <input type="text" id="barangaySearch" placeholder="Search barangay..." style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; box-sizing: border-box;">
-                            </div>
-                            <div id="barangayList" style="overflow-y: auto; overflow-x: hidden; max-height: 350px; padding: 8px;">
-                                <!-- Will be populated by JavaScript -->
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -1379,6 +1399,8 @@ if (request()->query('token')) {
                 // Update right panel with statistics and incident list
                 updateStatistics(filteredData);
                 updateIncidentList(filteredData);
+                renderStreetPanel();
+                renderBarangayCrimeLabels(filteredData);
 
                 // Update visualization based on selected mode
                 currentVisualizationMode = visualizationMode;
@@ -1402,6 +1424,123 @@ if (request()->query('token')) {
                 }
                 hideMapLoading();
             }
+        }
+
+        // ------------------------------------------------------------------
+        // "Streets with crime" panel: only streets that actually carry an
+        // incident in the current filter, busiest first. Selecting one
+        // highlights that street on the map and narrows the crime list.
+        // ------------------------------------------------------------------
+        let selectedStreet = null;
+
+        function renderStreetPanel() {
+            const list = document.getElementById('streetsList');
+            const countEl = document.getElementById('streetsPanelCount');
+            const clearBtn = document.getElementById('clearStreetFocusBtn');
+            if (!list) return;
+
+            const groups = groupIncidentsByStreet(currentData || []);
+
+            countEl.textContent = groups.length ? `(${groups.length})` : '';
+            clearBtn.style.display = selectedStreet ? 'inline' : 'none';
+
+            if (!groups.length) {
+                list.innerHTML = '<div style="padding:16px;text-align:center;color:#9ca3af;font-size:12px;">No streets with recorded crime for these filters.</div>';
+                return;
+            }
+
+            list.innerHTML = groups.map(g => {
+                const active = g.name === selectedStreet;
+                const color = getClusterColor(g.count);
+                const cleared = g.stats.cleared;
+
+                return `
+                    <div class="street-item" data-street="${escStreet(g.name)}" style="
+                        padding: 9px 12px;
+                        border-bottom: 1px solid #f1f5f9;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        background: ${active ? '#eef7f6' : 'transparent'};
+                        border-left: 3px solid ${active ? '#274d4c' : 'transparent'};
+                    ">
+                        <span style="width:10px;height:10px;border-radius:9999px;background:${color};flex-shrink:0;"></span>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:12.5px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                ${escStreet(g.name)}
+                            </div>
+                            <div style="font-size:10.5px;color:#6b7280;margin-top:1px;">
+                                mostly ${escStreet(g.stats.mostCommon)} · ${cleared} cleared
+                            </div>
+                        </div>
+                        <span style="background:${color};color:#fff;border-radius:9999px;min-width:26px;padding:2px 7px;text-align:center;font-size:11px;font-weight:800;flex-shrink:0;">
+                            ${g.count}
+                        </span>
+                    </div>`;
+            }).join('');
+
+            list.querySelectorAll('.street-item').forEach(item => {
+                item.addEventListener('click', function () {
+                    const name = this.dataset.street;
+                    const group = groups.find(g => g.name === name);
+                    if (selectedStreet === name) {
+                        clearStreetFocus();
+                    } else {
+                        focusStreet(name, group ? group.incidents : []);
+                    }
+                });
+            });
+        }
+
+        document.getElementById('clearStreetFocusBtn').addEventListener('click', clearStreetFocus);
+
+        // ------------------------------------------------------------------
+        // Crime counts sitting on the barangays themselves, so the map reads
+        // as "this barangay, this many crimes" without opening anything.
+        // ------------------------------------------------------------------
+        let barangayCountLayer = null;
+
+        function renderBarangayCrimeLabels(data) {
+            if (barangayCountLayer) {
+                map.removeLayer(barangayCountLayer);
+                barangayCountLayer = null;
+            }
+            if (!barangayBoundaryLayer) return;
+
+            // Count per barangay name, then label each polygon that has crimes
+            const counts = {};
+            (data || []).forEach(incident => {
+                const name = (incident.barangay_name || incident.location || '').trim();
+                if (!name) return;
+                counts[name] = (counts[name] || 0) + 1;
+            });
+
+            barangayCountLayer = L.layerGroup();
+
+            Object.entries(barangayLayersByCode).forEach(([code, layer]) => {
+                const name = layer._brgyName;
+                const count = counts[name];
+                if (!name || !count) return;   // only barangays that have crime
+
+                const center = layer.getBounds().getCenter();
+                L.marker(center, {
+                    interactive: false,
+                    icon: L.divIcon({
+                        className: '',
+                        iconSize: null,
+                        // Nudged below the centre so it never lands on top of
+                        // the selected barangay's own name label
+                        html: `<div style="transform:translate(-50%,10px);white-space:nowrap;
+                                background:rgba(255,255,255,0.94);border:1.5px solid #274d4c;
+                                border-radius:9999px;padding:2px 9px;font-size:11px;font-weight:800;
+                                color:#123332;box-shadow:0 1px 5px rgba(0,0,0,.2);">
+                                ${escStreet(name)} · ${count} crime${count === 1 ? '' : 's'}</div>`
+                    })
+                }).addTo(barangayCountLayer);
+            });
+
+            barangayCountLayer.addTo(map);
         }
 
         // Clear current visualization
@@ -1766,22 +1905,19 @@ if (request()->query('token')) {
         function toggleRightPanel(mode) {
             const incidentsPanel = document.getElementById('incidentsPanel');
             const heatmapPanel = document.getElementById('heatmapAnalysisPanel');
-            const barangaysPanel = document.getElementById('barangaysPanel');
             const severityLegend = document.getElementById('severityLegend');
 
             // Hide all panels first
             incidentsPanel.style.display = 'none';
             heatmapPanel.style.display = 'none';
-            barangaysPanel.style.display = 'none';
             severityLegend.style.display = 'none';
 
             // Show the appropriate panel
             if (mode === 'heatmap') {
                 heatmapPanel.style.display = 'flex';
-            } else if (mode === 'clusters') {
-                barangaysPanel.style.display = 'flex';
-                populateBarangaysList();
             } else {
+                // Cluster view is per street; the streets panel sits above the
+                // stats and the crime list stays where it is.
                 incidentsPanel.style.display = 'flex';
             }
         }
@@ -2101,6 +2237,7 @@ if (request()->query('token')) {
             return {
                 total: incidents.length,
                 mostCommon: mostCommon,
+                crimeTypes: crimeTypes,
                 cleared: statusCount.cleared,
                 uncleared: statusCount.uncleared
             };
@@ -2113,152 +2250,173 @@ if (request()->query('token')) {
             return '#16a34a'; // Green
         }
 
-        // Display cluster view - grouped by barangay
-        function displayClusters(data) {
-            markerLayer = L.featureGroup();
-            let barangayGroups = {};
+        // ------------------------------------------------------------------
+        // Cluster view - grouped BY STREET. Every incident belongs to one
+        // barangay, so the street is the level at which clustering says
+        // anything. Selecting a cluster highlights that street on the map
+        // itself and zooms to it.
+        // ------------------------------------------------------------------
+        function groupIncidentsByStreet(data) {
+            const groups = {};
 
-            // Group incidents by barangay
             data.forEach(incident => {
-                if (qcBounds && !qcBounds.contains([incident.latitude, incident.longitude])) {
-                    return;
+                if (qcBounds && !qcBounds.contains([incident.latitude, incident.longitude])) return;
+
+                const street = incident.street || 'Unnamed location';
+                if (!groups[street]) {
+                    groups[street] = { name: street, incidents: [], totalLat: 0, totalLng: 0 };
                 }
 
-                const barangayId = incident.barangay_id || 'unknown';
-                const barangayName = incident.location || 'Unknown Barangay';
-
-                if (!barangayGroups[barangayId]) {
-                    barangayGroups[barangayId] = {
-                        name: barangayName,
-                        incidents: [],
-                        totalLat: 0,
-                        totalLng: 0
-                    };
-                }
-
-                barangayGroups[barangayId].incidents.push(incident);
-                barangayGroups[barangayId].totalLat += parseFloat(incident.latitude);
-                barangayGroups[barangayId].totalLng += parseFloat(incident.longitude);
+                groups[street].incidents.push(incident);
+                groups[street].totalLat += parseFloat(incident.latitude);
+                groups[street].totalLng += parseFloat(incident.longitude);
             });
 
-            // Calculate center for each barangay cluster
-            Object.keys(barangayGroups).forEach(barangayId => {
-                const group = barangayGroups[barangayId];
-                const count = group.incidents.length;
-                const stats = calculateClusterStats(group.incidents);
+            return Object.values(groups)
+                .map(g => Object.assign(g, {
+                    count: g.incidents.length,
+                    centerLat: g.totalLat / g.incidents.length,
+                    centerLng: g.totalLng / g.incidents.length,
+                    stats: calculateClusterStats(g.incidents)
+                }))
+                .sort((a, b) => b.count - a.count);
+        }
 
-                // Center of cluster
-                const centerLat = group.totalLat / count;
-                const centerLng = group.totalLng / count;
+        // Highlight the street ON THE MAP and frame it, then narrow the list
+        function focusStreet(name, incidents) {
+            selectedStreet = name;
 
-                // Dynamic color based on incident count
+            // The highlight lands on the street line itself, so make sure the
+            // street layer is on the map even if the barangay filter had hidden it
+            if (typeof saStreetsSetVisible === 'function') saStreetsSetVisible(true);
+            if (typeof saStreetsHighlight === 'function') saStreetsHighlight(name);
+            if (typeof saStreetsFitStreet === 'function') {
+                saStreetsFitStreet(name);
+            } else if (incidents && incidents.length) {
+                map.fitBounds(L.latLngBounds(incidents.map(i => [i.latitude, i.longitude])).pad(0.4),
+                              { maxZoom: 18 });
+            }
+
+            if (incidents && incidents.length) {
+                showClusterIncidents(incidents, name);
+            }
+            renderStreetPanel();
+        }
+
+        function clearStreetFocus() {
+            selectedStreet = null;
+            if (typeof saStreetsHighlight === 'function') saStreetsHighlight(null);
+            renderStreetPanel();
+            updateIncidentList(currentData);
+        }
+
+        function displayClusters(data) {
+            markerLayer = L.featureGroup();
+            const groups = groupIncidentsByStreet(data);
+
+            groups.forEach(group => {
+                const count = group.count;
+                const stats = group.stats;
                 const clusterColor = getClusterColor(count);
 
-                // Create cluster marker (shows count with dynamic color)
                 const clusterIcon = L.divIcon({
                     className: 'cluster-marker',
                     html: `
                         <div style="
-                            width: 40px;
-                            height: 40px;
+                            min-width: 44px;
+                            padding: 4px 8px;
                             background: linear-gradient(135deg, ${clusterColor} 0%, ${clusterColor}dd 100%);
-                            border-radius: 50%;
+                            border-radius: 9999px;
                             display: flex;
+                            flex-direction: column;
                             align-items: center;
                             justify-content: center;
                             color: white;
                             font-weight: bold;
-                            font-size: 14px;
                             border: 2px solid white;
                             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
                             cursor: pointer;
-                            transition: all 0.2s;
+                            white-space: nowrap;
                         ">
-                            ${count}
+                            <span style="font-size: 14px; line-height: 1;">${count}</span>
+                            <span style="font-size: 8.5px; font-weight: 700; opacity: .95; line-height: 1.3;">${escStreet(group.name)}</span>
                         </div>
                     `,
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20],
+                    iconSize: null,
+                    iconAnchor: [22, 20],
                     popupAnchor: [0, -20]
                 });
 
-                const clusterMarker = L.marker([centerLat, centerLng], { icon: clusterIcon });
+                const clusterMarker = L.marker([group.centerLat, group.centerLng], { icon: clusterIcon });
 
-                // Create comprehensive popup
-                const popupContent = `
-                    <div style="min-width: 280px; font-family: Arial, sans-serif;">
+                const typeRows = Object.entries(stats.crimeTypes)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5)
+                    .map(([type, n]) => `
+                        <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0;">
+                            <span style="color:#4b5563;">${escStreet(type)}</span>
+                            <span style="font-weight:700;color:#111;">${n}</span>
+                        </div>`).join('');
+
+                clusterMarker.bindPopup(`
+                    <div style="min-width: 250px; font-family: Arial, sans-serif;">
                         <div style="border-bottom: 2px solid ${clusterColor}; padding-bottom: 8px; margin-bottom: 8px;">
-                            <h3 style="margin: 0 0 4px; color: #111; font-size: 14px; font-weight: bold;">${group.name}</h3>
-                            <div style="font-size: 12px; color: #666;">Cluster Summary</div>
+                            <h3 style="margin: 0 0 2px; color: #111; font-size: 14px; font-weight: bold;">${escStreet(group.name)}</h3>
+                            <div style="font-size: 11px; color: #666;">${escStreet(group.incidents[0].barangay_name || 'San Agustin')} · street cluster</div>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
-                            <div style="background: #f3f4f6; padding: 8px; border-radius: 4px;">
-                                <div style="font-size: 11px; color: #666; font-weight: 600;">Total</div>
-                                <div style="font-size: 16px; font-weight: bold; color: ${clusterColor};">${stats.total}</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+                            <div style="background:#f3f4f6;padding:6px;border-radius:4px;text-align:center;">
+                                <div style="font-size:10px;color:#666;font-weight:600;">Total</div>
+                                <div style="font-size:15px;font-weight:bold;color:${clusterColor};">${stats.total}</div>
                             </div>
-                            <div style="background: #f3f4f6; padding: 8px; border-radius: 4px;">
-                                <div style="font-size: 11px; color: #666; font-weight: 600;">Cleared</div>
-                                <div style="font-size: 16px; font-weight: bold; color: #16a34a;">${stats.cleared}</div>
+                            <div style="background:#f3f4f6;padding:6px;border-radius:4px;text-align:center;">
+                                <div style="font-size:10px;color:#666;font-weight:600;">Cleared</div>
+                                <div style="font-size:15px;font-weight:bold;color:#16a34a;">${stats.cleared}</div>
+                            </div>
+                            <div style="background:#f3f4f6;padding:6px;border-radius:4px;text-align:center;">
+                                <div style="font-size:10px;color:#666;font-weight:600;">Open</div>
+                                <div style="font-size:15px;font-weight:bold;color:#dc2626;">${stats.uncleared}</div>
                             </div>
                         </div>
 
-                        <div style="background: #fef3c7; padding: 8px; border-radius: 4px; margin-bottom: 10px; border-left: 3px solid #f59e0b;">
-                            <div style="font-size: 11px; color: #92400e; font-weight: 600;">Most Common Crime</div>
-                            <div style="font-size: 12px; color: #b45309; font-weight: bold;">${stats.mostCommon}</div>
+                        <div style="margin-bottom:10px;">
+                            <div style="font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:2px;">Crimes on this street</div>
+                            ${typeRows}
                         </div>
 
-                        <div style="display: flex; gap: 6px;">
-                            <button class="cluster-view-list" data-barangay-id="${barangayId}" style="flex: 1; padding: 8px; background: #274d4c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">
-                                <i class="fas fa-list mr-1"></i>View List
-                            </button>
-                            <button class="cluster-zoom" style="flex: 1; padding: 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">
-                                <i class="fas fa-search-plus mr-1"></i>Zoom In
-                            </button>
-                        </div>
+                        <button class="cluster-focus" style="width:100%;padding:8px;background:#274d4c;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;">
+                            <i class="fas fa-location-crosshairs mr-1"></i>Highlight this street
+                        </button>
                     </div>
-                `;
+                `, { maxWidth: 300 });
 
-                clusterMarker.bindPopup(popupContent, { maxWidth: 300 });
-
-                // Handle View List button
-                clusterMarker.on('popupopen', function() {
+                clusterMarker.on('popupopen', function () {
                     setTimeout(() => {
                         const popup = this.getPopup();
-                        if (popup && popup._contentNode) {
-                            const viewListBtn = popup._contentNode.querySelector('.cluster-view-list');
-                            const zoomBtn = popup._contentNode.querySelector('.cluster-zoom');
-
-                            if (viewListBtn) {
-                                viewListBtn.addEventListener('click', function(e) {
-                                    e.stopPropagation();
-                                    showClusterIncidents(group.incidents, group.name);
-                                    clusterMarker.closePopup();
-                                });
-                            }
-
-                            if (zoomBtn) {
-                                zoomBtn.addEventListener('click', function(e) {
-                                    e.stopPropagation();
-                                    const bounds = L.latLngBounds(
-                                        group.incidents.map(i => [i.latitude, i.longitude])
-                                    );
-                                    map.fitBounds(bounds, { padding: [50, 50] });
-                                    clusterMarker.closePopup();
-                                });
-                            }
+                        const btn = popup && popup._contentNode
+                            ? popup._contentNode.querySelector('.cluster-focus') : null;
+                        if (btn) {
+                            btn.addEventListener('click', e => {
+                                e.stopPropagation();
+                                clusterMarker.closePopup();
+                                focusStreet(group.name, group.incidents);
+                            });
                         }
-                    }, 100);
+                    }, 80);
                 });
+
+                // Clicking the bubble itself highlights the street too
+                clusterMarker.on('click', () => focusStreet(group.name, group.incidents));
 
                 clusterMarker.addTo(markerLayer);
 
-                // Add individual markers for this barangay (hidden by default, shown when zoomed in)
+                // The individual crimes behind the cluster, revealed on zoom-in
                 group.incidents.forEach(incident => {
                     const severity = getSeverityLevel(incident);
                     const severityColor = getSeverityIcon(severity);
 
-                    const individualIcon = L.circleMarker([incident.latitude, incident.longitude], {
+                    const dot = L.circleMarker([incident.latitude, incident.longitude], {
                         radius: 6,
                         fillColor: severityColor,
                         color: severityColor,
@@ -2267,112 +2425,61 @@ if (request()->query('token')) {
                         fillOpacity: 0.8
                     });
 
-                    // Store zoom level reference for showing/hiding
-                    individualIcon._barangayId = barangayId;
-                    individualIcon._centerLat = centerLat;
-                    individualIcon._centerLng = centerLng;
-                    individualIcon._severity = severity;
-
-                    // Create popup for individual marker
-                    const markerPopup = `
+                    dot.bindPopup(`
                         <div style="min-width: 220px; font-family: Arial, sans-serif;">
-                            <div style="font-weight: bold; color: #111; margin-bottom: 6px; font-size: 12px;">
-                                ${incident.incident_title}
+                            <div style="font-weight:bold;color:#111;margin-bottom:6px;font-size:12px;">${escStreet(incident.incident_title)}</div>
+                            <div style="font-size:11px;color:#666;margin-bottom:4px;">
+                                <i class="fas fa-flag" style="color:${severityColor};margin-right:4px;"></i>
+                                <span style="text-transform:capitalize;">${severity}</span>
                             </div>
-                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">
-                                <i class="fas fa-flag" style="color: ${severityColor}; margin-right: 4px;"></i>
-                                <span style="text-transform: capitalize;">${severity}</span>
-                            </div>
-                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">
-                                📅 ${incident.incident_date}
-                            </div>
-                            <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
-                                ${incident.category_name}
-                            </div>
-                            <button style="width: 100%; padding: 6px; background: #274d4c; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 600;">
-                                View Details
-                            </button>
+                            <div style="font-size:11px;color:#666;margin-bottom:4px;">📅 ${escStreet(incident.incident_date)}${incident.incident_time ? ' · ' + escStreet(incident.incident_time) : ''}</div>
+                            <div style="font-size:11px;color:#666;margin-bottom:8px;">${escStreet(incident.category_name)}</div>
+                            <button style="width:100%;padding:6px;background:#274d4c;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:600;">View Details</button>
                         </div>
-                    `;
+                    `);
 
-                    individualIcon.bindPopup(markerPopup);
-
-                    individualIcon.on('popupopen', function() {
+                    dot.on('popupopen', function () {
                         setTimeout(() => {
                             const popup = this.getPopup();
-                            if (popup && popup._contentNode) {
-                                const button = popup._contentNode.querySelector('button');
-                                if (button) {
-                                    button.onclick = function(e) {
-                                        e.stopPropagation();
-                                        openIncidentModal(incident.id);
-                                        individualIcon.closePopup();
-                                    };
-                                }
+                            const button = popup && popup._contentNode
+                                ? popup._contentNode.querySelector('button') : null;
+                            if (button) {
+                                button.onclick = e => {
+                                    e.stopPropagation();
+                                    openIncidentModal(incident.id);
+                                    dot.closePopup();
+                                };
                             }
-                        }, 100);
+                        }, 80);
                     });
 
-                    individualIcon.on('click', function() {
-                        // Show popup instead of opening modal directly
-                        this.openPopup();
-                    });
-
-                    individualIcon.addTo(markerLayer);
+                    dot.addTo(markerLayer);
                 });
             });
 
             markerLayer.addTo(map);
 
-            // Handle zoom-based cluster/individual marker visibility
-            // Remove old zoom handler if it exists to prevent duplicate handlers
-            if (clusterZoomHandler) {
-                map.off('zoomend', clusterZoomHandler);
-            }
+            // Cluster bubbles when zoomed out, individual crimes when zoomed in
+            if (clusterZoomHandler) map.off('zoomend', clusterZoomHandler);
 
-            clusterZoomHandler = function() {
-                const currentZoom = map.getZoom();
-                // Check if markerLayer still exists (in case it was cleared)
+            const applyClusterZoom = () => {
                 if (!markerLayer) return;
+                const zoomedIn = map.getZoom() >= 17;
 
-                markerLayer.eachLayer(function(layer) {
+                markerLayer.eachLayer(layer => {
                     if (layer instanceof L.Marker && layer.options.icon.options.className === 'cluster-marker') {
-                        // Show cluster markers only when zoomed out (zoom < 15)
-                        if (currentZoom < 15) {
-                            layer.setOpacity(1);
-                        } else {
-                            layer.setOpacity(0.1);
-                        }
+                        layer.setOpacity(zoomedIn ? 0.15 : 1);
                     } else if (layer instanceof L.CircleMarker) {
-                        // Show individual markers only when zoomed in (zoom >= 15)
-                        if (currentZoom >= 15) {
-                            layer.setStyle({fillOpacity: 0.8, opacity: 0.8});
-                        } else {
-                            layer.setStyle({fillOpacity: 0, opacity: 0});
-                        }
+                        layer.setStyle(zoomedIn
+                            ? { fillOpacity: 0.8, opacity: 0.8 }
+                            : { fillOpacity: 0, opacity: 0 });
                     }
                 });
             };
 
+            clusterZoomHandler = applyClusterZoom;
             map.on('zoomend', clusterZoomHandler);
-
-            // Trigger initial zoom-based visibility
-            const currentZoom = map.getZoom();
-            markerLayer.eachLayer(function(layer) {
-                if (layer instanceof L.Marker && layer.options.icon.options.className === 'cluster-marker') {
-                    if (currentZoom < 15) {
-                        layer.setOpacity(1);
-                    } else {
-                        layer.setOpacity(0.1);
-                    }
-                } else if (layer instanceof L.CircleMarker) {
-                    if (currentZoom >= 15) {
-                        layer.setStyle({fillOpacity: 0.8, opacity: 0.8});
-                    } else {
-                        layer.setStyle({fillOpacity: 0, opacity: 0});
-                    }
-                }
-            });
+            applyClusterZoom();
         }
 
         // Auto-filter on dropdown change
@@ -2415,36 +2522,28 @@ if (request()->query('token')) {
         });
 
         // ---- Enlarge the map, carrying the filters with it ----
+        // ------------------------------------------------------------------
+        // Fullscreen: ONLY the map. The browser's Fullscreen API puts the map
+        // container on the actual screen, so nothing from the page comes with
+        // it. Filters and panels stay where they are and come back untouched.
+        // ------------------------------------------------------------------
         let mapIsFullscreen = false;
-        let filtersHomeParent = null;
-        let filtersHomeAnchor = null;   // node the filters sat before, so they go back in place
 
-        function setMapFullscreen(on) {
+        function fullscreenElement() {
+            return document.fullscreenElement || document.webkitFullscreenElement || null;
+        }
+
+        function syncFullscreenChrome() {
             const container = document.getElementById('mapContainer');
-            const filters = document.getElementById('filtersSection');
             const icon = document.querySelector('#mapFullscreenBtn i');
             const label = document.querySelector('#mapFullscreenBtn span');
 
-            if (on === mapIsFullscreen) return;
-            mapIsFullscreen = on;
+            mapIsFullscreen = fullscreenElement() === container || container.classList.contains('map-fullscreen');
 
-            if (on) {
-                filtersHomeParent = filters.parentNode;
-                filtersHomeAnchor = filters.nextSibling;
-                container.classList.add('map-fullscreen');
-                container.appendChild(filters);          // filters float over the map
-                if (icon) icon.className = 'fas fa-compress';
-                if (label) label.textContent = 'Exit Fullscreen';
-                document.body.style.overflow = 'hidden';
-            } else {
-                container.classList.remove('map-fullscreen');
-                if (filtersHomeParent) filtersHomeParent.insertBefore(filters, filtersHomeAnchor);
-                if (icon) icon.className = 'fas fa-expand';
-                if (label) label.textContent = 'Fullscreen';
-                document.body.style.overflow = '';
-            }
+            if (icon) icon.className = mapIsFullscreen ? 'fas fa-compress' : 'fas fa-expand';
+            if (label) label.textContent = mapIsFullscreen ? 'Exit Fullscreen' : 'Fullscreen';
 
-            // Leaflet needs to re-measure after the container resizes
+            // Leaflet has to re-measure once the container has its new size
             setTimeout(() => {
                 map.invalidateSize();
 
@@ -2452,17 +2551,52 @@ if (request()->query('token')) {
                 const layer = code ? barangayLayersByCode[code] : null;
 
                 if (layer) {
-                    zoomToBarangayBounds(layer.getBounds());
+                    zoomToBarangayBounds(layer.getBounds(), false);
                 } else if (qcBounds && qcBounds.isValid()) {
-                    map.fitBounds(qcBounds, { padding: [20, 20] });
+                    map.fitBounds(qcBounds, { padding: [20, 20], animate: false });
                 }
-            }, 200);
+            }, 150);
         }
+
+        function setMapFullscreen(on) {
+            const container = document.getElementById('mapContainer');
+            const request = container.requestFullscreen || container.webkitRequestFullscreen;
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+
+            if (on) {
+                if (request) {
+                    request.call(container).catch(err => {
+                        // Blocked (permissions policy, iframe...) - fall back to
+                        // a fixed overlay so the button still does something.
+                        console.warn('Fullscreen request refused, using overlay:', err);
+                        container.classList.add('map-fullscreen');
+                        document.body.style.overflow = 'hidden';
+                        syncFullscreenChrome();
+                    });
+                } else {
+                    container.classList.add('map-fullscreen');
+                    document.body.style.overflow = 'hidden';
+                    syncFullscreenChrome();
+                }
+            } else {
+                if (fullscreenElement() && exit) {
+                    exit.call(document);
+                } else {
+                    container.classList.remove('map-fullscreen');
+                    document.body.style.overflow = '';
+                    syncFullscreenChrome();
+                }
+            }
+        }
+
+        ['fullscreenchange', 'webkitfullscreenchange'].forEach(evt =>
+            document.addEventListener(evt, syncFullscreenChrome));
 
         document.getElementById('mapFullscreenBtn').addEventListener('click', () => setMapFullscreen(!mapIsFullscreen));
         document.getElementById('exitFullscreenBtn').addEventListener('click', () => setMapFullscreen(false));
         document.addEventListener('keydown', e => {
-            if (e.key === 'Escape' && mapIsFullscreen) setMapFullscreen(false);
+            // The browser handles Escape in real fullscreen; this covers the fallback
+            if (e.key === 'Escape' && mapIsFullscreen && !fullscreenElement()) setMapFullscreen(false);
         });
 
         // Search incident functionality (with debounce to prevent lag on every keystroke)
@@ -2570,120 +2704,6 @@ if (request()->query('token')) {
         });
 
         // Populate barangays list with incident counts
-        function populateBarangaysList() {
-            const barangayList = document.getElementById('barangayList');
-
-            // Group incidents by barangay
-            let barangayGroups = {};
-            currentData.forEach(incident => {
-                const barangayId = incident.barangay_id || 'unknown';
-                const barangayName = incident.location || 'Unknown Barangay';
-
-                if (!barangayGroups[barangayId]) {
-                    barangayGroups[barangayId] = {
-                        name: barangayName,
-                        count: 0,
-                        incidents: []
-                    };
-                }
-
-                barangayGroups[barangayId].count++;
-                barangayGroups[barangayId].incidents.push(incident);
-            });
-
-            // Create HTML for barangays
-            let html = '';
-            Object.entries(barangayGroups).forEach(([barangayId, group]) => {
-                html += `
-                    <div class="barangay-item" data-barangay-id="${barangayId}" style="
-                        padding: 12px;
-                        border-bottom: 1px solid #e5e7eb;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                        background: #f9fafb;
-                        margin-bottom: 4px;
-                        border-radius: 6px;
-                        border-left: 4px solid #274d4c;
-                        width: 100%;
-                        box-sizing: border-box;
-                    ">
-                        <div style="display: flex; justify-content: space-between; align-items: start; gap: 8px;">
-                            <div style="flex-grow: 1; min-width: 0;">
-                                <div style="font-size: 13px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                    <i class="fas fa-map-pin mr-2" style="color: #274d4c;"></i><span class="barangay-name">${group.name}</span>
-                                </div>
-                                <div style="font-size: 11px; color: #666; margin-top: 4px;">
-                                    <i class="fas fa-list mr-1" style="color: #666;"></i>${group.count} crime${group.count !== 1 ? 's' : ''}
-                                </div>
-                            </div>
-                            <div style="background: #274d4c; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; flex-shrink: 0;">${group.count}</div>
-                        </div>
-                    </div>
-                `;
-            });
-
-            barangayList.innerHTML = html || '<div style="padding: 20px; text-align: center; color: #999;">No barangays available</div>';
-
-            // Add click handlers
-            document.querySelectorAll('.barangay-item').forEach(item => {
-                item.addEventListener('click', function() {
-                    const barangayId = this.getAttribute('data-barangay-id');
-                    zoomToBarangay(barangayId, barangayGroups);
-                });
-
-                // Hover effect
-                item.addEventListener('mouseover', function() {
-                    this.style.background = '#e8f5f3';
-                });
-
-                item.addEventListener('mouseout', function() {
-                    this.style.background = '#f9fafb';
-                });
-            });
-
-            // Setup search with highlighting
-            const barangaySearch = document.getElementById('barangaySearch');
-            if (barangaySearch) {
-                barangaySearch.addEventListener('input', function() {
-                    const searchQuery = this.value.toLowerCase();
-                    document.querySelectorAll('.barangay-item').forEach(item => {
-                        const barangayNameSpan = item.querySelector('.barangay-name');
-                        const barangayName = barangayNameSpan.textContent;
-                        const barangayNameLower = barangayName.toLowerCase();
-
-                        if (barangayNameLower.includes(searchQuery)) {
-                            item.style.display = 'block';
-                            // Highlight matching text
-                            if (searchQuery.length > 0) {
-                                const regex = new RegExp(`(${searchQuery})`, 'gi');
-                                const highlightedName = barangayName.replace(regex, '<span style="background-color: #fef08a; font-weight: 600;">$1</span>');
-                                barangayNameSpan.innerHTML = highlightedName;
-                            } else {
-                                barangayNameSpan.textContent = barangayName;
-                            }
-                        } else {
-                            item.style.display = 'none';
-                            barangayNameSpan.textContent = barangayName;
-                        }
-                    });
-                });
-            }
-        }
-
-        // Zoom to barangay
-        function zoomToBarangay(barangayId, barangayGroups) {
-            const group = barangayGroups[barangayId];
-            if (!group || group.incidents.length === 0) return;
-
-            // Calculate bounds from all incidents in barangay
-            const bounds = L.latLngBounds(
-                group.incidents.map(i => [i.latitude, i.longitude])
-            );
-
-            // Zoom and center on barangay
-            map.fitBounds(bounds, { padding: [50, 50] });
-        }
-
         // Show cluster incidents in left panel (drill-down mode)
         function showClusterIncidents(incidents, clusterName) {
             // Switch to incidents panel
@@ -2830,8 +2850,7 @@ if (request()->query('token')) {
                 if (resetBtn) {
                     resetBtn.addEventListener('click', function() {
                         document.getElementById('severityLegend').style.display = 'none';
-                        toggleRightPanel('clusters');
-                        populateBarangaysList();
+                        clearStreetFocus();
                     });
 
                     resetBtn.addEventListener('mouseover', function() {
