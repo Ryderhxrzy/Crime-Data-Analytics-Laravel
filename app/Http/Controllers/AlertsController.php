@@ -8,6 +8,7 @@ use App\Models\AlertSettings;
 use App\Models\CrimeAlert;
 use App\Models\CrimeCategory;
 use App\Models\CrimeIncident;
+use App\Models\UserPreference;
 use App\Services\CrimeAlertEngine;
 use Illuminate\Support\Carbon;
 
@@ -25,7 +26,7 @@ class AlertsController extends Controller
 
     public function activeAlerts()
     {
-        return view('alerts-active');
+        return view('alerts-active', ['preferences' => UserPreference::current()]);
     }
 
     public function history()
@@ -42,12 +43,20 @@ class AlertsController extends Controller
      */
     public function activeData(CrimeAlertEngine $engine)
     {
+        // "Only show me alerts of at least ..." from the user's Settings. With no
+        // session (this endpoint is also public) the default is 'low' - everything.
+        $minSeverity = UserPreference::current()['alert_min_severity'] ?? 'low';
+        $minRank = self::SEVERITY_RANK[$minSeverity] ?? 3;
+
+        $openTotal = CrimeAlert::activeStatus()->whereNotNull('street_name')->count();
+
         $alerts = CrimeAlert::with(['rule', 'barangay', 'category'])
             ->activeStatus()
             ->whereNotNull('street_name')
             ->orderByDesc('incident_count')
             ->orderByDesc('created_at')
             ->get()
+            ->filter(fn ($a) => (self::SEVERITY_RANK[$a->severity] ?? 9) <= $minRank)
             // Worst first, then busiest
             ->sortBy(fn ($a) => self::SEVERITY_RANK[$a->severity] ?? 9)
             ->values();
@@ -61,6 +70,8 @@ class AlertsController extends Controller
                 'low' => $alerts->where('severity', 'low')->count(),
                 'streets_affected' => $alerts->pluck('street_name')->filter()->unique()->count(),
                 'incidents_covered' => (int) $alerts->sum('incident_count'),
+                'min_severity' => $minSeverity,
+                'hidden_by_filter' => max(0, $openTotal - $alerts->count()),
             ],
             'alerts' => $alerts->map(fn ($alert) => $this->formatAlert($alert, $engine))->values(),
         ], 200, [], self::JSON_OPTIONS);
