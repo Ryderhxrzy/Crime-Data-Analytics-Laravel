@@ -16,7 +16,7 @@ if (request()->query('token')) {
                     <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">
                         <i class="fas fa-chart-bar mr-3" style="color: #274d4c;"></i>Crime Type Trends Analysis
                     </h1>
-                    <p class="text-gray-600 mt-1 text-sm lg:text-base">Comprehensive analysis of crime patterns by type across different time periods and locations</p>
+                    <p class="text-gray-600 mt-1 text-sm lg:text-base">Comprehensive analysis of crime patterns by type, across time periods and the streets they happen on</p>
                 </div>
             </div>
         </div>
@@ -98,8 +98,33 @@ if (request()->query('token')) {
             </div>
         </div>
 
+        <!-- Load / error banner -->
+        <div id="crimeTypeStatusBanner" class="hidden mb-6 rounded-lg border p-4 text-sm"></div>
+
         <!-- Crime Type Statistics Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gradient-to-br from-alertara-50 to-alertara-100 border-alertara-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <p class="text-sm font-semibold text-alertara-900 mb-1">
+                            <i class="fas fa-layer-group mr-1"></i>Incidents in Selection
+                        </p>
+                        <p class="text-2xl font-bold text-alertara-700" id="totalCrimeTypeIncidents">--</p>
+                        <p class="text-xs text-alertara-600 mt-1">Records matching the filters</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <p class="text-sm font-semibold text-teal-900 mb-1">
+                            <i class="fas fa-check-circle mr-1"></i>Clearance Rate
+                        </p>
+                        <p class="text-2xl font-bold text-teal-700" id="crimeTypeClearanceRate">--</p>
+                        <p class="text-xs text-teal-600 mt-1">Share of cleared cases</p>
+                    </div>
+                </div>
+            </div>
             <div class="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 rounded-lg p-6 hover:shadow-md transition-shadow">
                 <div class="flex items-start justify-between">
                     <div>
@@ -178,11 +203,11 @@ if (request()->query('token')) {
                 </div>
             </div>
 
-            <!-- Crime Type by Location -->
+            <!-- Crime Type by Street -->
             <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-gray-900">
-                        <i class="fas fa-map-marker-alt mr-2" style="color: #274d4c;"></i>Crime Type by Location
+                        <i class="fas fa-map-marker-alt mr-2" style="color: #274d4c;"></i>Crime Type by Street
                     </h3>
                     <button onclick="openCrimeTypeAnalysisModal('location')" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Open Detailed Analysis">
                         <i class="fas fa-expand text-lg"></i>
@@ -287,6 +312,33 @@ if (request()->query('token')) {
         });
 
         // Fetch real crime-type analytics from the database
+        // Banner states: a failed or empty load must be visible on the page,
+        // not just in the console.
+        function setStatusBanner(kind, message) {
+            const banner = document.getElementById('crimeTypeStatusBanner');
+            if (!banner) return;
+
+            if (!kind) {
+                banner.className = 'hidden mb-6 rounded-lg border p-4 text-sm';
+                banner.innerHTML = '';
+                return;
+            }
+
+            const styles = {
+                loading: 'bg-gray-50 border-gray-200 text-gray-700',
+                empty: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+                error: 'bg-red-50 border-red-200 text-red-800'
+            };
+            const icons = {
+                loading: 'fa-spinner fa-spin',
+                empty: 'fa-circle-info',
+                error: 'fa-triangle-exclamation'
+            };
+
+            banner.className = `mb-6 rounded-lg border p-4 text-sm ${styles[kind]}`;
+            banner.innerHTML = `<i class="fas ${icons[kind]} mr-2"></i>${message}`;
+        }
+
         async function loadCrimeTypeData() {
             const params = new URLSearchParams({
                 time_period: document.getElementById('crimeTypeTimePeriod').value,
@@ -296,12 +348,14 @@ if (request()->query('token')) {
                 clearance: document.getElementById('crimeTypeClearanceStatus').value
             });
 
+            setStatusBanner('loading', 'Loading crime type analytics...');
+
             try {
                 const response = await fetch(`/dashboard/crime-type-trends-data?${params}`, {
                     headers: { 'Accept': 'application/json' }
                 });
                 const data = await response.json();
-                if (!data.success) throw new Error(data.error || 'Request failed');
+                if (!response.ok || !data.success) throw new Error(data.error || `Request failed (HTTP ${response.status})`);
 
                 crimeTypeData = data;
                 updateCrimeTypeStatistics(data.stats);
@@ -309,8 +363,14 @@ if (request()->query('token')) {
                 renderTrendsChart(data.monthly);
                 renderByLocationChart(data.by_location);
                 renderSeverityChart(data.severity);
+
+                setStatusBanner(
+                    data.stats.total_incidents ? null : 'empty',
+                    'No incidents match the selected filters. Widen the time period or clear a filter.'
+                );
             } catch (error) {
                 console.error('Error loading crime type trends:', error);
+                setStatusBanner('error', `Could not load crime type analytics. ${error.message}`);
             }
         }
 
@@ -408,15 +468,15 @@ if (request()->query('token')) {
                     modalContent.innerHTML = `
                         <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
                             <h3 class="text-lg font-bold text-gray-900 mb-4">
-                                <i class="fas fa-map-marker-alt mr-2" style="color: #274d4c;"></i>Comprehensive Location Analysis
+                                <i class="fas fa-map-marker-alt mr-2" style="color: #274d4c;"></i>Comprehensive Street Analysis
                             </h3>
                             
-                            <!-- Location Filter -->
+                            <!-- Street Filter -->
                             <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                                 <div class="flex items-center gap-4">
-                                    <label class="text-sm font-medium text-gray-700">Filter by Location:</label>
+                                    <label class="text-sm font-medium text-gray-700">Filter by Street:</label>
                                     <select id="locationFilter" class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                        <option value="all">All Locations</option>
+                                        <option value="all">All Streets</option>
                                     </select>
                                     <button onclick="resetLocationFilter()" class="bg-gray-500 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-600 transition-colors">
                                         <i class="fas fa-redo mr-2"></i>Reset
@@ -428,9 +488,9 @@ if (request()->query('token')) {
                                 <canvas id="modalCrimeTypeByLocationChart"></canvas>
                             </div>
 
-                            <!-- Crime Breakdown by Location -->
+                            <!-- Crime Breakdown by Street -->
                             <div class="mt-6">
-                                <h4 class="font-semibold text-gray-900 mb-4">Crime Breakdown by Location</h4>
+                                <h4 class="font-semibold text-gray-900 mb-4">Crime Breakdown by Street</h4>
                                 <div class="overflow-x-auto">
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead class="bg-gray-50">
@@ -446,7 +506,7 @@ if (request()->query('token')) {
                             </div>
                             
                             <div class="mt-6">
-                                <h4 class="font-semibold text-gray-900 mb-4">Location-Specific Insights</h4>
+                                <h4 class="font-semibold text-gray-900 mb-4">Street-Specific Insights</h4>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="p-4 bg-purple-50 border-purple-200 rounded-lg">
                                         <h5 class="font-semibold text-purple-900 mb-2">High-Risk Areas</h5>
@@ -519,7 +579,7 @@ if (request()->query('token')) {
             `;
         }
 
-        // Computed insight text for the location modal
+        // Computed insight text for the street modal
         function renderLocationInsights(data) {
             const highRiskEl = document.getElementById('modalLocationHighRisk');
             const patternsEl = document.getElementById('modalLocationPatterns');
@@ -527,7 +587,7 @@ if (request()->query('token')) {
 
             const areas = data.by_location.labels;
             if (!areas.length) {
-                highRiskEl.textContent = 'No location data for the selected filters.';
+                highRiskEl.textContent = 'No street data for the selected filters.';
                 patternsEl.textContent = '--';
                 return;
             }
@@ -575,6 +635,8 @@ if (request()->query('token')) {
 
         // Update Crime Type Statistics from real server data
         function updateCrimeTypeStatistics(stats) {
+            document.getElementById('totalCrimeTypeIncidents').textContent = stats.total_incidents ?? 0;
+            document.getElementById('crimeTypeClearanceRate').textContent = `${stats.clearance_rate ?? 0}%`;
             document.getElementById('totalCrimeTypeCount').textContent = stats.total_types;
             document.getElementById('mostCommonCrimeType').textContent = stats.most_common;
             document.getElementById('trendingUpCrimeType').textContent = stats.trending_up;
@@ -649,7 +711,7 @@ if (request()->query('token')) {
             });
         }
 
-        // By-location grouped bars - real per-barangay per-category counts
+        // By-street grouped bars - real per-street per-category counts
         function renderByLocationChart(byLocation, canvasId = 'crimeTypeByLocationChart') {
             const ctx = document.getElementById(canvasId)?.getContext('2d');
             if (!ctx) return;
@@ -717,7 +779,7 @@ if (request()->query('token')) {
             });
         }
 
-        // Build the per-location table from the real crime categories returned by the API
+        // Build the per-street table from the real crime categories returned by the API
         function populateLocationCrimeTable() {
             const head = document.getElementById('locationCrimeTableHead');
             const tableBody = document.getElementById('locationCrimeTable');
@@ -726,12 +788,12 @@ if (request()->query('token')) {
             const { labels, totals, datasets } = crimeTypeData.by_location;
             const th = (text) => `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${text}</th>`;
 
-            head.innerHTML = th('Location')
+            head.innerHTML = th('Street')
                 + datasets.map(d => th(d.name)).join('')
                 + th('Total') + th('Risk Level');
 
             if (!labels.length) {
-                tableBody.innerHTML = `<tr><td colspan="${datasets.length + 3}" class="px-6 py-6 text-center text-sm text-gray-500">No location data for the selected filters.</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="${datasets.length + 3}" class="px-6 py-6 text-center text-sm text-gray-500">No street data for the selected filters.</td></tr>`;
                 return;
             }
 
@@ -765,18 +827,18 @@ if (request()->query('token')) {
             }).join('');
         }
 
-        // Populate the location dropdown with the real barangay names, then wire filtering
+        // Populate the street dropdown with the streets returned by the API, then wire filtering
         function setupLocationFilter() {
             const filter = document.getElementById('locationFilter');
             if (!filter || !crimeTypeData) return;
 
-            filter.innerHTML = '<option value="all">All Locations</option>'
+            filter.innerHTML = '<option value="all">All Streets</option>'
                 + crimeTypeData.by_location.labels.map(name => `<option value="${name}">${name}</option>`).join('');
 
             filter.addEventListener('change', filterLocationData);
         }
 
-        // Show only the selected barangay's row
+        // Show only the selected street's row
         function filterLocationData() {
             const filterValue = document.getElementById('locationFilter').value;
 
@@ -785,7 +847,7 @@ if (request()->query('token')) {
             });
         }
 
-        // Reset location filter
+        // Reset street filter
         function resetLocationFilter() {
             document.getElementById('locationFilter').value = 'all';
             filterLocationData();

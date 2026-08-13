@@ -484,7 +484,29 @@ class DashboardController extends Controller
         $barangays = Barangay::orderBy('barangay_name')->get();
         $crimeCategories = CrimeCategory::orderBy('category_name')->get();
 
-        return view('location-trends', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
+        // Every incident sits in one barangay, so this page works at street
+        // level; the filter lists the streets that actually have records.
+        $streets = $this->recordedStreets();
+
+        return view('location-trends', compact('barangays', 'crimeCategories', 'streets', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
+    }
+
+    /** Street names that appear in the incident table, alphabetical */
+    private function recordedStreets(): array
+    {
+        $streets = CrimeIncident::query()
+            ->whereNotNull('address_details')
+            ->distinct()
+            ->pluck('address_details')
+            ->map(fn ($address) => $this->streetFromAddress($address))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        sort($streets, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $streets;
     }
 
     /**
@@ -539,8 +561,38 @@ class DashboardController extends Controller
     }
 
     /**
+     * The street an incident happened on: the part of address_details before
+     * the first comma. Matches how the map, street modal and crime-data report
+     * derive a street, so every page names the same place the same way.
+     */
+    private function streetFromAddress(?string $address): ?string
+    {
+        $street = trim(explode(',', (string) $address)[0] ?? '');
+
+        if ($street === '' || str_starts_with($street, 'Purok')) {
+            return null;
+        }
+
+        return $street;
+    }
+
+    /**
+     * Category reference data keyed by lowercased name.
+     *
+     * The incident table stores category_name as plain text, so colour and
+     * severity are looked up by name rather than by foreign key — that keeps
+     * externally imported rows (whose crime_category_id may be null) in the
+     * charts instead of collapsing them into one "Unknown" slice.
+     */
+    private function categoryReference()
+    {
+        return CrimeCategory::get(['id', 'category_name', 'color_code', 'severity_level'])
+            ->keyBy(fn ($c) => mb_strtolower(trim($c->category_name)));
+    }
+
+    /**
      * Crime type trends data: distribution, monthly series per category,
-     * severity breakdown, and per-location category comparison.
+     * severity breakdown, and a per-street category comparison.
      */
     public function getCrimeTypeTrendsData(Request $request)
     {
@@ -552,16 +604,20 @@ class DashboardController extends Controller
             $clearance = $this->filterValue($request, 'clearance');
 
             $reference = $this->referenceDate();
+            $categories = $this->categoryReference();
 
-            $applyFilters = function ($query) use ($timePeriod, $barangayId, $categoryId, $status, $clearance, $reference) {
-                if ($timePeriod !== 'all') {
-                    $query->where('incident_date', '>=', $reference->copy()->subDays((int) $timePeriod)->toDateString());
-                }
+            // The filter dropdown sends a category id; this table's source of
+            // truth is the name, so translate once and match on the name.
+            $categoryName = $categoryId !== ''
+                ? (string) CrimeCategory::where('id', $categoryId)->value('category_name')
+                : '';
+
+            $applyFilters = function ($query) use ($barangayId, $categoryName, $status, $clearance) {
                 if ($barangayId !== '') {
                     $query->where('barangay_id', $barangayId);
                 }
-                if ($categoryId !== '') {
-                    $query->where('crime_category_id', $categoryId);
+                if ($categoryName !== '') {
+                    $query->whereRaw('LOWER(TRIM(category_name)) = ?', [mb_strtolower(trim($categoryName))]);
                 }
                 if ($status !== '') {
                     $query->where('status', $status);
@@ -571,140 +627,163 @@ class DashboardController extends Controller
                 }
             };
 
-            // 1. Distribution per category
-            $distribution = CrimeIncident::with('category')
-                ->select('crime_category_id', DB::raw('COUNT(*) as total'))
+            $periodStart = $timePeriod !== 'all'
+                ? $reference->copy()->subDays((int) $timePeriod)->toDateString()
+                : null;
+
+            // One read of the selected slice — every figure below is derived
+            // from it in PHP, which also lets streets (stored inside
+            // address_details) be grouped without a second pass over the table.
+            $incidents = CrimeIncident::query()
                 ->tap($applyFilters)
-                ->groupBy('crime_category_id')
-                ->orderByDesc('total')
-                ->get();
+                ->when($periodStart, fn ($q) => $q->where('incident_date', '>=', $periodStart))
+                ->get(['category_name', 'address_details', 'incident_date', 'status', 'clearance_status']);
+
+            // 1. Distribution per category
+            $counts = [];
+            foreach ($incidents as $incident) {
+                $name = trim((string) $incident->category_name) ?: 'Uncategorized';
+                $counts[$name] = ($counts[$name] ?? 0) + 1;
+            }
+            arsort($counts);
 
             $distributionOut = [
-                'labels' => $distribution->map(fn ($d) => $d->category->category_name ?? 'Unknown')->values(),
-                'values' => $distribution->pluck('total')->values(),
-                'colors' => $distribution->map(fn ($d) => $d->category->color_code ?? '#6b7280')->values(),
+                'labels' => array_keys($counts),
+                'values' => array_values($counts),
+                'colors' => array_map(
+                    fn ($name) => $categories[mb_strtolower($name)]->color_code ?? '#6b7280',
+                    array_keys($counts)
+                ),
             ];
 
-            // 2. Monthly series (last 6 months) for the top 5 categories
-            $topCategoryIds = $distribution->take(5)->pluck('crime_category_id');
+            $topCategories = array_slice(array_keys($counts), 0, 5);
+
+            // 2. Monthly series for the top categories. The window follows the
+            //    selected period so the chart and the filter agree.
+            $monthsCount = $timePeriod === 'all' ? 12 : max(3, (int) ceil(((int) $timePeriod) / 30));
             $monthLabels = [];
-            for ($i = 5; $i >= 0; $i--) {
-                $monthLabels[] = $reference->copy()->subMonths($i)->format('M Y');
+            $monthKeys = [];
+            for ($i = $monthsCount - 1; $i >= 0; $i--) {
+                $month = $reference->copy()->subMonths($i);
+                $monthLabels[] = $month->format('M Y');
+                $monthKeys[] = $month->format('Y-m');
+            }
+
+            $perMonth = [];   // [category][Y-m] => count
+            foreach ($incidents as $incident) {
+                if (! $incident->incident_date) {
+                    continue;
+                }
+                $name = trim((string) $incident->category_name) ?: 'Uncategorized';
+                $key = Carbon::parse($incident->incident_date)->format('Y-m');
+                $perMonth[$name][$key] = ($perMonth[$name][$key] ?? 0) + 1;
             }
 
             $trendDatasets = [];
-            foreach ($topCategoryIds as $catId) {
-                $row = $distribution->firstWhere('crime_category_id', $catId);
-                $values = [];
-                for ($i = 5; $i >= 0; $i--) {
-                    $date = $reference->copy()->subMonths($i);
-                    $values[] = CrimeIncident::where('crime_category_id', $catId)
-                        ->whereYear('incident_date', $date->year)
-                        ->whereMonth('incident_date', $date->month)
-                        ->tap(function ($q) use ($barangayId, $status, $clearance) {
-                            if ($barangayId !== '') {
-                                $q->where('barangay_id', $barangayId);
-                            }
-                            if ($status !== '') {
-                                $q->where('status', $status);
-                            }
-                            if ($clearance !== '') {
-                                $q->where('clearance_status', $clearance);
-                            }
-                        })
-                        ->count();
-                }
+            foreach ($topCategories as $name) {
                 $trendDatasets[] = [
-                    'name' => $row->category->category_name ?? 'Unknown',
-                    'color' => $row->category->color_code ?? '#6b7280',
-                    'values' => $values,
+                    'name' => $name,
+                    'color' => $categories[mb_strtolower($name)]->color_code ?? '#6b7280',
+                    'values' => array_map(fn ($key) => (int) ($perMonth[$name][$key] ?? 0), $monthKeys),
                 ];
             }
 
-            // 3. Severity breakdown (via the category's severity level)
-            $severityCounts = CrimeIncident::join('crime_department_crime_categories as cat', 'crime_department_crime_incidents.crime_category_id', '=', 'cat.id')
-                ->select('cat.severity_level', DB::raw('COUNT(*) as total'))
-                ->tap($applyFilters)
-                ->groupBy('cat.severity_level')
-                ->pluck('total', 'severity_level');
+            // 3. Severity breakdown, resolved through each category's severity level
+            $severityOut = ['low' => 0, 'medium' => 0, 'high' => 0, 'critical' => 0];
+            foreach ($counts as $name => $total) {
+                $level = mb_strtolower(trim((string) ($categories[mb_strtolower($name)]->severity_level ?? '')));
+                if (isset($severityOut[$level])) {
+                    $severityOut[$level] += $total;
+                }
+            }
 
-            $severityOut = [
-                'low' => (int) ($severityCounts['low'] ?? 0),
-                'medium' => (int) ($severityCounts['medium'] ?? 0),
-                'high' => (int) ($severityCounts['high'] ?? 0),
-                'critical' => (int) ($severityCounts['critical'] ?? 0),
-            ];
-
-            // 4. Trending up/down: most recent 30 days of data vs the 30 days before it
+            // 4. Trending up/down: the most recent 30 days against the 30 before,
+            //    under the same filters as everything else on the page.
             $trendWindowStart = $reference->copy()->subDays(30)->toDateString();
             $trendWindowPrevStart = $reference->copy()->subDays(60)->toDateString();
 
-            $currentMonthCounts = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as total'))
-                ->where('incident_date', '>=', $trendWindowStart)
-                ->groupBy('crime_category_id')->pluck('total', 'crime_category_id');
-            $previousMonthCounts = CrimeIncident::select('crime_category_id', DB::raw('COUNT(*) as total'))
-                ->whereBetween('incident_date', [$trendWindowPrevStart, $trendWindowStart])
-                ->groupBy('crime_category_id')->pluck('total', 'crime_category_id');
+            $recent = [];
+            $previous = [];
+            foreach ($incidents as $incident) {
+                if (! $incident->incident_date) {
+                    continue;
+                }
+                $name = trim((string) $incident->category_name) ?: 'Uncategorized';
+                $date = Carbon::parse($incident->incident_date)->toDateString();
+
+                if ($date >= $trendWindowStart) {
+                    $recent[$name] = ($recent[$name] ?? 0) + 1;
+                } elseif ($date >= $trendWindowPrevStart) {
+                    $previous[$name] = ($previous[$name] ?? 0) + 1;
+                }
+            }
 
             $changes = [];
-            foreach ($distribution as $row) {
-                $current = (int) ($currentMonthCounts[$row->crime_category_id] ?? 0);
-                $previous = (int) ($previousMonthCounts[$row->crime_category_id] ?? 0);
+            foreach (array_keys($counts) as $name) {
                 $changes[] = [
-                    'name' => $row->category->category_name ?? 'Unknown',
-                    'change' => $current - $previous,
+                    'name' => $name,
+                    'change' => (int) ($recent[$name] ?? 0) - (int) ($previous[$name] ?? 0),
                 ];
             }
             usort($changes, fn ($a, $b) => $b['change'] <=> $a['change']);
-            $trendingUp = $changes && $changes[0]['change'] > 0 ? $changes[0]['name'] : 'None';
-            $lastChange = end($changes);
-            $trendingDown = $changes && $lastChange['change'] < 0 ? $lastChange['name'] : 'None';
 
-            // 5. Per-location breakdown for the top 5 categories (top 8 barangays)
-            $topBarangays = CrimeIncident::with('barangay')
-                ->select('barangay_id', DB::raw('COUNT(*) as total'))
-                ->tap($applyFilters)
-                ->groupBy('barangay_id')
-                ->orderByDesc('total')
-                ->limit(8)
-                ->get();
+            $trendingUp = ($changes && $changes[0]['change'] > 0) ? $changes[0]['name'] : 'None';
+            $lastChange = $changes ? end($changes) : null;
+            $trendingDown = ($lastChange && $lastChange['change'] < 0) ? $lastChange['name'] : 'None';
 
-            $locationLabels = $topBarangays->map(fn ($b) => $b->barangay->barangay_name ?? 'Unknown')->values();
-            $locationTotals = $topBarangays->pluck('total')->map(fn ($t) => (int) $t)->values();
-            $locationDatasets = [];
-            foreach ($topCategoryIds as $catId) {
-                $row = $distribution->firstWhere('crime_category_id', $catId);
-                $values = [];
-                foreach ($topBarangays as $b) {
-                    $values[] = CrimeIncident::where('barangay_id', $b->barangay_id)
-                        ->where('crime_category_id', $catId)
-                        ->tap($applyFilters)
-                        ->count();
+            // 5. Per-street breakdown for the top categories (top 8 streets).
+            //    Every incident sits in one barangay, so the street is the level
+            //    at which "where does this crime type happen" is answerable.
+            $streetTotals = [];
+            $streetByCategory = [];
+            foreach ($incidents as $incident) {
+                $street = $this->streetFromAddress($incident->address_details);
+                if ($street === null) {
+                    continue;
                 }
+                $name = trim((string) $incident->category_name) ?: 'Uncategorized';
+                $streetTotals[$street] = ($streetTotals[$street] ?? 0) + 1;
+                $streetByCategory[$street][$name] = ($streetByCategory[$street][$name] ?? 0) + 1;
+            }
+            arsort($streetTotals);
+            $topStreets = array_slice(array_keys($streetTotals), 0, 8);
+
+            $locationDatasets = [];
+            foreach ($topCategories as $name) {
                 $locationDatasets[] = [
-                    'name' => $row->category->category_name ?? 'Unknown',
-                    'color' => $row->category->color_code ?? '#6b7280',
-                    'values' => $values,
+                    'name' => $name,
+                    'color' => $categories[mb_strtolower($name)]->color_code ?? '#6b7280',
+                    'values' => array_map(
+                        fn ($street) => (int) ($streetByCategory[$street][$name] ?? 0),
+                        $topStreets
+                    ),
                 ];
             }
+
+            $cleared = $incidents->where('clearance_status', 'cleared')->count();
 
             return response()->json([
                 'success' => true,
                 'stats' => [
-                    'total_types' => $distribution->count(),
+                    'total_types' => count($counts),
+                    'total_incidents' => $incidents->count(),
                     'most_common' => $distributionOut['labels'][0] ?? 'None',
                     'trending_up' => $trendingUp,
                     'trending_down' => $trendingDown,
+                    'cleared' => $cleared,
+                    'clearance_rate' => $incidents->count() > 0
+                        ? (int) round($cleared / $incidents->count() * 100)
+                        : 0,
                 ],
                 'distribution' => $distributionOut,
                 'monthly' => ['labels' => $monthLabels, 'datasets' => $trendDatasets],
                 'severity' => $severityOut,
                 'by_location' => [
-                    'labels' => $locationLabels,
-                    'totals' => $locationTotals,
+                    'labels' => $topStreets,
+                    'totals' => array_map(fn ($street) => (int) $streetTotals[$street], $topStreets),
                     'datasets' => $locationDatasets,
                 ],
-            ]);
+            ], 200, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
             \Log::error('Error in getCrimeTypeTrendsData: ' . $e->getMessage());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
@@ -712,28 +791,33 @@ class DashboardController extends Controller
     }
 
     /**
-     * Location trends data: per-barangay current-vs-previous comparison,
-     * monthly time series for the top areas, and quarterly seasonal breakdown.
+     * Location trends data, at street level.
+     *
+     * Every incident in this system sits in one barangay (San Agustin), so a
+     * per-barangay comparison would always be a single row. The unit of
+     * analysis here is therefore the street the incident happened on, taken
+     * from address_details the same way the map and the street modal take it.
+     *
+     * Returns, per street: totals for the selected period, a current-vs-previous
+     * comparison of two equal windows, the dominant crime type, clearance, and
+     * the last time something happened there — plus a monthly series and a
+     * quarterly breakdown for the busiest streets.
      */
     public function getLocationTrendsData(Request $request)
     {
         try {
             $timePeriod = $this->filterValue($request, 'time_period', 'all');
-            $barangayId = $this->filterValue($request, 'barangay');
+            $street = $this->filterValue($request, 'street');
             $crimeType = $this->filterValue($request, 'crime_type');
             $caseStatus = $this->filterValue($request, 'case_status');
 
-            $applyFilters = function ($query) use ($barangayId, $crimeType, $caseStatus) {
-                if ($barangayId !== '') {
-                    $query->where('barangay_id', $barangayId);
-                }
-                if ($crimeType !== '') {
-                    $query->where('crime_category_id', $crimeType);
-                }
-                if ($caseStatus !== '') {
-                    $query->where('status', $caseStatus);
-                }
-            };
+            $reference = $this->referenceDate();
+            $categories = $this->categoryReference();
+
+            // The dropdown sends a category id; this table stores the name.
+            $categoryName = $crimeType !== ''
+                ? (string) CrimeCategory::where('id', $crimeType)->value('category_name')
+                : '';
 
             if ($timePeriod === 'all') {
                 // All Time: count everything, and derive the trend by splitting the
@@ -757,45 +841,92 @@ class DashboardController extends Controller
             } else {
                 // Fixed window measured back from the latest recorded incident
                 $windowDays = (int) $timePeriod;
-                $reference = $this->referenceDate();
                 $currentStart = $reference->copy()->subDays($windowDays)->toDateString();
                 $trendCurrentStart = $currentStart;
                 $trendPreviousStart = $reference->copy()->subDays($windowDays * 2)->toDateString();
             }
 
-            // Counts per barangay for the selected period
-            $currentQuery = CrimeIncident::with('barangay')
-                ->select('barangay_id', DB::raw('COUNT(*) as total'))
-                ->tap($applyFilters);
-            if ($currentStart !== null) {
-                $currentQuery->where('incident_date', '>=', $currentStart);
-            }
-            $currentCounts = $currentQuery->groupBy('barangay_id')->get();
+            $monthsCount = $timePeriod === 'all' ? 12 : max(3, (int) ceil($windowDays / 30));
+            $seriesStart = $reference->copy()->subMonths($monthsCount - 1)->startOfMonth()->toDateString();
+            $seasonalYear = $reference->year;
 
-            // Comparison counts used only for the trend direction
-            $trendCurrent = collect();
-            $previousCounts = collect();
-            if ($trendCurrentStart && $trendPreviousStart) {
-                $trendCurrent = CrimeIncident::select('barangay_id', DB::raw('COUNT(*) as total'))
-                    ->where('incident_date', '>=', $trendCurrentStart)
-                    ->tap($applyFilters)
-                    ->groupBy('barangay_id')
-                    ->pluck('total', 'barangay_id');
+            // Read once, wide enough to cover the comparison window, the monthly
+            // series and the seasonal year; everything below is grouped in PHP
+            // because the street lives inside address_details.
+            $fetchFrom = $timePeriod === 'all' ? null : min(array_filter([
+                $trendPreviousStart,
+                $seriesStart,
+                Carbon::create($seasonalYear, 1, 1)->toDateString(),
+            ]));
 
-                $previousCounts = CrimeIncident::select('barangay_id', DB::raw('COUNT(*) as total'))
-                    ->whereBetween('incident_date', [$trendPreviousStart, $trendCurrentStart])
-                    ->tap($applyFilters)
-                    ->groupBy('barangay_id')
-                    ->pluck('total', 'barangay_id');
+            $incidents = CrimeIncident::query()
+                ->when($categoryName !== '', fn ($q) => $q->whereRaw('LOWER(TRIM(category_name)) = ?', [mb_strtolower(trim($categoryName))]))
+                ->when($caseStatus !== '', fn ($q) => $q->where('status', $caseStatus))
+                ->when($fetchFrom, fn ($q) => $q->where('incident_date', '>=', $fetchFrom))
+                ->get(['address_details', 'category_name', 'incident_date', 'status', 'clearance_status']);
+
+            $wanted = mb_strtolower(trim($street));
+            $streets = [];   // street => running tallies
+
+            foreach ($incidents as $incident) {
+                $name = $this->streetFromAddress($incident->address_details);
+                if ($name === null || ! $incident->incident_date) {
+                    continue;
+                }
+                if ($wanted !== '' && mb_strtolower($name) !== $wanted) {
+                    continue;
+                }
+
+                $date = Carbon::parse($incident->incident_date);
+                $dateString = $date->toDateString();
+
+                $streets[$name] ??= [
+                    'current' => 0, 'trend_now' => 0, 'trend_before' => 0,
+                    'cleared' => 0, 'categories' => [], 'months' => [],
+                    'quarters' => [0, 0, 0, 0], 'last' => null,
+                ];
+                $entry = &$streets[$name];
+
+                // Total for the selected period (what the table shows)
+                if ($currentStart === null || $dateString >= $currentStart) {
+                    $entry['current']++;
+
+                    $category = trim((string) $incident->category_name) ?: 'Uncategorized';
+                    $entry['categories'][$category] = ($entry['categories'][$category] ?? 0) + 1;
+
+                    if ($incident->clearance_status === 'cleared') {
+                        $entry['cleared']++;
+                    }
+                    if ($entry['last'] === null || $dateString > $entry['last']) {
+                        $entry['last'] = $dateString;
+                    }
+                }
+
+                // Two equal windows, used only for the trend direction
+                if ($trendCurrentStart && $dateString >= $trendCurrentStart) {
+                    $entry['trend_now']++;
+                } elseif ($trendPreviousStart && $dateString >= $trendPreviousStart) {
+                    $entry['trend_before']++;
+                }
+
+                // Monthly series and the seasonal year
+                $entry['months'][$date->format('Y-m')] = ($entry['months'][$date->format('Y-m')] ?? 0) + 1;
+                if ($date->year === $seasonalYear) {
+                    $entry['quarters'][$date->quarter - 1]++;
+                }
+
+                unset($entry);
             }
 
             $locations = [];
-            foreach ($currentCounts as $row) {
-                $current = (int) $row->total;
-                // The trend compares two equal windows; the display count above is
-                // the total for the whole selected period, so keep them separate.
-                $trendNow = (int) ($trendCurrent[$row->barangay_id] ?? 0);
-                $trendBefore = (int) ($previousCounts[$row->barangay_id] ?? 0);
+            foreach ($streets as $name => $entry) {
+                // A street with nothing in the selected period is not a row.
+                if ($entry['current'] === 0) {
+                    continue;
+                }
+
+                $trendNow = $entry['trend_now'];
+                $trendBefore = $entry['trend_before'];
 
                 if ($trendBefore > 0) {
                     $changePercent = (int) round(($trendNow - $trendBefore) / $trendBefore * 100);
@@ -805,63 +936,81 @@ class DashboardController extends Controller
                     $changePercent = 0;
                 }
 
-                // A barangay with no incidents in either comparison window is not a
-                // meaningful trend - flag it so it can't win "most stable".
-                $hasTrendData = ($trendNow + $trendBefore) > 0;
+                arsort($entry['categories']);
+                $topCategory = array_key_first($entry['categories']);
 
                 $locations[] = [
-                    'barangay_id' => $row->barangay_id,
-                    'name' => $row->barangay->barangay_name ?? 'Unknown',
-                    'current' => $current,
+                    'name' => $name,
+                    'current' => $entry['current'],
                     'trend_current' => $trendNow,
                     'trend_previous' => $trendBefore,
                     'previous' => $trendBefore,
                     'change_percent' => $changePercent,
-                    'has_trend_data' => $hasTrendData,
+                    // A street with no incidents in either comparison window is not
+                    // a meaningful trend - flag it so it can't win "most stable".
+                    'has_trend_data' => ($trendNow + $trendBefore) > 0,
                     'trend' => $changePercent > 10 ? 'increasing' : ($changePercent < -10 ? 'decreasing' : 'stable'),
+                    'top_category' => $topCategory,
+                    'top_category_count' => $topCategory ? $entry['categories'][$topCategory] : 0,
+                    'top_category_color' => $topCategory
+                        ? ($categories[mb_strtolower($topCategory)]->color_code ?? '#6b7280')
+                        : '#6b7280',
+                    'cleared' => $entry['cleared'],
+                    'clearance_rate' => (int) round($entry['cleared'] / $entry['current'] * 100),
+                    'last_incident' => $entry['last'],
                 ];
             }
 
             usort($locations, fn ($a, $b) => $b['current'] <=> $a['current']);
 
-            // Monthly time series for the top 5 barangays, ending at the latest recorded incident
-            $reference = $this->referenceDate();
-            $topBarangayIds = array_column(array_slice($locations, 0, 5), 'barangay_id');
-            $monthsCount = $timePeriod === 'all' ? 12 : max(3, (int) ceil($windowDays / 30));
+            // Monthly series for the busiest streets
+            $topStreets = array_column(array_slice($locations, 0, 5), 'name');
             $seriesLabels = [];
-            $seriesData = [];
-
+            $monthKeys = [];
             for ($i = $monthsCount - 1; $i >= 0; $i--) {
-                $seriesLabels[] = $reference->copy()->subMonths($i)->format('M Y');
+                $month = $reference->copy()->subMonths($i);
+                $seriesLabels[] = $month->format('M Y');
+                $monthKeys[] = $month->format('Y-m');
             }
 
-            foreach ($topBarangayIds as $id) {
-                $location = collect($locations)->firstWhere('barangay_id', $id);
-                $values = [];
-                for ($i = $monthsCount - 1; $i >= 0; $i--) {
-                    $date = $reference->copy()->subMonths($i);
-                    $values[] = CrimeIncident::where('barangay_id', $id)
-                        ->whereYear('incident_date', $date->year)
-                        ->whereMonth('incident_date', $date->month)
-                        ->tap($applyFilters)
-                        ->count();
-                }
-                $seriesData[] = ['name' => $location['name'] ?? 'Unknown', 'values' => $values];
+            $seriesData = [];
+            foreach ($topStreets as $name) {
+                $seriesData[] = [
+                    'name' => $name,
+                    'values' => array_map(fn ($key) => (int) ($streets[$name]['months'][$key] ?? 0), $monthKeys),
+                ];
             }
 
-            // Quarterly seasonal breakdown for the year of the latest incident
-            $seasonalYear = $reference->year;
+            // Quarterly breakdown for the year of the latest incident
             $seasonal = [];
             foreach ([1, 2, 3, 4] as $quarter) {
-                $values = [];
-                foreach ($topBarangayIds as $id) {
-                    $values[] = CrimeIncident::where('barangay_id', $id)
-                        ->whereYear('incident_date', $seasonalYear)
-                        ->whereRaw('QUARTER(incident_date) = ?', [$quarter])
-                        ->tap($applyFilters)
-                        ->count();
+                $seasonal[] = [
+                    'quarter' => "Q{$quarter} {$seasonalYear}",
+                    'values' => array_map(fn ($name) => (int) $streets[$name]['quarters'][$quarter - 1], $topStreets),
+                ];
+            }
+
+            // Crime mix on the busiest streets: one dataset per leading category
+            $mixCategories = [];
+            foreach ($locations as $location) {
+                if (! in_array($location['name'], $topStreets, true)) {
+                    continue;
                 }
-                $seasonal[] = ['quarter' => "Q{$quarter} {$seasonalYear}", 'values' => $values];
+                foreach ($streets[$location['name']]['categories'] as $category => $count) {
+                    $mixCategories[$category] = ($mixCategories[$category] ?? 0) + $count;
+                }
+            }
+            arsort($mixCategories);
+            $mixDatasets = [];
+            foreach (array_slice(array_keys($mixCategories), 0, 6) as $category) {
+                $mixDatasets[] = [
+                    'name' => $category,
+                    'color' => $categories[mb_strtolower($category)]->color_code ?? '#6b7280',
+                    'values' => array_map(
+                        fn ($name) => (int) ($streets[$name]['categories'][$category] ?? 0),
+                        $topStreets
+                    ),
+                ];
             }
 
             $increasing = array_values(array_filter($locations, fn ($l) => $l['trend'] === 'increasing'));
@@ -870,15 +1019,18 @@ class DashboardController extends Controller
 
             $fastestGrowing = collect($increasing)->sortByDesc('change_percent')->first();
 
-            // "Most stable" must come from barangays that actually have activity in
-            // both comparison windows; otherwise a flat-but-empty area (or a sharply
-            // declining one) would win by default.
+            // "Most stable" must come from streets that actually have activity in
+            // both comparison windows; otherwise a flat-but-empty street (or a
+            // sharply declining one) would win by default.
             $mostStable = collect($stable)->filter(fn ($l) => $l['has_trend_data'])
                 ->sortByDesc('current')
                 ->first()
                 ?? collect($locations)->filter(fn ($l) => $l['has_trend_data'])
                     ->sortBy(fn ($l) => abs($l['change_percent']))
                     ->first();
+
+            $totalIncidents = array_sum(array_column($locations, 'current'));
+            $totalCleared = array_sum(array_column($locations, 'cleared'));
 
             return response()->json([
                 'success' => true,
@@ -887,18 +1039,23 @@ class DashboardController extends Controller
                     'increasing_count' => count($increasing),
                     'decreasing_count' => count($decreasing),
                     'stable_count' => count($stable),
+                    'street_count' => count($locations),
+                    'total_incidents' => $totalIncidents,
+                    'clearance_rate' => $totalIncidents > 0 ? (int) round($totalCleared / $totalIncidents * 100) : 0,
+                    'busiest' => $locations[0] ?? null,
                     'fastest_growing' => $fastestGrowing,
                     'most_stable' => $mostStable,
                 ],
                 'locations' => $locations,
                 'series' => ['labels' => $seriesLabels, 'datasets' => $seriesData],
-                'seasonal' => ['areas' => array_map(fn ($id) => collect($locations)->firstWhere('barangay_id', $id)['name'] ?? 'Unknown', $topBarangayIds), 'quarters' => $seasonal],
+                'seasonal' => ['areas' => $topStreets, 'quarters' => $seasonal],
+                'crime_mix' => ['labels' => $topStreets, 'datasets' => $mixDatasets],
                 'migration' => [
                     'gaining' => array_slice($increasing, 0, 5),
                     'losing' => array_slice($decreasing, 0, 5),
                     'stable' => array_slice($stable, 0, 5),
                 ],
-            ]);
+            ], 200, [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
             \Log::error('Error in getLocationTrendsData: ' . $e->getMessage());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
