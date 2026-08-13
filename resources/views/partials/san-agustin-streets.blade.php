@@ -1206,7 +1206,11 @@
         let streetAiSeq = 0;               // stale-response guard
 
         // Language of the suggestions (shared with pattern detection via localStorage)
-        let saLang = localStorage.getItem('sa_sugg_lang') === 'tl' ? 'tl' : 'en';
+        // Seeded from the user's Settings, then remembered per browser once
+        // they use the toggle in the panel.
+        const SA_LANG_PREF = @json(\App\Models\UserPreference::current()['suggestion_language']);
+        let saLang = localStorage.getItem('sa_sugg_lang') || SA_LANG_PREF;
+        saLang = saLang === 'tl' ? 'tl' : 'en';
         function isTl() { return saLang === 'tl'; }
         function applyStreetLangToggle() {
             document.querySelectorAll('#streetLangToggle [data-lang]').forEach(function (b) {
