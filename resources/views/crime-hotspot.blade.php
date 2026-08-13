@@ -21,6 +21,21 @@ if (request()->query('token')) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
+    <style>
+        /* Barangay name sitting on the polygon, same idea as the crime map */
+        .brgy-label {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #274d4c;
+            color: #274d4c;
+            font-weight: 800;
+            font-size: 11px;
+            padding: 2px 10px;
+            border-radius: 9999px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .brgy-label::before { display: none; }
+    </style>
+
     <!-- Leaflet Heatmap Plugin -->
     <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
 
@@ -74,9 +89,9 @@ if (request()->query('token')) {
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">View Mode</label>
                             <select id="visualizationMode" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                                <option value="markers" selected>Individual Markers</option>
-                                <option value="heatmap">Heat Map</option>
-                                <option value="clusters">Cluster View</option>
+                                <option value="heatmap" selected>Heat Map (density)</option>
+                                <option value="zones">Hotspot Zones</option>
+                                <option value="markers">Individual Markers</option>
                             </select>
                         </div>
 
@@ -130,14 +145,13 @@ if (request()->query('token')) {
                     </div>
                 </div>
 
-                <!-- Street-level prevention advice lives on this page: clicking a
-                     street opens its crimes and generates suggestions for it. -->
+                <!-- Streets are the unit of analysis here: click one to break it down. -->
                 <div class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-purple-200 bg-purple-50 p-3">
                     <i class="fas fa-shield-halved text-purple-700"></i>
                     <p class="flex-1 text-sm text-purple-900">
-                        <span class="font-bold">Street prevention suggestions.</span>
-                        Click any coloured street on the map to see every crime recorded there and generate
-                        prevention suggestions for it — per street, per crime type.
+                        <span class="font-bold">Click a street to analyse it.</span>
+                        The map zooms to it and the panel on the right breaks down its crime count by type,
+                        peak hours, trend and risk level — with prevention suggestions one click further.
                     </p>
                     <button type="button" id="zoomToStreetsBtn"
                             class="px-3 py-1.5 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors text-xs font-bold flex items-center gap-2">
@@ -173,8 +187,12 @@ if (request()->query('token')) {
                         <div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                             <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
                                 <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0;">
-                                    <i class="fas fa-list-ol mr-2 text-red-600"></i>Top High-Risk Areas
+                                    <i class="fas fa-list-ol mr-2 text-red-600"></i>Top 10 Hotspot Streets
                                 </h3>
+                                <p style="font-size: 10.5px; color: #6b7280; margin: 6px 0 0;">
+                                    Risk score = 40% volume + 20% density (crimes per 100 m of street)
+                                    + 25% severity + 15% trend. Click a street to analyse it.
+                                </p>
                             </div>
                             <div id="topHotspots" style="overflow-y: auto; max-height: 280px;">
                                 <!-- Will be populated by JavaScript -->
@@ -184,28 +202,18 @@ if (request()->query('token')) {
                             </div>
                         </div>
 
-                        <!-- Area Statistics Card -->
-                        <div id="areaStatsCard" class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm" style="display: none;">
-                            <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0;">
-                                    <i class="fas fa-chart-bar mr-2 text-blue-600"></i>Area Statistics
+                        <!-- Selected street breakdown -->
+                        <div id="streetAnalysisCard" class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm" style="display: none;">
+                            <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; display: flex; align-items: center; gap: 8px;">
+                                <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0; flex: 1;">
+                                    <i class="fas fa-location-crosshairs mr-2 text-purple-700"></i><span id="streetAnalysisName">Street</span>
                                 </h3>
+                                <button type="button" id="clearStreetSelection" title="Clear selection"
+                                        style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 14px;">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
-                            <div id="areaStats" style="padding: 16px;">
-                                <!-- Populated on hotspot selection -->
-                            </div>
-                        </div>
-
-                        <!-- Risk Classification -->
-                        <div id="riskClassification" class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm" style="display: none;">
-                            <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0;">
-                                    <i class="fas fa-exclamation-triangle mr-2 text-yellow-600"></i>Risk Classification
-                                </h3>
-                            </div>
-                            <div id="riskBadge" style="padding: 20px; text-align: center;">
-                                <!-- Populated dynamically -->
-                            </div>
+                            <div id="streetAnalysisBody" style="padding: 14px 16px; max-height: 460px; overflow-y: auto;"></div>
                         </div>
 
                         <!-- Export -->
@@ -235,7 +243,7 @@ if (request()->query('token')) {
                     <div class="flex items-start justify-between">
                         <div>
                             <p class="text-sm font-semibold text-red-900 mb-1">
-                                <i class="fas fa-fire mr-1"></i>Critical/High-Risk Areas
+                                <i class="fas fa-fire mr-1"></i>Critical/High-Risk Streets
                             </p>
                             <p class="text-2xl font-bold text-red-700" id="highRiskCount">0</p>
                             <p class="text-xs text-red-600 mt-1">Composite risk score ≥ 45</p>
@@ -246,7 +254,7 @@ if (request()->query('token')) {
                     <div class="flex items-start justify-between">
                         <div>
                             <p class="text-sm font-semibold text-yellow-900 mb-1">
-                                <i class="fas fa-exclamation-triangle mr-1"></i>Medium-Risk Areas
+                                <i class="fas fa-exclamation-triangle mr-1"></i>Medium-Risk Streets
                             </p>
                             <p class="text-2xl font-bold text-yellow-700" id="mediumRiskCount">0</p>
                             <p class="text-xs text-yellow-600 mt-1">Composite risk score 25-44</p>
@@ -257,7 +265,7 @@ if (request()->query('token')) {
                     <div class="flex items-start justify-between">
                         <div>
                             <p class="text-sm font-semibold text-green-900 mb-1">
-                                <i class="fas fa-check-circle mr-1"></i>Low-Risk Areas
+                                <i class="fas fa-check-circle mr-1"></i>Low-Risk Streets
                             </p>
                             <p class="text-2xl font-bold text-green-700" id="lowRiskCount">0</p>
                             <p class="text-xs text-green-600 mt-1">Composite risk score < 25</p>
@@ -271,7 +279,7 @@ if (request()->query('token')) {
                                 <i class="fas fa-chart-line mr-1"></i>Total Incidents
                             </p>
                             <p class="text-2xl font-bold text-blue-700" id="totalIncidentsCount">0</p>
-                            <p class="text-xs text-blue-600 mt-1">Across all barangays</p>
+                            <p class="text-xs text-blue-600 mt-1">In the selected period</p>
                         </div>
                     </div>
                 </div>
@@ -292,7 +300,7 @@ if (request()->query('token')) {
                             </span>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-700">Highest Risk Area</span>
+                            <span class="text-sm text-gray-700">Highest Risk Street</span>
                             <span id="highestDensity" class="text-sm font-bold text-gray-900">—</span>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -321,13 +329,28 @@ if (request()->query('token')) {
                 </div>
             </div>
 
-            <!-- Monthly Trend Chart -->
-            <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mt-6">
-                <h3 class="text-lg font-bold text-gray-900 mb-4">
-                    <i class="fas fa-chart-line mr-2 text-alertara-700"></i>12-Month Hotspot Trend
-                </h3>
-                <div id="monthlyTrendChart" style="position: relative; height: 300px;">
-                    <canvas id="monthlyTrendCanvas"></canvas>
+            <!-- Date & time trend -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <h3 class="text-lg font-bold text-gray-900 mb-1">
+                        <i class="fas fa-chart-line mr-2 text-alertara-700"></i>12-Month Trend
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">Incidents per month across the barangay</p>
+                    <div id="monthlyTrendChart" style="position: relative; height: 300px;">
+                        <canvas id="monthlyTrendCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <h3 class="text-lg font-bold text-gray-900 mb-1">
+                        <i class="fas fa-clock mr-2 text-alertara-700"></i>Time of Day
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                        When crime happens - busiest window: <span id="peakPeriodLabel" class="font-bold text-gray-900">--</span>
+                    </p>
+                    <div id="hourlyChart" style="position: relative; height: 300px;">
+                        <canvas id="hourlyCanvas"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -417,113 +440,80 @@ if (request()->query('token')) {
             console.log('Map initialized');
         }
 
-        // Load QC boundary from GeoJSON
-        function loadQCBoundary() {
-            console.log('Loading QC boundary...');
+        // Boundaries, drawn exactly like the crime map: a thin unfilled outline
+        // for Quezon City, and the San Agustin polygon marked out inside it.
+        // Both are non-interactive and sit in a pane BELOW the street lines, so
+        // they can never swallow a street hover or click.
+        const STYLE_QC_OUTLINE = { color: '#274d4c', weight: 2, opacity: 0.9, fill: false };
+        const STYLE_BARANGAY   = { color: '#274d4c', weight: 2.5, opacity: 1, fillColor: '#9ed4cb', fillOpacity: 0.18 };
 
-            const timestamp = new Date().getTime();
-            fetch(`/qc_map.geojson?t=${timestamp}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('QC boundary loaded successfully');
+        let barangayLayer = null;
+        let barangayBounds = null;
 
-                    if (boundaryLayer) {
-                        map.removeLayer(boundaryLayer);
-                    }
+        async function loadQCBoundary() {
+            const timestamp = Date.now();
 
-                    boundaryLayer = L.geoJSON(data, {
-                        pane: 'boundaryPane',
-                        style: {
-                            color: '#274d4c',
-                            weight: 3,
-                            opacity: 1,
-                            fillColor: '#e8f5f3',
-                            fillOpacity: 0.08,
-                            lineCap: 'round',
-                            lineJoin: 'round'
-                        },
-                        onEachFeature: function(feature, layer) {
-                            // Hover effect
-                            layer.on('mouseover', function() {
-                                this.setStyle({
-                                    weight: 4,
-                                    fillOpacity: 0.15,
-                                    fillColor: '#d0ebe7'
-                                });
-                            });
+            // 1. Whole-QC outline (PSGC city outline, lines up with the barangays)
+            try {
+                const response = await fetch(`/fullmapqc.geojson?t=${timestamp}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
 
-                            layer.on('mouseout', function() {
-                                this.setStyle({
-                                    weight: 3,
-                                    fillOpacity: 0.08,
-                                    fillColor: '#e8f5f3'
-                                });
-                            });
-                        }
+                if (boundaryLayer) map.removeLayer(boundaryLayer);
+                boundaryLayer = L.geoJSON(data, {
+                    style: STYLE_QC_OUTLINE,
+                    interactive: false,
+                    pane: 'boundaryPane'
+                }).addTo(map);
+
+                qcBounds = boundaryLayer.getBounds();
+            } catch (error) {
+                console.error('Error loading QC outline:', error);
+                qcBounds = L.latLngBounds(L.latLng(14.50, 120.90), L.latLng(14.80, 121.20));
+            }
+
+            // 2. Barangay San Agustin — every recorded incident sits inside it
+            try {
+                const response = await fetch(`/qc_barangays.geojson?t=${timestamp}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                const feature = (data.features || []).find(f =>
+                    String((f.properties || {}).name || '').trim().toLowerCase() === 'san agustin');
+
+                if (feature) {
+                    barangayLayer = L.geoJSON(feature, {
+                        style: STYLE_BARANGAY,
+                        interactive: false,
+                        pane: 'boundaryPane'
                     }).addTo(map);
 
-                    // Get the bounds of QC boundary
-                    qcBounds = boundaryLayer.getBounds();
-                    console.log('QC bounds:', qcBounds);
+                    barangayBounds = barangayLayer.getBounds();
 
-                    // Invalidate size to ensure map calculates correct dimensions
-                    map.invalidateSize();
+                    barangayLayer.bindTooltip('Barangay San Agustin', {
+                        permanent: true,
+                        direction: 'center',
+                        className: 'brgy-label'
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading barangay boundary:', error);
+            }
 
-                    // Fit bounds
-                    if (qcBounds.isValid()) {
-                        console.log('Fitting map to QC bounds...');
-                        map.fitBounds(qcBounds, {
-                            padding: [20, 20],
-                            animate: true
-                        });
-                    }
+            map.invalidateSize();
 
-                    // Load other data
-                    // Every recorded incident is in San Agustin, and the street
-                    // lines are unusable at whole-city zoom, so open there.
-                    if (typeof saStreetsFitBounds === 'function') saStreetsFitBounds();
+            // Open on the barangay, not the whole city: at citywide zoom the
+            // street lines are too small to read, hover or click.
+            if (barangayBounds && barangayBounds.isValid()) {
+                map.fitBounds(barangayBounds, { padding: [24, 24], animate: false });
+            } else if (qcBounds && qcBounds.isValid()) {
+                map.fitBounds(qcBounds, { padding: [20, 20], animate: false });
+            }
 
-                    loadCrimeCategories();
-                    loadBarangays();
-                    setupFilterListeners();
-                    loadHotspotData();
-                })
-                .catch(error => {
-                    console.error('Error loading QC boundary:', error);
-
-                    // Fallback: Use default QC bounds
-                    qcBounds = L.latLngBounds(
-                        L.latLng(14.50, 120.90),
-                        L.latLng(14.80, 121.20)
-                    );
-
-                    console.log('Using default QC bounds:', qcBounds);
-
-                    map.invalidateSize();
-
-                    if (qcBounds.isValid()) {
-                        map.fitBounds(qcBounds, {
-                            padding: [20, 20],
-                            animate: true
-                        });
-                    } else {
-                        map.setView([14.6349, 121.0446], 12);
-                    }
-
-                    // Every recorded incident is in San Agustin, and the street
-                    // lines are unusable at whole-city zoom, so open there.
-                    if (typeof saStreetsFitBounds === 'function') saStreetsFitBounds();
-
-                    loadCrimeCategories();
-                    loadBarangays();
-                    setupFilterListeners();
-                    loadHotspotData();
-                });
+            loadCrimeCategories();
+            loadBarangays();
+            setupFilterListeners();
+            loadHotspotData();
         }
 
         // Full analytics payload from the server (hotspot ranking, summary, charts)
@@ -559,10 +549,10 @@ if (request()->query('token')) {
                     // Display based on selected mode
                     if (visualizationMode === 'heatmap') {
                         displayHeatmap(hotspotsData);
-                    } else if (visualizationMode === 'markers') {
+                    } else if (visualizationMode === 'zones') {
+                        displayHotspotZones(data.hotspots || []);
+                    } else {
                         displayMarkers(hotspotsData);
-                    } else if (visualizationMode === 'clusters') {
-                        displayClusters(hotspotsData);
                     }
 
                     updateTopHotspots();
@@ -652,75 +642,54 @@ if (request()->query('token')) {
             markerLayer.addTo(map);
         }
 
-        // Display clusters visualization
-        function displayClusters(data) {
+        // Hotspot zones: one circle per ranked street, sized by incident count
+        // and coloured by risk level. This is the "where are the hotspots"
+        // view — no individual crime detail, by design.
+        function displayHotspotZones(hotspots) {
             markerLayer = L.featureGroup();
-            let barangayGroups = {};
 
-            // Group by barangay
-            data.forEach(incident => {
-                const barangayId = incident.barangay_id || 'unknown';
-                const barangayName = incident.barangay_name || 'Unknown Barangay';
+            const ZONE_COLORS = {
+                CRITICAL: '#7f1d1d', HIGH: '#dc2626', MEDIUM: '#f59e0b', LOW: '#16a34a'
+            };
+            const maxCount = Math.max(...hotspots.map(h => h.incident_count), 1);
 
-                if (!barangayGroups[barangayId]) {
-                    barangayGroups[barangayId] = {
-                        name: barangayName,
-                        incidents: [],
-                        totalLat: 0,
-                        totalLng: 0
-                    };
-                }
+            hotspots.forEach(h => {
+                const color = ZONE_COLORS[h.risk_level] || '#6b7280';
+                // 60-260 m radius, scaled by share of the busiest street
+                const radius = 60 + (h.incident_count / maxCount) * 200;
 
-                barangayGroups[barangayId].incidents.push(incident);
-                barangayGroups[barangayId].totalLat += parseFloat(incident.latitude);
-                barangayGroups[barangayId].totalLng += parseFloat(incident.longitude);
-            });
-
-            // Create cluster markers
-            Object.keys(barangayGroups).forEach(barangayId => {
-                const group = barangayGroups[barangayId];
-                const count = group.incidents.length;
-                const clusterColor = getClusterColor(count);
-
-                const centerLat = group.totalLat / count;
-                const centerLng = group.totalLng / count;
-
-                const clusterIcon = L.divIcon({
-                    className: 'cluster-marker',
-                    html: `
-                        <div style="
-                            width: 40px;
-                            height: 40px;
-                            background: linear-gradient(135deg, ${clusterColor} 0%, ${clusterColor}dd 100%);
-                            border-radius: 50%;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: white;
-                            font-weight: bold;
-                            font-size: 14px;
-                            border: 2px solid white;
-                            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-                        ">
-                            ${count}
-                        </div>
-                    `,
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20],
-                    popupAnchor: [0, -20]
+                const circle = L.circle([h.latitude, h.longitude], {
+                    radius: radius,
+                    color: color,
+                    weight: 2,
+                    opacity: 0.9,
+                    fillColor: color,
+                    fillOpacity: 0.25
                 });
 
-                const marker = L.marker([centerLat, centerLng], { icon: clusterIcon });
+                circle.bindTooltip(`
+                    <div style="font-weight:700;">#${h.rank} ${h.area_name}</div>
+                    <div>${h.incident_count} incidents · ${h.risk_level} risk</div>
+                    <div>Mostly ${h.top_category ?? 'n/a'}${h.peak_period ? ' · peak ' + h.peak_period : ''}</div>
+                    <div style="color:#93c5fd;font-weight:600;margin-top:2px;">Click to analyse</div>
+                `, { sticky: true, direction: 'top' });
 
-                marker.bindPopup(`
-                    <div style="font-size: 12px;">
-                        <strong>${group.name}</strong><br>
-                        Incidents: ${count}<br>
-                        Risk Level: ${clusterColor === '#dc2626' ? 'HIGH' : clusterColor === '#eab308' ? 'MEDIUM' : 'LOW'}
-                    </div>
-                `);
+                circle.on('click', () => selectHotspot(h.area_name, h));
 
-                marker.addTo(markerLayer);
+                circle.addTo(markerLayer);
+
+                // Rank badge at the centre of the zone
+                L.marker([h.latitude, h.longitude], {
+                    interactive: false,
+                    icon: L.divIcon({
+                        className: '',
+                        iconSize: null,
+                        html: `<div style="transform:translate(-50%,-50%);background:${color};color:#fff;
+                                font-size:11px;font-weight:800;padding:2px 7px;border-radius:9999px;
+                                border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4);white-space:nowrap;">
+                                #${h.rank} · ${h.incident_count}</div>`
+                    })
+                }).addTo(markerLayer);
             });
 
             markerLayer.addTo(map);
@@ -732,12 +701,6 @@ if (request()->query('token')) {
                 weight += 0.5;
             }
             return Math.min(weight * heatmapIntensity, 1.0);
-        }
-
-        function getClusterColor(count) {
-            if (count >= 31) return '#dc2626'; // Red
-            if (count >= 11) return '#eab308'; // Yellow
-            return '#16a34a'; // Green
         }
 
         const RISK_STYLES = {
@@ -763,28 +726,45 @@ if (request()->query('token')) {
                 return;
             }
 
-            window.hotspotsData = hotspots;
 
-            topHotspotsDiv.innerHTML = hotspots.map((h, idx) => {
+            topHotspotsDiv.innerHTML = hotspots.map((h) => {
                 const style = RISK_STYLES[h.risk_level] || RISK_STYLES.LOW;
+
+                // Top three types by name; the tail is folded into "Others"
+                const shown = h.categories.slice(0, 3);
+                const others = h.categories.slice(3).reduce((sum, c) => sum + c.count, 0);
+                const chips = shown.map(c =>
+                    `<span class="inline-flex items-center gap-1 text-[11px] text-gray-700">
+                        <span style="width:8px;height:8px;border-radius:9999px;background:${c.color};display:inline-block;"></span>
+                        ${c.name}: <b>${c.count}</b>
+                     </span>`).join('<span class="text-gray-300 mx-1">·</span>');
+
                 return `
-                <div class="border-b border-gray-100 p-3 hover:bg-gray-50 cursor-pointer transition-colors hotspot-item" data-index="${idx}">
-                    <div class="flex items-start justify-between mb-2">
-                        <div>
-                            <div class="font-semibold text-gray-900 text-sm">
-                                <span class="text-lg mr-2">${style.icon}</span>${idx + 1}. ${h.area_name}
-                            </div>
-                            <div class="text-xs text-gray-600 mt-1">
-                                <i class="fas fa-exclamation-circle mr-1"></i>${h.incident_count} incident(s)
-                                ${h.crime_rate_per_1000 !== null ? ` · ${h.crime_rate_per_1000}/1k residents` : ''}
-                                · ${trendArrow(h.trend_direction, h.trend_percent)}
-                            </div>
+                <div class="border-b border-gray-100 p-3 hover:bg-gray-50 cursor-pointer transition-colors hotspot-item" data-street="${h.area_name}">
+                    <div class="flex items-start justify-between mb-1.5">
+                        <div class="font-semibold text-gray-900 text-sm">
+                            <span class="mr-1">${style.icon}</span>#${h.rank} ${h.area_name}
                         </div>
-                        <div class="text-right">
-                            <span class="text-xs font-bold px-2 py-1 rounded-full ${style.badge}">${h.risk_level}</span>
-                            <div class="text-[10px] text-gray-400 mt-1 font-bold">score ${h.risk_score}</div>
+                        <div class="text-right shrink-0 ml-2">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${style.badge}">${h.risk_level}</span>
+                            <div class="text-[10px] text-gray-400 mt-0.5 font-bold">score ${h.risk_score}</div>
                         </div>
                     </div>
+
+                    <div class="text-xs text-gray-700 mb-1">
+                        <b>${h.incident_count}</b> incidents · ${trendArrow(h.trend_direction, h.trend_percent)}
+                    </div>
+
+                    <div class="flex flex-wrap items-center mb-1">
+                        ${chips}${others ? `<span class="text-gray-300 mx-1">·</span><span class="text-[11px] text-gray-500">Others: <b>${others}</b></span>` : ''}
+                    </div>
+
+                    <div class="text-[11px] text-gray-500 mb-2">
+                        ${h.peak_period ? `<i class="fas fa-clock mr-1"></i>Peak ${h.peak_period}` : ''}
+                        ${h.density_per_100m !== null ? ` · <i class="fas fa-compress mr-1"></i>${h.density_per_100m}/100m` : ''}
+                        · <i class="fas fa-location-dot mr-1"></i>${h.affected_locations} spot${h.affected_locations === 1 ? '' : 's'}
+                    </div>
+
                     <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                         <div class="h-full ${style.bar}" style="width: ${Math.min(h.risk_score, 100)}%"></div>
                     </div>
@@ -793,8 +773,7 @@ if (request()->query('token')) {
 
             topHotspotsDiv.querySelectorAll('.hotspot-item').forEach(item => {
                 item.addEventListener('click', function() {
-                    const hotspot = window.hotspotsData[parseInt(this.dataset.index)];
-                    selectHotspot(hotspot.area_name, hotspot);
+                    selectHotspot(this.dataset.street, hotspotByStreet(this.dataset.street));
                 });
             });
 
@@ -802,6 +781,7 @@ if (request()->query('token')) {
             updateTrendAnalysis();
             renderCrimeDistributionChart();
             renderMonthlyTrendChart();
+            renderHourlyChart();
             generateInsights();
         }
 
@@ -846,7 +826,12 @@ if (request()->query('token')) {
                 crimeDistributionChartInstance.destroy();
             }
 
-            const colors = ['#dc2626', '#ea580c', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9'];
+            // Each category's own colour, so a crime type looks the same here,
+            // on the map, and in the street breakdown.
+            const fallback = ['#dc2626', '#ea580c', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9'];
+            const colors = distribution.colors?.length
+                ? distribution.colors
+                : fallback.slice(0, distribution.labels.length);
 
             crimeDistributionChartInstance = new Chart(ctx, {
                 type: 'doughnut',
@@ -854,7 +839,7 @@ if (request()->query('token')) {
                     labels: distribution.labels,
                     datasets: [{
                         data: distribution.values,
-                        backgroundColor: colors.slice(0, distribution.labels.length),
+                        backgroundColor: colors,
                         borderColor: '#fff',
                         borderWidth: 2
                     }]
@@ -921,6 +906,53 @@ if (request()->query('token')) {
         }
 
         // Generate insights from the server-computed analytics (deterministic rules, no randomness)
+        // Time-of-day distribution, with the busiest window called out
+        let hourlyChartInstance = null;
+
+        function renderHourlyChart() {
+            const hourly = analyticsData?.hourly;
+            const ctx = document.getElementById('hourlyCanvas');
+            if (!ctx || !hourly) return;
+
+            document.getElementById('peakPeriodLabel').textContent = hourly.peak_period || 'no time recorded';
+
+            if (hourlyChartInstance) hourlyChartInstance.destroy();
+
+            // Night hours (6 PM - 6 AM) shaded differently so the pattern reads
+            const colors = hourly.values.map((_, hour) =>
+                (hour >= 18 || hour < 6) ? '#4338ca' : '#60a5fa');
+
+            hourlyChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: hourly.labels,
+                    datasets: [{
+                        label: 'Incidents',
+                        data: hourly.values,
+                        backgroundColor: colors,
+                        borderRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => items[0].label,
+                                label: (item) => `${item.parsed.y} incident(s)`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 60, minRotation: 60 } },
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            });
+        }
+
         function generateInsights() {
             const insights = [];
             const hotspots = analyticsData?.hotspots || [];
@@ -942,7 +974,7 @@ if (request()->query('token')) {
                     type: top.risk_level === 'CRITICAL' || top.risk_level === 'HIGH' ? 'danger' : 'info',
                     icon: 'fire',
                     title: `Highest Risk: ${top.area_name} (score ${top.risk_score}/100)`,
-                    description: `${top.incident_count} incidents${top.crime_rate_per_1000 !== null ? ` (${top.crime_rate_per_1000} per 1,000 residents)` : ''}, severity index ${top.severity_index}/4, mostly ${top.top_category}. <a href="/pattern-detection" class="underline font-semibold">Simulate interventions →</a>`
+                    description: `${top.incident_count} incidents, mostly ${top.top_category}${top.peak_period ? `, peaking ${top.peak_period}` : ''}${top.density_per_100m !== null ? `, ${top.density_per_100m} crimes per 100 m of street` : ''}. Severity index ${top.severity_index}/4. <a href="/pattern-detection" class="underline font-semibold">Simulate interventions →</a>`
                 });
 
                 // Rising areas
@@ -951,7 +983,7 @@ if (request()->query('token')) {
                     insights.push({
                         type: 'warning',
                         icon: 'arrow-trend-up',
-                        title: `${rising.length} Area(s) with Rising Incidents`,
+                        title: `${rising.length} Street(s) with Rising Incidents`,
                         description: `${rising.slice(0, 3).map(h => `${h.area_name} (+${h.trend_percent}%)`).join(', ')}${rising.length > 3 ? '…' : ''} vs the previous period. Prioritize preventive deployment before these harden into hotspots.`
                     });
                 }
@@ -1024,79 +1056,154 @@ if (request()->query('token')) {
             }).join('');
         }
 
+        // ---------------------------------------------------------------
+        // Selecting a street: zoom the map to it and break it down in the
+        // panel. Reached from a click on the map or on the ranked list.
+        // ---------------------------------------------------------------
+        function hotspotByStreet(street) {
+            const key = String(street || '').toLowerCase();
+            return (analyticsData?.hotspots || [])
+                .find(h => String(h.area_name).toLowerCase() === key) || null;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
+
+        function clearStreetSelection() {
+            selectedHotspot = null;
+            document.getElementById('streetAnalysisCard').style.display = 'none';
+            if (typeof saStreetsHighlight === 'function') saStreetsHighlight(null);
+        }
+
         function selectHotspot(name, hotspot) {
             try {
+                hotspot = hotspot || hotspotByStreet(name);
+
+                const card = document.getElementById('streetAnalysisCard');
+                const body = document.getElementById('streetAnalysisBody');
+                document.getElementById('streetAnalysisName').textContent = name;
+                card.style.display = 'block';
+
+                // Zoom to the street and pick it out from its neighbours
+                if (typeof saStreetsFitStreet === 'function') saStreetsFitStreet(name);
+                if (typeof saStreetsHighlight === 'function') saStreetsHighlight(name);
+
+                if (!hotspot) {
+                    body.innerHTML = `
+                        <div class="text-sm text-gray-500">
+                            No incidents recorded on ${escapeHtml(name)} for the current filters.
+                        </div>
+                        <button type="button" class="mt-3 w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold open-street-modal" data-street="${escapeHtml(name)}">
+                            <i class="fas fa-shield-halved mr-1"></i>Crimes &amp; prevention suggestions
+                        </button>`;
+                    wireStreetPanelButtons();
+                    return;
+                }
+
                 selectedHotspot = hotspot;
-                console.log('Selected hotspot:', hotspot);
 
-            const statsCard = document.getElementById('areaStatsCard');
-            const statsDiv = document.getElementById('areaStats');
-            const riskCard = document.getElementById('riskClassification');
-            const riskBadge = document.getElementById('riskBadge');
+                const style = RISK_STYLES[hotspot.risk_level] || RISK_STYLES.LOW;
+                const pc = hotspot.trend_percent;
+                const trendClass = pc > 0 ? 'text-red-600' : pc < 0 ? 'text-green-600' : 'text-gray-500';
+                const trendIcon = pc > 0 ? 'fa-arrow-up' : pc < 0 ? 'fa-arrow-down' : 'fa-arrows-left-right';
 
-            statsCard.style.display = 'block';
-            riskCard.style.display = 'block';
+                // Top 3 types by name, everything else folded into "Others"
+                const shown = hotspot.categories.slice(0, 3);
+                const otherCount = hotspot.categories.slice(3)
+                    .reduce((sum, c) => sum + c.count, 0);
 
-            const style = RISK_STYLES[hotspot.risk_level] || RISK_STYLES.LOW;
-            const riskDescriptions = {
-                CRITICAL: 'Immediate patrol action recommended',
-                HIGH: 'Elevated patrol presence recommended',
-                MEDIUM: 'Monitor and increase patrols as needed',
-                LOW: 'Stable crime levels, routine patrols',
-            };
+                const badge = (label, count, color) => `
+                    <div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
+                        <span class="flex items-center gap-2 text-sm text-gray-700">
+                            <span style="width:10px;height:10px;border-radius:9999px;background:${color};display:inline-block;"></span>
+                            ${escapeHtml(label)}
+                        </span>
+                        <span class="font-bold text-sm text-gray-900">${count}</span>
+                    </div>`;
 
-            const pc = hotspot.trend_percent;
-            const changeIcon = pc > 0 ? '📈' : pc < 0 ? '📉' : '➖';
+                const stat = (label, value) => `
+                    <div class="flex items-center justify-between py-1.5">
+                        <span class="text-sm text-gray-600">${label}</span>
+                        <span class="text-sm font-bold text-gray-900">${value}</span>
+                    </div>`;
 
-            statsDiv.innerHTML = `
-                <div class="space-y-4">
-                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
-                        <span class="text-sm text-gray-600">Total Incidents</span>
-                        <span class="font-bold text-lg text-gray-900">${hotspot.incident_count}</span>
-                    </div>
-                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
-                        <span class="text-sm text-gray-600">Crime Rate</span>
-                        <span class="font-bold text-sm text-gray-900">${hotspot.crime_rate_per_1000 !== null ? hotspot.crime_rate_per_1000 + ' / 1,000 residents' : 'No population data'}</span>
-                    </div>
-                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
-                        <span class="text-sm text-gray-600">Severity Index</span>
-                        <span class="font-bold text-lg text-gray-900">${hotspot.severity_index}<span class="text-xs text-gray-400 font-normal">/4</span></span>
-                    </div>
-                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
-                        <span class="text-sm text-gray-600">Cleared / Uncleared</span>
-                        <span class="font-bold text-sm"><span class="text-green-600">${hotspot.cleared}</span> / <span class="text-red-600">${hotspot.uncleared}</span></span>
-                    </div>
-                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
-                        <span class="text-sm text-gray-600">Most Common Crime</span>
-                        <span class="font-bold text-sm text-gray-900">${hotspot.top_category ?? 'N/A'}</span>
-                    </div>
-                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
-                        <span class="text-sm text-gray-600">Night-time Share</span>
-                        <span class="font-bold text-sm text-indigo-600">${hotspot.night_percent}%</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-600">Change vs Previous</span>
-                        <span class="font-bold text-lg ${pc > 0 ? 'text-red-600' : pc < 0 ? 'text-green-600' : 'text-gray-500'}">${changeIcon} ${pc > 0 ? '+' : ''}${pc}%</span>
-                    </div>
-                    <a href="/pattern-detection" class="block w-full text-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold text-sm">
-                        <i class="fas fa-flask mr-2"></i>Simulate Interventions for This Area
-                    </a>
-                </div>
-            `;
+                const recent = (hotspot.recent_incidents || []).map(i => `
+                    <div class="flex items-baseline gap-2 py-1 text-xs border-t border-gray-100">
+                        <span class="font-semibold text-gray-900">${escapeHtml(i.date || '')}</span>
+                        ${i.time ? `<span class="text-gray-500">${escapeHtml(i.time)}</span>` : ''}
+                        <span class="text-gray-700">${escapeHtml(i.category)}</span>
+                        <span class="ml-auto font-bold ${i.cleared ? 'text-green-600' : 'text-amber-600'}">
+                            ${i.cleared ? 'CLEARED' : 'OPEN'}
+                        </span>
+                    </div>`).join('');
 
-            riskBadge.innerHTML = `
-                <div class="text-5xl mb-3">${style.icon}</div>
-                <div class="text-2xl font-bold text-gray-900 mb-2">${hotspot.risk_level} RISK ZONE</div>
-                <div class="text-sm font-bold text-gray-500 mb-2">Composite Risk Score: ${hotspot.risk_score}/100</div>
-                <p class="text-sm text-gray-600 mb-4">Score = 50% volume (population-adjusted rate) + 30% severity + 20% trend.</p>
-                <div class="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                    <i class="fas fa-info-circle mr-1"></i>${riskDescriptions[hotspot.risk_level]}
-                </div>
-            `;
+                body.innerHTML = `
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-xs font-bold px-2 py-1 rounded-full ${style.badge}">${style.icon} ${hotspot.risk_level} RISK</span>
+                        <span class="text-[11px] text-gray-400 font-bold">score ${hotspot.risk_score}/100</span>
+                        <span class="ml-auto text-[11px] font-bold text-gray-500">#${hotspot.rank}</span>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-lg p-3 mb-3 text-center">
+                        <div class="text-3xl font-bold text-gray-900">${hotspot.incident_count}</div>
+                        <div class="text-xs text-gray-600">total crime incidents</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Breakdown by type</div>
+                        ${shown.map(c => badge(c.name, c.count, c.color)).join('')}
+                        ${otherCount ? badge('Others', otherCount, '#9ca3af') : ''}
+                    </div>
+
+                    <div class="mb-3 border-t border-gray-100 pt-2">
+                        ${stat('Most common crime', escapeHtml(hotspot.top_category ?? 'N/A'))}
+                        ${stat('Highest crime period', escapeHtml(hotspot.peak_period ?? 'No time recorded'))}
+                        ${stat('Trend', `<span class="${trendClass}"><i class="fas ${trendIcon} mr-1"></i>${pc > 0 ? '+' : ''}${pc}%</span>`)}
+                        ${stat('Affected locations', hotspot.affected_locations)}
+                        ${stat('Crime density', hotspot.density_per_100m !== null
+                            ? `${hotspot.density_per_100m} / 100 m`
+                            : '<span class="text-gray-400 font-normal">street too short</span>')}
+                        ${stat('Cleared / open', `<span class="text-green-600">${hotspot.cleared}</span> / <span class="text-red-600">${hotspot.uncleared}</span>`)}
+                        ${stat('Night-time share', `${hotspot.night_percent}%`)}
+                    </div>
+
+                    ${recent ? `
+                        <div class="mb-3">
+                            <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Recent incidents</div>
+                            ${recent}
+                        </div>` : ''}
+
+                    <button type="button" class="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold open-street-modal" data-street="${escapeHtml(hotspot.area_name)}">
+                        <i class="fas fa-shield-halved mr-1"></i>Crimes &amp; prevention suggestions
+                    </button>
+                `;
+
+                wireStreetPanelButtons();
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } catch (error) {
                 console.error('Error selecting hotspot:', error);
             }
         }
+
+        function wireStreetPanelButtons() {
+            document.querySelectorAll('.open-street-modal').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    if (typeof openStreetModal === 'function') {
+                        openStreetModal(this.dataset.street, null);
+                    }
+                });
+            });
+        }
+
+        // A street clicked on the map analyses it here rather than jumping
+        // straight into the suggestions modal.
+        window.SA_CLICK_HINT = 'Click to analyse this street';
+        window.onSanAgustinStreetClick = function (street) {
+            selectHotspot(street, hotspotByStreet(street));
+        };
 
         function loadCrimeCategories() {
             fetch('/api/crime-categories')
@@ -1142,12 +1249,12 @@ if (request()->query('token')) {
                 document.getElementById('caseStatus').value = '';
                 document.getElementById('barangay').value = '';
                 selectedHotspot = null;
-                document.getElementById('areaStatsCard').style.display = 'none';
-                document.getElementById('riskClassification').style.display = 'none';
+                clearStreetSelection();
                 loadHotspotData();
             });
 
             document.getElementById('downloadCsvBtn').addEventListener('click', downloadCSV);
+            document.getElementById('clearStreetSelection').addEventListener('click', clearStreetSelection);
 
         }
 
