@@ -191,6 +191,32 @@
     </main>
 
     <script>
+        // From Settings: the minimum severity to show, and whether to beep
+        const ALERT_PREFS = @json($preferences ?? \App\Models\UserPreference::DEFAULTS);
+
+        // A short beep via WebAudio, so no audio file has to ship
+        function playAlertSound() {
+            if (!ALERT_PREFS.alert_sound) return;
+
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 880;
+                gain.gain.setValueAtTime(0.001, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.45);
+            } catch (e) {
+                console.warn('Alert sound unavailable:', e);
+            }
+        }
+
         const SEVERITY_STYLES = {
             critical: { badge: 'bg-red-100 text-red-800', icon: 'fa-exclamation-triangle' },
             high: { badge: 'bg-orange-100 text-orange-800', icon: 'fa-triangle-exclamation' },
@@ -315,9 +341,14 @@
                 document.getElementById('statMedium').textContent = data.stats.medium;
                 const streetsEl = document.getElementById('statStreets');
                 if (streetsEl) streetsEl.textContent = data.stats.streets_affected;
-                document.getElementById('alertsSummaryText').textContent =
-                    `${data.stats.total_active} open alert(s) across ${data.stats.streets_affected} street(s), `
+                let summary = `${data.stats.total_active} open alert(s) across ${data.stats.streets_affected} street(s), `
                     + `covering ${data.stats.incidents_covered} recorded incident(s)`;
+
+                if (data.stats.hidden_by_filter > 0) {
+                    summary += ` · ${data.stats.hidden_by_filter} hidden by your "${data.stats.min_severity} and above" setting`;
+                }
+
+                document.getElementById('alertsSummaryText').textContent = summary;
 
                 renderAlertsTable(data.alerts);
             } catch (e) {
@@ -341,6 +372,8 @@
                 });
                 const data = await res.json();
                 await loadActiveAlerts();
+                if (data.created_count > 0) playAlertSound();
+
                 alert(data.created_count > 0
                     ? `${data.created_count} new alert(s) raised. Alerts whose condition has passed were closed and moved to the history.`
                     : 'No new alerts. Anything whose condition has passed was closed and moved to the history.');
