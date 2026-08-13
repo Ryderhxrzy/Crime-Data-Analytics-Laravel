@@ -366,11 +366,13 @@ class DashboardController extends Controller
             'count' => $peakHours->firstWhere('hour', $h)?->count ?? 0,
         ]);
 
-        // 5. Crime Types Distribution
+        // 5. Crime Types Distribution.
+        // Grouped on the incident table's own category_name: that column is the
+        // source of truth here, and joining kept the old table name so this
+        // query used to fail outright.
         $crimeTypes = (clone $query)
-            ->join('crime_department_crime_categories', 'crime_department_crime_incidents.crime_category_id', '=', 'crime_department_crime_categories.id')
-            ->select('crime_department_crime_categories.category_name', DB::raw('COUNT(*) as count'))
-            ->groupBy('crime_department_crime_categories.id', 'crime_department_crime_categories.category_name')
+            ->select('category_name', DB::raw('COUNT(*) as count'))
+            ->groupBy('category_name')
             ->orderByDesc('count')
             ->limit(10)
             ->get();

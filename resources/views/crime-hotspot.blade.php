@@ -10,6 +10,8 @@ if (request()->query('token')) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{-- Needed by the street suggestions partial when saving a report --}}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Crime Hotspots - Crime Management System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="{{ asset('js/tailwind-config.js') }}"></script>
@@ -203,6 +205,25 @@ if (request()->query('token')) {
                     <button class="map-toggle-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-all" data-view="compare" style="display: none;">
                         <i class="fas fa-code-compare mr-2"></i>Compare View
                     </button>
+                </div>
+
+                <!-- Street-level prevention advice lives on this page: clicking a
+                     street opens its crimes and generates suggestions for it. -->
+                <div class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-purple-200 bg-purple-50 p-3">
+                    <i class="fas fa-shield-halved text-purple-700"></i>
+                    <p class="flex-1 text-sm text-purple-900">
+                        <span class="font-bold">Street prevention suggestions.</span>
+                        Click any coloured street on the map to see every crime recorded there and generate
+                        prevention suggestions for it — per street, per crime type.
+                    </p>
+                    <button type="button" id="zoomToStreetsBtn"
+                            class="px-3 py-1.5 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors text-xs font-bold flex items-center gap-2">
+                        <i class="fas fa-magnifying-glass-location"></i>Zoom to San Agustin
+                    </button>
+                    <label class="flex items-center gap-2 text-xs font-semibold text-purple-900">
+                        <input type="checkbox" id="toggleStreetLayer" checked>
+                        Show streets
+                    </label>
                 </div>
 
                 <!-- Map and Right Panel Side-by-Side -->
@@ -448,6 +469,11 @@ if (request()->query('token')) {
         </div>
     </main>
 
+    {{-- San Agustin streets + the street suggestion modal. This is the analysis
+         page, so the "generate suggestions" flow lives here rather than on the
+         crime map. --}}
+    @include('partials.san-agustin-streets', ['withSuggestions' => true])
+
     <!-- Chart.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 
@@ -481,6 +507,31 @@ if (request()->query('token')) {
                 attribution: '© OpenStreetMap contributors',
                 maxZoom: 19
             }).addTo(map);
+
+            // San Agustin streets, colour-coded by crime level. Clicking one
+            // opens its crimes and the prevention suggestions for that street.
+            if (typeof saStreetsAttach === 'function') {
+                saStreetsAttach(map);
+                saStreetsSetVisible(true);
+
+                const toggle = document.getElementById('toggleStreetLayer');
+                if (toggle) {
+                    toggle.addEventListener('change', function () {
+                        saStreetsSetVisible(this.checked);
+                    });
+                }
+
+                const zoomBtn = document.getElementById('zoomToStreetsBtn');
+                if (zoomBtn) {
+                    zoomBtn.addEventListener('click', function () {
+                        if (!toggle.checked) {
+                            toggle.checked = true;
+                            saStreetsSetVisible(true);
+                        }
+                        saStreetsFitBounds();
+                    });
+                }
+            }
 
             console.log('Map initialized');
         }
