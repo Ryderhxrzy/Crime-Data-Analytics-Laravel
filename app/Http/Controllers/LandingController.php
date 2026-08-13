@@ -88,17 +88,29 @@ class LandingController extends Controller
             ->map(function ($incident) use ($categories) {
                 $category = $categories->get(mb_strtolower(trim($incident->category_name)));
 
+                // The street is the part of address_details before the first
+                // comma — the same rule the street layer, the hotspot ranking
+                // and the crime-data report all use.
+                $street = trim(explode(',', (string) $incident->address_details)[0] ?? '');
+                if ($street === '' || str_starts_with($street, 'Purok')) {
+                    $street = null;
+                }
+
                 return [
                     'id' => $incident->id,
                     'latitude' => (float) $incident->latitude,
                     'longitude' => (float) $incident->longitude,
                     'incident_date' => optional($incident->incident_date)->format('Y-m-d'),
+                    'incident_time' => $incident->incident_time ? substr((string) $incident->incident_time, 0, 5) : null,
                     'incident_title' => $incident->incident_title,
                     'status' => $incident->status,
                     'clearance_status' => $incident->clearance_status,
                     'record_type' => $incident->record_type,
                     'crime_category_id' => $category->id ?? null,
                     'location' => $incident->barangay_name,
+                    'barangay_name' => $incident->barangay_name,
+                    'street' => $street,
+                    'address' => $incident->address_details,
                     'category_name' => $incident->category_name ?: 'Unknown',
                     'color_code' => $category->color_code ?? '#274d4c',
                     'icon' => $category->icon ?? 'fa-exclamation-circle',
