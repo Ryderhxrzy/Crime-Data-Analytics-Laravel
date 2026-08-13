@@ -101,6 +101,14 @@ if (request()->query('token')) {
                         <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Crime Mapping</h1>
                         <p class="text-gray-600 mt-1 text-sm lg:text-base">Interactive crime data visualization and analysis</p>
                     </div>
+                    <div class="flex items-center gap-2">
+                        <button id="importReportsBtn" type="button"
+                                class="px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 transition-colors flex items-center gap-2 text-sm font-semibold"
+                                title="Pull crime records from the Alertara Reports system">
+                            <i class="fas fa-cloud-download-alt"></i>
+                            <span>Import from Reports</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -4616,6 +4624,424 @@ if (request()->query('token')) {
                 alert('Failed to create notification: ' + error.message);
             }
         }
+    </script>
+
+    <!-- ============ Import from the Alertara Reports system ============ -->
+    <style>
+        #importModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99999; padding: 20px; align-items: center; justify-content: center; }
+        #importModal.open { display: flex; }
+        .imp-shell { background: #fff; border-radius: 16px; width: min(1180px, 96vw); height: min(88vh, 860px); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 70px rgba(0,0,0,0.35); }
+        .imp-head { padding: 16px 20px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: flex-start; gap: 12px; }
+        .imp-title { font-size: 16px; font-weight: 800; color: #111; margin: 0; }
+        .imp-sub { font-size: 12px; color: #6b7280; margin: 3px 0 0; }
+        .imp-x { margin-left: auto; background: none; border: none; font-size: 18px; color: #9ca3af; cursor: pointer; width: 32px; height: 32px; border-radius: 8px; }
+        .imp-x:hover { color: #111; background: #f3f4f6; }
+        .imp-bar { padding: 12px 20px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+        .imp-bar input[type="text"], .imp-bar select, .imp-bar input[list] { padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; background: #fff; }
+        .imp-bar label { font-size: 12px; color: #374151; display: inline-flex; align-items: center; gap: 6px; }
+        .imp-btn { font-size: 12px; font-weight: 700; border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+        .imp-btn:hover { background: #f3f4f6; }
+        .imp-btn-primary { background: #274d4c; border-color: #274d4c; color: #fff; }
+        .imp-btn-primary:hover { background: #214040; }
+        .imp-btn-primary:disabled { background: #9ca3af; border-color: #9ca3af; cursor: not-allowed; }
+        .imp-body { flex: 1; overflow: auto; }
+        .imp-state { padding: 60px 20px; text-align: center; color: #6b7280; font-size: 13px; }
+        .imp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .imp-table th { position: sticky; top: 0; background: #f3f4f6; text-align: left; padding: 9px 10px; font-size: 11px; font-weight: 800; color: #374151; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid #e5e7eb; z-index: 1; white-space: nowrap; }
+        .imp-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #111; }
+        .imp-table tbody tr:hover { background: #f8fafc; }
+        .imp-table tr.is-imported { background: #f9fafb; color: #9ca3af; }
+        .imp-table tr.is-imported td { color: #9ca3af; }
+        .imp-table tr.needs-street td { background: #fff7ed; }
+        .imp-table select, .imp-table input[list] { width: 100%; min-width: 120px; padding: 5px 7px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 11.5px; background: #fff; }
+        .imp-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+        .imp-pill { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+        .imp-pill-case { background: #e0e7ff; color: #3730a3; }
+        .imp-pill-blotter { background: #fef3c7; color: #92400e; }
+        .imp-pill-done { background: #dcfce7; color: #166534; }
+        .imp-pill-risk { background: #fee2e2; color: #991b1b; }
+        .imp-pill-draft { background: #f1f5f9; color: #475569; }
+        .imp-muted { color: #9ca3af; }
+        .imp-foot { padding: 12px 20px; border-top: 1px solid #e5e7eb; background: #f9fafb; display: flex; align-items: center; gap: 12px; }
+        .imp-count { font-size: 12px; color: #374151; font-weight: 700; }
+        .imp-note { font-size: 11.5px; color: #b45309; }
+        .imp-toast { position: fixed; right: 20px; bottom: 20px; z-index: 100020; background: #111827; color: #fff; padding: 12px 16px; border-radius: 10px; font-size: 12.5px; font-weight: 600; box-shadow: 0 12px 30px rgba(0,0,0,0.3); max-width: 380px; }
+        .imp-toast.ok { background: #15803d; }
+        .imp-toast.err { background: #b91c1c; }
+    </style>
+
+    <div id="importModal" onclick="if (event.target === this) closeImportModal()">
+        <div class="imp-shell">
+            <div class="imp-head">
+                <div>
+                    <h3 class="imp-title"><i class="fas fa-cloud-download-alt mr-2" style="color:#274d4c;"></i>Import crime data from Reports</h3>
+                    <p class="imp-sub">Records pulled from the Alertara Reports system. Tick the ones you want, choose where each belongs on the map, then insert them.</p>
+                </div>
+                <button class="imp-x" type="button" onclick="closeImportModal()" title="Close"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div class="imp-bar">
+                <input type="text" id="impSearch" placeholder="Search reference, type, location..." style="min-width: 220px; flex: 1;">
+                <select id="impSource">
+                    <option value="">All sources</option>
+                    <option value="case">Cases</option>
+                    <option value="blotter">Blotters</option>
+                </select>
+                <label><input type="checkbox" id="impHideImported" checked> Hide already imported</label>
+                <label title="Reports still in Draft, or filed without a reference number"><input type="checkbox" id="impHideDrafts" checked> Hide drafts</label>
+                <span style="width: 1px; height: 22px; background: #e5e7eb;"></span>
+                <input list="impStreetList" id="impBulkStreet" placeholder="Street to place on..." style="min-width: 190px;">
+                <button class="imp-btn" type="button" id="impApplyStreet" title="Set this street on every ticked row">Apply to ticked</button>
+                <button class="imp-btn" type="button" id="impRefresh" style="margin-left: auto;"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>
+            </div>
+
+            <datalist id="impStreetList"></datalist>
+
+            <div class="imp-body">
+                <div id="impLoading" class="imp-state"><i class="fas fa-spinner fa-spin mr-2"></i>Reading the Reports system...</div>
+                <div id="impEmpty" class="imp-state" style="display: none;"></div>
+                <table class="imp-table" id="impTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th style="width: 34px;"><input type="checkbox" id="impCheckAll" title="Select all shown"></th>
+                            <th>Source</th>
+                            <th>Reference</th>
+                            <th>Reported type</th>
+                            <th style="min-width: 150px;">Save as category</th>
+                            <th>Date &amp; time</th>
+                            <th>Reported location</th>
+                            <th style="min-width: 170px;">Place on street</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="impRows"></tbody>
+                </table>
+            </div>
+
+            <div class="imp-foot">
+                <span class="imp-count" id="impSelected">0 selected</span>
+                <span class="imp-note" id="impWarning"></span>
+                <button class="imp-btn" type="button" onclick="closeImportModal()" style="margin-left: auto;">Cancel</button>
+                <button class="imp-btn imp-btn-primary" type="button" id="impInsert" disabled>
+                    <i class="fas fa-database mr-1"></i>Insert selected
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            let impRecords = [];      // everything the feed returned
+            let impStreets = [];      // San Agustin street names
+            let impCategories = [];   // categories already used by this system
+            const impChoice = {};     // code => { street, category, checked }
+            let impLoaded = false;
+
+            const $ = (id) => document.getElementById(id);
+
+            function esc(value) {
+                return String(value ?? '').replace(/[&<>"']/g, (c) => (
+                    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+                ));
+            }
+
+            function toast(message, kind) {
+                const el = document.createElement('div');
+                el.className = 'imp-toast ' + (kind || '');
+                el.textContent = message;
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 5000);
+            }
+
+            window.openImportModal = function () {
+                $('importModal').classList.add('open');
+                if (!impLoaded) loadReports(false);
+            };
+
+            window.closeImportModal = function () {
+                $('importModal').classList.remove('open');
+            };
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && $('importModal').classList.contains('open')) closeImportModal();
+            });
+
+            async function loadReports(refresh) {
+                impLoaded = true;
+                $('impLoading').style.display = 'block';
+                $('impEmpty').style.display = 'none';
+                $('impTable').style.display = 'none';
+
+                try {
+                    const res = await fetch('/mapping/external-crimes' + (refresh ? '?refresh=1' : ''), {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const data = await res.json();
+
+                    if (!res.ok || !data.success) throw new Error(data.error || 'Request failed');
+
+                    impRecords = data.records || [];
+                    impStreets = data.streets || [];
+                    impCategories = data.categories || [];
+
+                    $('impStreetList').innerHTML = impStreets
+                        .map((s) => '<option value="' + esc(s) + '"></option>').join('');
+
+                    // Seed each row's choices once, from what the feed suggests.
+                    impRecords.forEach((r) => {
+                        if (!impChoice[r.code]) {
+                            impChoice[r.code] = {
+                                street: r.street_hint || '',
+                                category: r.category || '',
+                                checked: false
+                            };
+                        }
+                    });
+
+                    render();
+                } catch (err) {
+                    console.error('Reports import: load failed', err);
+                    $('impLoading').style.display = 'none';
+                    $('impEmpty').style.display = 'block';
+                    $('impEmpty').innerHTML = '<i class="fas fa-triangle-exclamation mr-2" style="color:#b91c1c;"></i>'
+                        + 'Could not reach the Reports system. Try Refresh in a moment.';
+                }
+            }
+
+            function visibleRecords() {
+                const q = $('impSearch').value.trim().toLowerCase();
+                const source = $('impSource').value;
+                const hideImported = $('impHideImported').checked;
+                const hideDrafts = $('impHideDrafts').checked;
+
+                return impRecords.filter((r) => {
+                    if (source && r.source !== source) return false;
+                    if (hideImported && r.already_imported) return false;
+                    if (hideDrafts && r.draft && !r.already_imported) return false;
+                    if (!q) return true;
+                    return [r.code, r.type, r.category, r.location, r.title, r.reporter]
+                        .filter(Boolean).join(' ').toLowerCase().includes(q);
+                });
+            }
+
+            function categoryOptions(current) {
+                const list = impCategories.slice();
+                if (current && !list.some((c) => c.toLowerCase() === current.toLowerCase())) list.unshift(current);
+                return list.map((c) => '<option value="' + esc(c) + '"'
+                    + (c.toLowerCase() === String(current).toLowerCase() ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
+            }
+
+            function render() {
+                const rows = visibleRecords();
+                $('impLoading').style.display = 'none';
+
+                if (!impRecords.length) {
+                    $('impTable').style.display = 'none';
+                    $('impEmpty').style.display = 'block';
+                    $('impEmpty').innerHTML = '<i class="fas fa-inbox mr-2"></i>The Reports system has no crime data to import right now.';
+                    updateFooter();
+                    return;
+                }
+
+                if (!rows.length) {
+                    $('impTable').style.display = 'none';
+                    $('impEmpty').style.display = 'block';
+                    $('impEmpty').innerHTML = '<i class="fas fa-filter mr-2"></i>Nothing matches these filters. '
+                        + impRecords.length + ' record(s) available in total.';
+                    updateFooter();
+                    return;
+                }
+
+                $('impEmpty').style.display = 'none';
+                $('impTable').style.display = 'table';
+
+                $('impRows').innerHTML = rows.map((r) => {
+                    const choice = impChoice[r.code];
+                    const done = r.already_imported;
+                    const hasOwnPoint = r.lat !== null && r.lng !== null;
+                    const needsStreet = !done && !hasOwnPoint && !choice.street;
+                    const when = esc(r.date) + (r.time ? ' <span class="imp-muted">' + esc(r.time.slice(0, 5)) + '</span>' : '');
+
+                    const place = hasOwnPoint
+                        ? '<span class="imp-muted" title="This report carries its own coordinates">'
+                            + '<i class="fas fa-location-dot mr-1"></i>' + Number(r.lat).toFixed(5) + ', ' + Number(r.lng).toFixed(5) + '</span>'
+                        : '<input list="impStreetList" data-code="' + esc(r.code) + '" class="imp-street" '
+                            + 'placeholder="Pick a street" value="' + esc(choice.street) + '"' + (done ? ' disabled' : '') + '>';
+
+                    const detail = [
+                        r.title, r.description, r.reporter ? 'Reported by: ' + r.reporter : '',
+                        r.victim ? 'Victim: ' + r.victim : '', r.suspect ? 'Suspect: ' + r.suspect : '',
+                        r.urgency ? 'Urgency: ' + r.urgency : ''
+                    ].filter(Boolean).join('\n');
+
+                    return '<tr class="' + (done ? 'is-imported' : '') + (needsStreet ? ' needs-street' : '') + '">'
+                        + '<td><input type="checkbox" class="imp-pick" data-code="' + esc(r.code) + '"'
+                            + (choice.checked && !done ? ' checked' : '') + (done ? ' disabled' : '') + '></td>'
+                        + '<td><span class="imp-pill imp-pill-' + esc(r.source) + '">' + esc(r.source) + '</span></td>'
+                        + '<td class="imp-code" title="' + esc(detail) + '">' + esc(r.code)
+                            + (r.draft ? ' <span class="imp-pill imp-pill-draft" title="Unfiled in Reports">draft</span>' : '')
+                            + (r.high_risk ? ' <span class="imp-pill imp-pill-risk">high risk</span>' : '')
+                            + (done ? ' <span class="imp-pill imp-pill-done">in database</span>' : '') + '</td>'
+                        + '<td>' + esc(r.type) + '</td>'
+                        + '<td><select class="imp-cat" data-code="' + esc(r.code) + '"' + (done ? ' disabled' : '') + '>'
+                            + categoryOptions(choice.category) + '</select></td>'
+                        + '<td style="white-space: nowrap;">' + when + '</td>'
+                        + '<td>' + (r.location ? esc(r.location) : '<span class="imp-muted">not stated</span>') + '</td>'
+                        + '<td>' + place + '</td>'
+                        + '<td>' + esc(r.raw_status || '—') + ' <span class="imp-muted">&rarr; ' + esc(r.status) + '</span></td>'
+                        + '</tr>';
+                }).join('');
+
+                const pickable = rows.filter((r) => !r.already_imported);
+                $('impCheckAll').checked = pickable.length > 0 && pickable.every((r) => impChoice[r.code].checked);
+                updateFooter();
+            }
+
+            function selectedCodes() {
+                return impRecords
+                    .filter((r) => !r.already_imported && impChoice[r.code] && impChoice[r.code].checked)
+                    .map((r) => r.code);
+            }
+
+            function unplacedCount() {
+                return impRecords.filter((r) => {
+                    if (r.already_imported || !impChoice[r.code].checked) return false;
+                    if (r.lat !== null && r.lng !== null) return false;
+                    return !impChoice[r.code].street;
+                }).length;
+            }
+
+            function updateFooter() {
+                const count = selectedCodes().length;
+                const unplaced = unplacedCount();
+
+                $('impSelected').textContent = count + ' selected';
+                $('impWarning').textContent = unplaced
+                    ? unplaced + ' ticked row(s) still need a street before they can go on the map.'
+                    : '';
+                $('impInsert').disabled = count === 0 || unplaced > 0;
+            }
+
+            // ---- events
+
+            $('impSearch').addEventListener('input', render);
+            $('impSource').addEventListener('change', render);
+            $('impHideImported').addEventListener('change', render);
+            $('impHideDrafts').addEventListener('change', render);
+            $('impRefresh').addEventListener('click', () => loadReports(true));
+
+            $('impCheckAll').addEventListener('change', function () {
+                visibleRecords().forEach((r) => {
+                    if (!r.already_imported) impChoice[r.code].checked = this.checked;
+                });
+                render();
+            });
+
+            $('impRows').addEventListener('change', function (e) {
+                const el = e.target;
+                const code = el.dataset.code;
+                if (!code || !impChoice[code]) return;
+
+                if (el.classList.contains('imp-pick')) {
+                    impChoice[code].checked = el.checked;
+                    updateFooter();
+                } else if (el.classList.contains('imp-cat')) {
+                    impChoice[code].category = el.value;
+                }
+            });
+
+            // Street is a free-text datalist input, so track it as it is typed.
+            $('impRows').addEventListener('input', function (e) {
+                const el = e.target;
+                if (!el.classList.contains('imp-street')) return;
+
+                const code = el.dataset.code;
+                if (!code || !impChoice[code]) return;
+
+                impChoice[code].street = el.value.trim();
+                el.closest('tr').classList.toggle('needs-street', !impChoice[code].street);
+                updateFooter();
+            });
+
+            $('impApplyStreet').addEventListener('click', function () {
+                const street = $('impBulkStreet').value.trim();
+                if (!street) {
+                    toast('Type or pick a street first.', 'err');
+                    return;
+                }
+                if (!impStreets.some((s) => s.toLowerCase() === street.toLowerCase())) {
+                    toast('"' + street + '" is not a San Agustin street.', 'err');
+                    return;
+                }
+
+                const codes = selectedCodes();
+                if (!codes.length) {
+                    toast('Tick the rows you want to place first.', 'err');
+                    return;
+                }
+
+                codes.forEach((code) => { impChoice[code].street = street; });
+                render();
+                toast(codes.length + ' row(s) set to ' + street + '.', 'ok');
+            });
+
+            $('impInsert').addEventListener('click', async function () {
+                const codes = selectedCodes();
+                if (!codes.length) return;
+
+                const items = codes.map((code) => ({
+                    code: code,
+                    street: impChoice[code].street || null,
+                    category: impChoice[code].category || null
+                }));
+
+                this.disabled = true;
+                const original = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Inserting...';
+
+                try {
+                    const res = await fetch('/mapping/external-crimes/import', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        },
+                        body: JSON.stringify({ items: items })
+                    });
+                    const data = await res.json();
+
+                    if (!res.ok || !data.success) throw new Error(data.error || 'Import failed');
+
+                    let message = data.inserted + ' crime record(s) inserted.';
+                    if (data.skipped) message += ' ' + data.skipped + ' already existed.';
+                    if (data.failed && data.failed.length) {
+                        message += ' ' + data.failed.length + ' could not be placed.';
+                        console.warn('Reports import: rows skipped', data.failed);
+                    }
+                    toast(message, data.inserted ? 'ok' : 'err');
+
+                    (data.codes || []).forEach((code) => { if (impChoice[code]) impChoice[code].checked = false; });
+
+                    // Refresh the map and the list side by side.
+                    if (typeof loadCrimeData === 'function') loadCrimeData();
+                    if (typeof loadTotalStats === 'function') loadTotalStats();
+                    await loadReports(false);
+                } catch (err) {
+                    console.error('Reports import failed', err);
+                    toast(err.message || 'The import failed. Nothing was inserted.', 'err');
+                } finally {
+                    this.disabled = false;
+                    this.innerHTML = original;
+                    updateFooter();
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', function () {
+                const btn = $('importReportsBtn');
+                if (btn) btn.addEventListener('click', openImportModal);
+            });
+        })();
     </script>
 
     <!-- External Fullscreen JavaScript -->
