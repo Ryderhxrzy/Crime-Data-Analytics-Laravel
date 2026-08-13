@@ -21,6 +21,7 @@ use App\Http\Controllers\LandingController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\AlertsController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\ExternalCrimeImportController;
 
 // Public landing page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
@@ -64,6 +65,15 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/dashboard/crime-type-trends-data', [DashboardController::class, 'getCrimeTypeTrendsData'])->name('dashboard.crime-type.trends-data');
     Route::get('/dashboard/location-trends', [DashboardController::class, 'locationTrends'])->name('dashboard.location.trends');
     Route::get('/mapping', [LandingController::class, 'mapping'])->name('mapping');
+
+    // Crime mapping > Import from the Alertara Reports system
+    Route::get('/mapping/external-crimes', [ExternalCrimeImportController::class, 'index'])
+        ->middleware('throttle:30,1')
+        ->name('mapping.external-crimes');
+    Route::post('/mapping/external-crimes/import', [ExternalCrimeImportController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('mapping.external-crimes.import');
+
     Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');
     Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->name('risk-forecasting');
     Route::get('/pattern-detection', [DashboardController::class, 'patternDetection'])->name('pattern-detection');
