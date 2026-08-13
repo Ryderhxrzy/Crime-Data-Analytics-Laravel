@@ -161,11 +161,11 @@
                         <thead>
                             <tr class="bg-gray-50 border-b border-gray-200">
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Severity</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Alert Type</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Location</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Description</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Triggered</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Street</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Crimes behind it</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Rule &amp; condition</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Raised</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="alertsTableBody" class="divide-y divide-gray-200">
@@ -181,10 +181,9 @@
                         <div id="alertsSummaryText" class="text-sm text-gray-700">
                             Loading...
                         </div>
-                        <div class="flex gap-2">
-                            <button class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">Previous</button>
-                            <button class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">Next</button>
-                        </div>
+                        <a href="{{ route('alerts.history') }}" class="text-sm font-semibold text-alertara-700 hover:text-alertara-900">
+                            View closed alerts <i class="fas fa-arrow-right ml-1"></i>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -211,35 +210,93 @@
             return `${days} day${days === 1 ? '' : 's'} ago`;
         }
 
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
+
         function renderAlertsTable(alerts) {
             const tbody = document.getElementById('alertsTableBody');
+
             if (!alerts.length) {
-                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">No active alerts right now.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">
+                    No street in San Agustin currently meets any alert rule.
+                    <a href="{{ route('alerts.management') }}" class="text-alertara-700 font-semibold underline">Review the rules</a>
+                    or press Refresh to re-evaluate.
+                </td></tr>`;
                 return;
             }
 
             tbody.innerHTML = alerts.map(alert => {
                 const style = SEVERITY_STYLES[(alert.severity || '').toLowerCase()] || SEVERITY_STYLES.medium;
+
+                // What the count is actually made of
+                const breakdown = (alert.breakdown || []).slice(0, 4).map(b =>
+                    `<span class="inline-block text-[11px] bg-gray-100 text-gray-700 rounded-full px-2 py-0.5 mr-1 mb-1">
+                        ${escapeHtml(b.name)}: <b>${b.count}</b></span>`).join('');
+
+                const acknowledged = alert.status === 'acknowledged';
+
                 return `
-                    <tr class="hover:bg-gray-50 transition-colors">
+                    <tr class="hover:bg-gray-50 align-top">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${style.badge}">
-                                <i class="fas ${style.icon} mr-1"></i> ${alert.severity}
+                            <span class="px-2 py-1 inline-flex text-xs font-bold rounded-full ${style.badge}">
+                                <i class="fas ${style.icon} mr-1"></i>${alert.severity}
                             </span>
+                            ${acknowledged ? '<div class="text-[10px] text-blue-600 font-bold mt-1">ACKNOWLEDGED</div>' : ''}
                         </td>
-                        <td class="px-6 py-4 text-sm text-gray-900 font-medium">${alert.rule_name ?? ''}</td>
-                        <td class="px-6 py-4 text-sm text-gray-900">
-                            ${alert.area_name ?? ''}
-                            <div class="text-xs text-gray-500">${alert.route ?? ''}</div>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-semibold text-gray-900">${escapeHtml(alert.street ?? '—')}</div>
+                            <div class="text-xs text-gray-500">Brgy. ${escapeHtml(alert.barangay ?? '')}</div>
                         </td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${alert.condition ?? ''} — ${alert.incident_count} incident${alert.incident_count === 1 ? '' : 's'} (${alert.time_window ?? ''})</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${timeAgo(alert.triggered_at)}</td>
-                        <td class="px-6 py-4 text-sm">
-                            <button onclick="resolveAlert('${alert.alert_id}')" class="text-green-600 hover:text-green-800 font-medium">Resolve</button>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-bold text-gray-900">${alert.incident_count} incident${alert.incident_count === 1 ? '' : 's'}</div>
+                            <div class="mt-1">${breakdown}</div>
+                            ${alert.last_incident ? `<div class="text-[11px] text-gray-500">latest ${escapeHtml(alert.last_incident)}</div>` : ''}
                         </td>
-                    </tr>
-                `;
+                        <td class="px-6 py-4 max-w-xs">
+                            <div class="text-sm text-gray-900">${escapeHtml(alert.rule_name ?? '')}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(alert.condition ?? '')}</div>
+                            ${alert.time_window ? `<div class="text-[11px] text-gray-400">${escapeHtml(alert.time_window)}</div>` : ''}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">${timeAgo(alert.triggered_at)}</td>
+                        <td class="px-6 py-4 text-right whitespace-nowrap">
+                            ${acknowledged ? '' : `<button onclick="alertAction('${alert.alert_id}', 'acknowledge')" class="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3">Acknowledge</button>`}
+                            <button onclick="alertAction('${alert.alert_id}', 'resolve')" class="text-green-600 hover:text-green-800 text-sm font-medium mr-3">Resolve</button>
+                            <button onclick="alertAction('${alert.alert_id}', 'dismiss')" class="text-gray-500 hover:text-gray-700 text-sm font-medium">False alarm</button>
+                        </td>
+                    </tr>`;
             }).join('');
+        }
+
+        // Acknowledge / resolve / dismiss, then reload the list
+        async function alertAction(code, action) {
+            let notes = null;
+
+            if (action === 'resolve') {
+                notes = prompt('What was done about this alert? (optional)') ?? '';
+            } else if (action === 'dismiss' && !confirm('Mark this alert as a false alarm?')) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/alerts/api/${encodeURIComponent(code)}/${action}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify({ resolution_notes: notes })
+                });
+
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                await loadActiveAlerts();
+            } catch (err) {
+                console.error('Alert action failed:', err);
+                alert('Could not update the alert. Please try again.');
+            }
         }
 
         async function loadActiveAlerts() {
@@ -256,8 +313,11 @@
                 document.getElementById('statCritical').textContent = data.stats.critical;
                 document.getElementById('statHigh').textContent = data.stats.high;
                 document.getElementById('statMedium').textContent = data.stats.medium;
+                const streetsEl = document.getElementById('statStreets');
+                if (streetsEl) streetsEl.textContent = data.stats.streets_affected;
                 document.getElementById('alertsSummaryText').textContent =
-                    `Showing ${data.alerts.length} of ${data.stats.total_active} active alerts`;
+                    `${data.stats.total_active} open alert(s) across ${data.stats.streets_affected} street(s), `
+                    + `covering ${data.stats.incidents_covered} recorded incident(s)`;
 
                 renderAlertsTable(data.alerts);
             } catch (e) {
@@ -281,31 +341,14 @@
                 });
                 const data = await res.json();
                 await loadActiveAlerts();
-                if (data.created_count > 0) {
-                    alert(`${data.created_count} new alert(s) generated.`);
-                }
+                alert(data.created_count > 0
+                    ? `${data.created_count} new alert(s) raised. Alerts whose condition has passed were closed and moved to the history.`
+                    : 'No new alerts. Anything whose condition has passed was closed and moved to the history.');
             } catch (e) {
                 console.error(e);
             } finally {
                 btn.disabled = false;
                 btn.classList.remove('opacity-60');
-            }
-        }
-
-        async function resolveAlert(alertId) {
-            if (!confirm('Mark this alert as resolved?')) return;
-
-            try {
-                await fetch(`/alerts/api/${alertId}/resolve`, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    }
-                });
-                await loadActiveAlerts();
-            } catch (e) {
-                console.error(e);
             }
         }
 
