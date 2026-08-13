@@ -22,6 +22,7 @@ use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\AlertsController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ExternalCrimeImportController;
+use App\Http\Controllers\ProfileController;
 
 // Public landing page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
@@ -73,6 +74,13 @@ Route::middleware('jwt.api')->group(function () {
     Route::post('/mapping/external-crimes/import', [ExternalCrimeImportController::class, 'store'])
         ->middleware('throttle:20,1')
         ->name('mapping.external-crimes.import');
+
+    // Account: profile and per-user preferences
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::post('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::get('/settings', [ProfileController::class, 'settings'])->name('settings');
+    Route::post('/settings', [ProfileController::class, 'updateSettings'])->name('settings.update');
+    Route::get('/settings/reset', [ProfileController::class, 'resetSettings'])->name('settings.reset');
 
     Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');
     Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->name('risk-forecasting');
