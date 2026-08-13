@@ -34,11 +34,19 @@ class CrimeAlert extends Model
         'resolution_notes',
     ];
 
-    protected $dates = [
-        'acknowledged_at',
-        'resolved_at',
-        'created_at',
-        'updated_at',
+    /**
+     * $dates was removed in Laravel 10, so these came back as plain strings and
+     * anything calling ->setTimezone() on resolved_at blew up with a 500 — which
+     * is why the Alert History page rendered nothing. They are real casts now.
+     */
+    protected $casts = [
+        'acknowledged_at' => 'datetime',
+        'resolved_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'incident_count' => 'integer',
+        'center_latitude' => 'float',
+        'center_longitude' => 'float',
     ];
 
     public function barangay()
