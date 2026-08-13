@@ -397,11 +397,22 @@ class CrimeAlertEngine
 
     protected function buildDescription(AlertRule $rule, int $count, ?string $street, ?CrimeCategory $category, int $windowHours): string
     {
-        $where = $street ? $street : 'Barangay '.self::BARANGAY;
-        $what = $category ? $category->category_name.' incidents' : 'crime incidents';
+        $severityFilter = array_filter((array) (($rule->conditions_data ?? [])['severity_filter'] ?? []));
+
+        // Name what was actually counted: the category if the rule targets one,
+        // otherwise the severities it filters on, otherwise plain crimes.
+        if ($category) {
+            $what = $category->category_name.' incident'.($count === 1 ? '' : 's');
+        } elseif ($severityFilter) {
+            $what = implode('/', $severityFilter).'-severity incident'.($count === 1 ? '' : 's');
+        } else {
+            $what = 'crime incident'.($count === 1 ? '' : 's');
+        }
+
+        $where = $street ? 'on '.$street : 'in Barangay '.self::BARANGAY;
         $window = $this->formatWindow($windowHours);
 
-        return "{$count} {$what} recorded on {$where} within the last {$window} — meets the \"{$rule->rule_name}\" rule.";
+        return "{$count} {$what} recorded {$where} within the last {$window} — meets the \"{$rule->rule_name}\" rule.";
     }
 
     public function formatWindow(int $hours): string
