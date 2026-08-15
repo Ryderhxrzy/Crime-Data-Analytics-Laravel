@@ -185,11 +185,12 @@ async function loadCrimeData() {
 function showMapError(message) {
     const loader = document.getElementById('mapLoader');
     if (loader) {
+        // The loader sits on a white panel, so the copy has to be dark to be readable.
         loader.innerHTML = `
-            <div class="text-center">
-                <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4 block"></i>
-                <p class="text-white text-lg font-medium">${escapeHtml(message)}</p>
-                <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-alertara-600 text-white rounded hover:bg-alertara-700">
+            <div class="text-center px-6">
+                <i class="fas fa-triangle-exclamation text-3xl mb-3 block" style="color:#b45309"></i>
+                <p class="text-base font-medium" style="color:#0b132b">${escapeHtml(message)}</p>
+                <button onclick="location.reload()" class="mt-4 rounded-full px-5 py-2.5 text-sm font-semibold text-white" style="background:#2f7d7b">
                     Retry
                 </button>
             </div>
