@@ -7,12 +7,13 @@
             </span>
 
             <h2 class="mt-5 text-3xl font-bold leading-tight tracking-tight text-ink sm:text-4xl md:text-[2.75rem]">
-                Crime heatmap — Quezon City
+                Crime heatmap — Barangay San Agustin
             </h2>
 
             <p class="mx-auto mt-4 text-base leading-relaxed text-ink-muted sm:text-lg">
-                Crime density across the city, rendered as a single heat layer. The teal boundary
-                marks the official Quezon City limits — the map stays inside it.
+                Crime density rendered as a single heat layer. The teal boundary marks Barangay
+                San Agustin, Quezon City — the coverage area for this data. Neighbouring barangays
+                are shown faintly for orientation only.
             </p>
         </div>
 
@@ -74,7 +75,7 @@
                 <ul class="mt-4 space-y-2.5 text-xs leading-relaxed text-ink-muted">
                     <li class="flex gap-2.5">
                         <i class="fas fa-check mt-0.5 shrink-0 text-brand"></i>
-                        <span><strong class="font-semibold text-ink">City boundary:</strong> the exact Quezon City limits, drawn from the official map data.</span>
+                        <span><strong class="font-semibold text-ink">Highlighted boundary:</strong> Barangay San Agustin, drawn from the official barangay map data.</span>
                     </li>
                     <li class="flex gap-2.5">
                         <i class="fas fa-check mt-0.5 shrink-0 text-brand"></i>

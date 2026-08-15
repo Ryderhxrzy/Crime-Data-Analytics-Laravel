@@ -14,7 +14,7 @@
                     <span class="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-brand"></span>
                     <span class="relative inline-flex h-2 w-2 rounded-full bg-brand"></span>
                 </span>
-                Live crime data — Quezon City
+                Live crime data — Barangay San Agustin, QC
             </p>
         </div>
 
@@ -25,7 +25,7 @@
             </h1>
 
             <p class="mx-auto mt-6 max-w-3xl text-lg font-medium text-ink/90 sm:text-xl md:text-2xl">
-                Monitor crime activity across Quezon City with our interactive heatmap.
+                Monitor crime activity in Barangay San Agustin, Quezon City with our interactive heatmap.
             </p>
 
             <p class="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-ink-muted sm:text-lg">
@@ -86,7 +86,7 @@
                     </span>
                     <div class="min-w-0">
                         <dt class="text-xs uppercase tracking-wider text-ink-subtle">Coverage</dt>
-                        <dd class="truncate font-display text-sm font-bold text-ink">Quezon City limits</dd>
+                        <dd class="truncate font-display text-sm font-bold text-ink">Brgy. San Agustin</dd>
                     </div>
                 </div>
             </dl>

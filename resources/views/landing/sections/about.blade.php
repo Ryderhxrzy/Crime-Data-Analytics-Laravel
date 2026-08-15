@@ -11,9 +11,9 @@
             </h2>
 
             <p class="mx-auto mt-4 text-base leading-relaxed text-ink-muted sm:text-lg">
-                Crime Analytics is the public view of AlerTaraQC's crime records for Quezon City.
-                It turns individual incident reports into a density map and plain statistics, so
-                residents can see the pattern instead of a spreadsheet.
+                Crime Analytics is the public view of AlerTaraQC's crime records for Barangay
+                San Agustin, Quezon City. It turns individual incident reports into a density map
+                and plain statistics, so residents can see the pattern instead of a spreadsheet.
             </p>
         </div>
 
@@ -44,10 +44,10 @@
                 <span class="grid h-12 w-12 place-items-center rounded-xl border border-brand/15 bg-brand-soft text-brand transition-colors duration-300 group-hover:bg-brand group-hover:text-white">
                     <i class="fas fa-location-dot text-lg"></i>
                 </span>
-                <h3 class="mt-5 text-lg font-semibold text-ink">Quezon City Coverage</h3>
+                <h3 class="mt-5 text-lg font-semibold text-ink">Barangay-Level Detail</h3>
                 <p class="mt-2.5 text-sm leading-relaxed text-ink-muted">
-                    The map is bounded to the official Quezon City limits, so every point you see
-                    falls inside the city.
+                    The map is framed on Barangay San Agustin, so the density you see reflects
+                    that barangay — not a city-wide average.
                 </p>
             </div>
         </div>

@@ -163,6 +163,22 @@
         /* Leaflet has to sit under the fixed header. */
         .leaflet-pane, .leaflet-top, .leaflet-bottom { z-index: 10 !important; }
 
+        /* Barangay name pinned to the centre of the highlighted boundary —
+           same treatment as the authenticated crime mapping page. */
+        .brgy-label-selected {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            color: #123332;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            text-shadow: 0 0 4px #fff, 0 0 8px #fff, 0 1px 2px #fff;
+            white-space: nowrap;
+        }
+
+        .brgy-label-selected::before { display: none; }
+
         @media (prefers-reduced-motion: reduce) {
             html { scroll-behavior: auto; }
             *, *::before, *::after {

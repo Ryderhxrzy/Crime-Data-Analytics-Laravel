@@ -1,34 +1,67 @@
-// Global variables
+/*
+ * Public crime heatmap.
+ *
+ * Scope: Barangay San Agustin only. The incident API is backed by the San
+ * Agustin table, so the map frames that barangay and highlights it the same
+ * way the authenticated crime mapping page does — the selected barangay is
+ * drawn in brand teal, its neighbours stay faint for context.
+ *
+ * This map is heat-only. No incident markers are ever added, so no individual
+ * case is identifiable from the public page.
+ */
+
+// Barangay San Agustin, Quezon City — 'code' in public/qc_barangays.geojson.
+const SAN_AGUSTIN_CODE = '137404095';
+const SAN_AGUSTIN_NAME = 'San Agustin';
+
+// Boundary styling, matched to the AlerTaraQC palette.
+const STYLE_BRGY_IDLE = {
+    color: '#8fb3b0',
+    weight: 0.8,
+    opacity: 0.7,
+    fillColor: '#f2f9f8',
+    fillOpacity: 0.10,
+};
+
+const STYLE_BRGY_ACTIVE = {
+    color: '#2f7d7b',
+    weight: 2.5,
+    opacity: 1,
+    fillColor: '#bfe5de',
+    fillOpacity: 0.16,
+};
+
 let map;
 let heatLayer;
-let qcGeoJsonLayer;
+let barangayLayer;
+let sanAgustinLayer;
+let sanAgustinBounds;
 
-// Initialize map on page load
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     initMap();
     attachEventListeners();
 });
 
 /**
- * Initialize Leaflet map with base layers and GeoJSON boundary
+ * Initialize Leaflet map with the base layer and barangay boundaries
  */
 function initMap() {
     try {
-        // Create map centered on Quezon City
-        const qcCenter = [14.6760, 121.0437];
-        map = L.map('crimeMap').setView(qcCenter, 12);
+        // Opening view; loadBarangayBoundaries() reframes onto San Agustin as
+        // soon as the GeoJSON lands.
+        map = L.map('crimeMap', { zoomControl: true }).setView([14.6760, 121.0437], 13);
 
-        // Add OpenStreetMap tile layer
+        // Boundaries sit below the heat canvas (overlayPane is 400).
+        map.createPane('barangayPane');
+        map.getPane('barangayPane').style.zIndex = 350;
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19,
-            minZoom: 10
+            minZoom: 11
         }).addTo(map);
 
-        // Load QC boundary from GeoJSON
-        loadQcBoundary();
-
-        // Load crime data
+        loadBarangayBoundaries();
         loadCrimeData();
 
     } catch (error) {
@@ -38,126 +71,112 @@ function initMap() {
 }
 
 /**
- * Load Quezon City boundary from GeoJSON file and restrict map to QC area only
+ * Draw the Quezon City barangays, highlight San Agustin, and lock the view to it.
  */
-function loadQcBoundary() {
-    try {
-        fetch('/qc_map.geojson')
-            .then(response => {
-                if (!response.ok) throw new Error('Failed to load GeoJSON');
-                return response.json();
+function loadBarangayBoundaries() {
+    fetch('/qc_barangays.geojson')
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+        })
+        .then(data => {
+            barangayLayer = L.geoJSON(data, {
+                pane: 'barangayPane',
+                interactive: false,
+                style: function (feature) {
+                    const code = String((feature.properties || {}).code || '');
+                    return code === SAN_AGUSTIN_CODE
+                        ? Object.assign({}, STYLE_BRGY_ACTIVE)
+                        : Object.assign({}, STYLE_BRGY_IDLE);
+                },
+                onEachFeature: function (feature, layer) {
+                    const code = String((feature.properties || {}).code || '');
+                    if (code === SAN_AGUSTIN_CODE) sanAgustinLayer = layer;
+                }
+            }).addTo(map);
+
+            if (!sanAgustinLayer) {
+                console.warn('San Agustin boundary not found in qc_barangays.geojson');
+                return;
+            }
+
+            // Keep the highlighted barangay drawn over its neighbours.
+            sanAgustinLayer.bringToFront();
+
+            sanAgustinBounds = sanAgustinLayer.getBounds();
+
+            // Permanent centre label, same treatment as the crime mapping page.
+            L.marker(sanAgustinBounds.getCenter(), {
+                interactive: false,
+                icon: L.divIcon({ className: '', html: '' })
             })
-            .then(data => {
-                // Calculate bounds from GeoJSON to restrict map view
-                let bounds = L.geoJSON(data).getBounds();
+                .addTo(map)
+                .bindTooltip(SAN_AGUSTIN_NAME, {
+                    permanent: true,
+                    direction: 'center',
+                    className: 'brgy-label-selected'
+                })
+                .openTooltip();
 
-                // Set max bounds to QC area - users cannot pan outside this area
-                map.setMaxBounds(bounds.pad(0.05)); // 5% padding for visual comfort
-
-                // Restrict zoom to reasonable levels for QC
-                map.setMinZoom(11);
-                map.setMaxZoom(18);
-
-                // Add QC boundary as visual overlay with light, clean styling
-                qcGeoJsonLayer = L.geoJSON(data, {
-                    style: {
-                        color: '#274d4c',           // Theme green border - Quezon City boundary
-                        weight: 5,                  // Bold border for clear definition
-                        opacity: 1,                 // Full opacity on border
-                        fillOpacity: 0.08,          // Very light fill to show QC area clearly
-                        fill: true,
-                        fillColor: '#e8f5f3',       // Very light green-tinted fill for visibility
-                        lineCap: 'round',
-                        lineJoin: 'round'
-                    },
-                    onEachFeature: function(feature, layer) {
-                        // Add popup to show QC area info
-                        layer.bindPopup('<div style="text-align:center;"><strong style="color:#274d4c;">Quezon City</strong><br><small>Coverage Area - Restricted to this boundary</small></div>');
-
-                        // Add hover effect for interactivity
-                        layer.on('mouseover', function() {
-                            this.setStyle({
-                                weight: 6,
-                                opacity: 1,
-                                fillOpacity: 0.15,
-                                fillColor: '#d0ebe7'
-                            });
-                            this.openPopup();
-                        });
-                        layer.on('mouseout', function() {
-                            this.setStyle({
-                                weight: 5,
-                                opacity: 1,
-                                fillOpacity: 0.08,
-                                fillColor: '#e8f5f3'
-                            });
-                            this.closePopup();
-                        });
-                    }
-                }).addTo(map);
-
-                console.log('QC boundary loaded - QC area light, outside areas darkened');
-            })
-            .catch(error => {
-                console.warn('Could not load QC boundary GeoJSON:', error);
-                // Continue even if boundary fails to load
-            });
-    } catch (error) {
-        console.error('Error loading QC boundary:', error);
-    }
+            // Frame the barangay, then hold the view around it. The padding gives
+            // enough of the neighbouring streets for orientation without letting
+            // the viewport wander across the city.
+            map.fitBounds(sanAgustinBounds, { padding: [16, 16] });
+            map.setMaxBounds(sanAgustinBounds.pad(0.8));
+            map.setMinZoom(Math.max(12, map.getZoom() - 2));
+            map.setMaxZoom(18);
+        })
+        .catch(error => {
+            console.warn('Could not load barangay boundaries:', error);
+            // The heatmap still works without the outline, so this is not fatal.
+        });
 }
 
 /**
- * Fetch crime data from API and create heatmap
+ * Fetch incident coordinates and render them as a single heat layer.
  */
 async function loadCrimeData() {
     const loader = document.getElementById('mapLoader');
 
     try {
-        // Show loader
         if (loader) loader.classList.remove('hidden');
 
-        // Get date range from filter
         const dateRange = document.getElementById('dateRangeFilter').value;
-        const apiUrl = dateRange === 'all'
-            ? '/api/crime-heatmap?range=all'
-            : `/api/crime-heatmap?range=${dateRange}`;
+        const response = await fetch(`/api/crime-heatmap?range=${encodeURIComponent(dateRange)}`);
 
-        // Fetch crime data
-        const response = await fetch(apiUrl);
-
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
 
         const data = await response.json();
 
         if (!Array.isArray(data) || data.length === 0) {
-            console.warn('No crime data available');
-            showMapError('No crime data available');
+            showMapError('No crime data available for this period.');
             return;
         }
 
-        // Create heatmap data points
-        const heatPoints = data.map(incident => {
-            return [
-                parseFloat(incident.lat),
-                parseFloat(incident.lng),
-                0.5  // Default intensity
-            ];
-        });
+        // The API returns latitude/longitude; older payloads used lat/lng.
+        const heatPoints = data
+            .map(incident => [
+                parseFloat(incident.latitude ?? incident.lat),
+                parseFloat(incident.longitude ?? incident.lng),
+                0.5
+            ])
+            .filter(point => Number.isFinite(point[0]) && Number.isFinite(point[1]));
 
-        // Remove old heatmap if exists
+        if (heatPoints.length === 0) {
+            showMapError('No mappable incidents for this period.');
+            return;
+        }
+
         if (heatLayer && map.hasLayer(heatLayer)) {
             map.removeLayer(heatLayer);
         }
 
-        // Create new heatmap layer with Leaflet.heat - density-based color gradient
+        // Radius/blur are tuned for a single barangay rather than the whole city.
         heatLayer = L.heatLayer(heatPoints, {
-            radius: 30,
-            blur: 40,
-            maxZoom: 13,
-            minOpacity: 0.2,
+            radius: 25,
+            blur: 30,
+            maxZoom: 17,
+            minOpacity: 0.25,
             gradient: {
                 0.0: '#3498db',      // Blue - Low density
                 0.2: '#2ecc71',      // Green - Low-Medium density
@@ -168,19 +187,18 @@ async function loadCrimeData() {
             }
         }).addTo(map);
 
-        console.log(`Loaded ${data.length} crime incidents`);
+        console.log(`Loaded ${heatPoints.length} mappable incidents`);
 
     } catch (error) {
         console.error('Error loading crime data:', error);
         showMapError('Failed to load crime data. Please refresh the page.');
     } finally {
-        // Hide loader
         if (loader) loader.classList.add('hidden');
     }
 }
 
 /**
- * Show error message on map
+ * Show a message over the map panel
  */
 function showMapError(message) {
     const loader = document.getElementById('mapLoader');
@@ -210,7 +228,7 @@ function escapeHtml(text) {
         '"': '&quot;',
         "'": '&#039;'
     };
-    return text.replace(/[&<>"']/g, char => map[char]);
+    return String(text).replace(/[&<>"']/g, char => map[char]);
 }
 
 /**
@@ -218,14 +236,12 @@ function escapeHtml(text) {
  */
 function attachEventListeners() {
     try {
-        // Date range filter
         const dateFilter = document.getElementById('dateRangeFilter');
         if (dateFilter) {
-            dateFilter.addEventListener('change', function() {
+            dateFilter.addEventListener('change', function () {
                 loadCrimeData();
             });
         }
-
     } catch (error) {
         console.error('Error attaching event listeners:', error);
     }
@@ -234,10 +250,8 @@ function attachEventListeners() {
 /**
  * Handle responsive map resizing
  */
-window.addEventListener('resize', function() {
-    if (map) {
-        map.invalidateSize();
-    }
+window.addEventListener('resize', function () {
+    if (map) map.invalidateSize();
 });
 
 console.log('Landing map script loaded successfully');
