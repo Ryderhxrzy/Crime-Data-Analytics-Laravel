@@ -2043,10 +2043,15 @@ class DashboardController extends Controller
         try {
             $historicalDays = max(28, min(365, (int) $this->filterValue($request, 'historical_days', '90')));
             $forecastDays = max(7, min(90, (int) $this->filterValue($request, 'forecast_days', '14')));
-            $crimeType = $this->filterValue($request, 'crime_type');
-            $barangay = $this->filterValue($request, 'barangay');
+            // "all" is what the selects send for an unset filter; it must not
+            // reach the query as a literal id.
+            $unset = fn (string $value) => $value === 'all' ? '' : $value;
 
-            $result = $analytics->forecast($historicalDays, $forecastDays, $crimeType, $barangay);
+            $crimeType = $unset($this->filterValue($request, 'crime_type'));
+            $barangay = $unset($this->filterValue($request, 'barangay'));
+            $caseStatus = $unset($this->filterValue($request, 'case_status'));
+
+            $result = $analytics->forecast($historicalDays, $forecastDays, $crimeType, $barangay, $caseStatus);
 
             return response()->json($result);
         } catch (\Exception $e) {
