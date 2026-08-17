@@ -25,8 +25,11 @@ use Illuminate\Support\Facades\Cache;
  * the same count — the short one is the denser, more concentrated hotspot.
  *
  * The forecast is a least-squares linear regression over weekly incident
- * counts — a transparent trend projection, NOT a machine-learning model.
- * Confidence is derived from the regression fit (R²) and sample size.
+ * counts, fitted per street — a transparent trend projection, NOT a
+ * machine-learning model. It reports a 95% prediction interval alongside every
+ * point estimate, and a separate heuristic "confidence" index derived from the
+ * regression fit (R²), sample size and how far ahead the week sits. That index
+ * is not an accuracy figure: nothing here is validated against held-out data.
  */
 class HotspotAnalyticsService
 {
@@ -606,78 +609,432 @@ class HotspotAnalyticsService
     // Forecast: least-squares linear regression over weekly incident counts
     // ------------------------------------------------------------------
 
-    public function forecast(int $historicalDays, int $forecastDays, string $crimeType = '', string $barangay = ''): array
-    {
-        $start = Carbon::now()->subDays($historicalDays)->startOfDay();
+    /**
+     * Smallest historical sample a street needs before we will project it. A
+     * line fitted through one or two incidents is noise in the costume of a
+     * trend, and it would still print a confident-looking number.
+     */
+    private const MIN_FORECAST_SAMPLE = 3;
+
+    /** Weeks of recent history shown beside the six-month mean. */
+    private const TREND_COMPARISON_WEEKS = 6;
+
+    /**
+     * Trend forecast over weekly incident counts.
+     *
+     * The unit of analysis is the STREET, for the same reason as the ranking:
+     * every incident sits in one barangay, so grouping by barangay returns a
+     * single row whose risk level can only ever come out "highest".
+     *
+     * Windows are anchored on the most recent recorded incident rather than on
+     * today, so a dataset that lags the calendar still yields a fit worth
+     * reading instead of a slope dragged to zero by empty trailing weeks.
+     */
+    public function forecast(
+        int $historicalDays,
+        int $forecastDays,
+        string $crimeType = '',
+        string $barangay = '',
+        string $caseStatus = ''
+    ): array {
+        $anchor = $this->referenceDate()->startOfDay();
         $weeks = max(4, (int) floor($historicalDays / 7));
         $forecastWeeks = max(1, (int) ceil($forecastDays / 7));
 
-        $query = CrimeIncident::with('barangay')
-            ->where('incident_date', '>=', $start->toDateString());
+        // Whole weeks ending on the anchor, so the newest bucket is never a stub.
+        $start = $anchor->copy()->subDays($weeks * 7 - 1);
 
-        if ($crimeType !== '') {
-            $query->where('crime_category_id', $crimeType);
-        }
-        if ($barangay !== '') {
-            $query->where('barangay_id', $barangay);
-        }
+        $incidents = CrimeIncident::with(['category', 'barangay'])
+            ->where('incident_date', '>=', $start->toDateString())
+            ->where('incident_date', '<=', $anchor->copy()->endOfDay()->toDateTimeString())
+            ->when($crimeType !== '', fn ($q) => $q->where('crime_category_id', $crimeType))
+            ->when($barangay !== '', fn ($q) => $q->where('barangay_id', $barangay))
+            ->when($caseStatus !== '', fn ($q) => $q->where('status', $caseStatus))
+            ->get();
 
-        $incidents = $query->get();
+        $series = $this->weeklySeries($incidents, $start, $weeks);
+        $fit = $this->linearFit($series);
+        $weeklyAverage = array_sum($series) / $weeks;
+        $leading = $this->leadingCategory($incidents);
+        $baseConfidence = $this->forecastConfidence($fit['r_squared'], $weeks, $incidents->count());
 
-        $predictions = [];
-        foreach ($incidents->filter(fn ($i) => $i->barangay_id)->groupBy('barangay_id') as $barangayId => $group) {
-            $series = $this->weeklySeries($group, $start, $weeks);
-            $fit = $this->linearFit($series);
+        $projection = $this->projectWeeks(
+            $fit,
+            $weeks,
+            $forecastWeeks,
+            $forecastDays,
+            $anchor,
+            $weeklyAverage,
+            $baseConfidence,
+            $leading['name'] ?? null
+        );
 
-            $projected = 0.0;
-            for ($k = 1; $k <= $forecastWeeks; $k++) {
-                $projected += max(0, $fit['intercept'] + $fit['slope'] * ($weeks - 1 + $k));
-            }
-            // Scale down if the forecast horizon is a partial week
-            $projected = $projected * min(1, $forecastDays / ($forecastWeeks * 7));
+        $predictedTotal = array_sum(array_column($projection, 'predicted'));
+        $baseline = $weeklyAverage * $forecastDays / 7;
+        $changePercent = $baseline > 0
+            ? (int) round(($predictedTotal - $baseline) / $baseline * 100)
+            : 0;
 
-            $currentTotal = array_sum($series);
-            $currentWeeklyAvg = $currentTotal / $weeks;
-            $expectedBaseline = $currentWeeklyAvg * $forecastDays / 7;
+        [$streets, $excludedStreets, $streetsConsidered, $riskCounts] =
+            $this->forecastStreets($incidents, $start, $weeks, $forecastWeeks, $forecastDays);
 
-            $barangayModel = $group->first()->barangay;
-
-            $predictions[] = [
-                'barangay_id' => (int) $barangayId,
-                'area_name' => $barangayModel->barangay_name ?? 'Unknown',
-                'latitude' => (float) ($barangayModel->latitude ?: round($group->avg('latitude'), 6)),
-                'longitude' => (float) ($barangayModel->longitude ?: round($group->avg('longitude'), 6)),
-                'historical_count' => $currentTotal,
-                'weekly_average' => round($currentWeeklyAvg, 2),
-                'predicted_count' => (int) round($projected),
-                'change_percent' => $expectedBaseline > 0
-                    ? round(($projected - $expectedBaseline) / $expectedBaseline * 100)
-                    : 0,
+        return [
+            'method' => 'Least-squares linear regression over weekly incident counts, projected per street (trend projection, not machine learning)',
+            'confidence_note' => 'Confidence is a heuristic index built from the regression fit (R²), sample size and forecast distance — it is not a statistical confidence level and it is not an accuracy figure. The shaded band on the chart is the 95% prediction interval from the same fit.',
+            'anchor_date' => $anchor->toDateString(),
+            'anchor_is_stale' => $anchor->lt(Carbon::now()->subDays(14)),
+            'days_behind_today' => max(0, (int) $anchor->diffInDays(Carbon::now()->startOfDay())),
+            'historical_days' => $weeks * 7,
+            'forecast_days' => $forecastDays,
+            'weeks_observed' => $weeks,
+            'weeks_projected' => count($projection),
+            'citywide' => [
+                'historical_count' => $incidents->count(),
+                'weekly_average' => round($weeklyAverage, 2),
+                'baseline_count' => round($baseline, 1),
+                'predicted_count' => (int) round($predictedTotal),
+                'change_percent' => $changePercent,
                 'trend' => $fit['slope'] > 0.05 ? 'rising' : ($fit['slope'] < -0.05 ? 'falling' : 'flat'),
-                'confidence' => $this->forecastConfidence($fit['r_squared'], $weeks, $currentTotal),
+                'slope_per_week' => round($fit['slope'], 3),
+                'r_squared' => round($fit['r_squared'], 3),
+                'confidence' => $baseConfidence,
+                'risk_level' => $this->forecastRiskLevel($changePercent),
+            ],
+            'top_category' => $leading,
+            'timeline' => [
+                'history' => $this->historyBuckets($series, $start),
+                'projection' => $projection,
+            ],
+            'streets' => $streets,
+            'streets_considered' => $streetsConsidered,
+            'streets_excluded' => $excludedStreets,
+            'risk_counts' => $riskCounts,
+            'comparison' => [
+                'months' => $this->monthComparison($crimeType, $barangay, $caseStatus, $anchor),
+                'trend_vs_average' => $this->trendVersusAverage($series, $start, $weeks, $crimeType, $barangay, $caseStatus, $anchor),
+            ],
+            'notes' => $this->forecastNotes($incidents->count(), $weeks, $fit, $excludedStreets, $anchor),
+        ];
+    }
+
+    /**
+     * Risk band for a projection, defined exactly as the page states it:
+     * projected volume against that same period's own historical baseline.
+     */
+    protected function forecastRiskLevel(float $changePercent): string
+    {
+        return match (true) {
+            $changePercent >= 50 => 'HIGH',
+            $changePercent >= 20 => 'MODERATE',
+            default => 'LOW',
+        };
+    }
+
+    /** Observed weekly counts, labelled with the dates each bucket covers. */
+    protected function historyBuckets(array $series, Carbon $start): array
+    {
+        $rows = [];
+
+        foreach ($series as $index => $count) {
+            $bucketStart = $start->copy()->addDays($index * 7);
+            $bucketEnd = $bucketStart->copy()->addDays(6);
+
+            $rows[] = [
+                'week' => $index + 1,
+                'label' => $bucketStart->format('M j'),
+                'range' => $bucketStart->format('M j') . ' – ' . $bucketEnd->format('M j'),
+                'start' => $bucketStart->toDateString(),
+                'end' => $bucketEnd->toDateString(),
+                'count' => $count,
             ];
         }
 
-        usort($predictions, fn ($a, $b) => $b['predicted_count'] <=> $a['predicted_count']);
+        return $rows;
+    }
 
-        // Relative risk levels within this forecast batch
-        $maxPredicted = $predictions ? max(array_column($predictions, 'predicted_count')) : 0;
-        foreach ($predictions as &$p) {
-            $ratio = $maxPredicted > 0 ? $p['predicted_count'] / $maxPredicted : 0;
-            $p['risk_level'] = $ratio >= 0.66 ? 'HIGH' : ($ratio >= 0.33 ? 'MEDIUM' : 'LOW');
+    /**
+     * Point estimate and 95% prediction interval at week index $x.
+     *
+     * The interval carries the leverage term, so it widens the further the week
+     * sits from the middle of the observed window. That is the honest shape of
+     * a projection: week 12 is a wider claim than week 1.
+     */
+    protected function predictAt(array $fit, float $x): array
+    {
+        $value = max(0.0, $fit['intercept'] + $fit['slope'] * $x);
+
+        $margin = 0.0;
+        if ($fit['n'] > 2 && $fit['std_error'] > 0) {
+            $leverage = 1 + 1 / $fit['n']
+                + ($fit['ss_xx'] > 0 ? (($x - $fit['x_mean']) ** 2) / $fit['ss_xx'] : 0);
+            $margin = 1.96 * $fit['std_error'] * sqrt($leverage);
         }
-        unset($p);
 
         return [
-            'method' => 'Least-squares linear regression over weekly incident counts (trend projection, not machine learning)',
-            'historical_days' => $historicalDays,
-            'forecast_days' => $forecastDays,
-            'citywide' => [
-                'historical_count' => $incidents->count(),
-                'predicted_count' => array_sum(array_column($predictions, 'predicted_count')),
-            ],
-            'predictions' => array_slice($predictions, 0, 15),
+            'value' => $value,
+            'lower' => max(0.0, $value - $margin),
+            'upper' => $value + $margin,
         ];
+    }
+
+    /**
+     * One row per forecast week. A horizon that is not a whole number of weeks
+     * leaves a short final bucket, which is scaled to the days it actually
+     * covers rather than quietly rounded up to seven.
+     */
+    protected function projectWeeks(
+        array $fit,
+        int $weeks,
+        int $forecastWeeks,
+        int $forecastDays,
+        Carbon $anchor,
+        float $weeklyAverage,
+        int $baseConfidence,
+        ?string $topCategory
+    ): array {
+        $rows = [];
+        $remaining = $forecastDays;
+
+        for ($k = 1; $k <= $forecastWeeks && $remaining > 0; $k++) {
+            $days = min(7, $remaining);
+            $remaining -= $days;
+            $share = $days / 7;
+
+            $point = $this->predictAt($fit, $weeks - 1 + $k);
+            $predicted = $point['value'] * $share;
+            $baseline = $weeklyAverage * $share;
+            $change = $baseline > 0 ? ($predicted - $baseline) / $baseline * 100 : 0.0;
+
+            $bucketStart = $anchor->copy()->addDays(($k - 1) * 7 + 1);
+            $bucketEnd = $bucketStart->copy()->addDays($days - 1);
+
+            $rows[] = [
+                'week' => $k,
+                'label' => $bucketStart->format('M j'),
+                'range' => $bucketStart->format('M j') . ' – ' . $bucketEnd->format('M j'),
+                'start' => $bucketStart->toDateString(),
+                'end' => $bucketEnd->toDateString(),
+                'days' => $days,
+                'predicted' => round($predicted, 1),
+                'lower' => round($point['lower'] * $share, 1),
+                'upper' => round($point['upper'] * $share, 1),
+                'baseline' => round($baseline, 1),
+                'change_percent' => (int) round($change),
+                'risk_level' => $this->forecastRiskLevel($change),
+                'confidence' => $this->horizonConfidence($baseConfidence, $k),
+                'top_category' => $topCategory,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Confidence decays with distance from the observed data: three points per
+     * week past the first, floored at 30. A far-out week should never read as
+     * confidently as the one starting tomorrow.
+     */
+    protected function horizonConfidence(int $base, int $week): int
+    {
+        return (int) max(30, $base - 3 * ($week - 1));
+    }
+
+    /**
+     * Per-street projections. Streets below MIN_FORECAST_SAMPLE are dropped and
+     * counted, so the caller can report how much was left out instead of
+     * presenting a filtered list as the whole picture.
+     *
+     * Risk band counts are tallied over every projected street, not just the
+     * ten returned for display — otherwise the bands would silently describe a
+     * truncated list.
+     *
+     * @return array{0: array<int, array>, 1: int, 2: int, 3: array<string, int>} [top streets, excluded, considered, risk counts]
+     */
+    protected function forecastStreets(Collection $incidents, Carbon $start, int $weeks, int $forecastWeeks, int $forecastDays): array
+    {
+        $groups = $incidents
+            ->filter(fn ($i) => $this->streetOf($i) !== null)
+            ->groupBy(fn ($i) => $this->streetOf($i));
+
+        $rows = [];
+        $excluded = 0;
+
+        foreach ($groups as $street => $group) {
+            if ($group->count() < self::MIN_FORECAST_SAMPLE) {
+                $excluded++;
+                continue;
+            }
+
+            $series = $this->weeklySeries($group, $start, $weeks);
+            $fit = $this->linearFit($series);
+            $weeklyAverage = array_sum($series) / $weeks;
+
+            $projected = 0.0;
+            $lower = 0.0;
+            $upper = 0.0;
+            $remaining = $forecastDays;
+
+            for ($k = 1; $k <= $forecastWeeks && $remaining > 0; $k++) {
+                $days = min(7, $remaining);
+                $remaining -= $days;
+                $share = $days / 7;
+
+                $point = $this->predictAt($fit, $weeks - 1 + $k);
+                $projected += $point['value'] * $share;
+                $lower += $point['lower'] * $share;
+                $upper += $point['upper'] * $share;
+            }
+
+            $baseline = $weeklyAverage * $forecastDays / 7;
+            $change = $baseline > 0 ? ($projected - $baseline) / $baseline * 100 : 0.0;
+            $leading = $this->leadingCategory($group);
+
+            $rows[] = [
+                'street' => $street,
+                'area_name' => $street,
+                'barangay_name' => $group->first()->barangay_name ?? 'San Agustin',
+                'historical_count' => $group->count(),
+                'weekly_average' => round($weeklyAverage, 2),
+                'baseline_count' => round($baseline, 1),
+                'predicted_count' => (int) round($projected),
+                'predicted_exact' => round($projected, 1),
+                'lower' => round($lower, 1),
+                'upper' => round($upper, 1),
+                'change_percent' => (int) round($change),
+                'trend' => $fit['slope'] > 0.05 ? 'rising' : ($fit['slope'] < -0.05 ? 'falling' : 'flat'),
+                'r_squared' => round($fit['r_squared'], 3),
+                'confidence' => $this->forecastConfidence($fit['r_squared'], $weeks, $group->count()),
+                'risk_level' => $this->forecastRiskLevel($change),
+                'top_category' => $leading['name'] ?? null,
+                'latitude' => round($group->avg('latitude'), 6),
+                'longitude' => round($group->avg('longitude'), 6),
+            ];
+        }
+
+        $considered = count($rows);
+        $tally = array_count_values(array_column($rows, 'risk_level'));
+        $riskCounts = [
+            'high' => $tally['HIGH'] ?? 0,
+            'moderate' => $tally['MODERATE'] ?? 0,
+            'low' => $tally['LOW'] ?? 0,
+        ];
+
+        usort(
+            $rows,
+            fn ($a, $b) => [$b['predicted_count'], $b['historical_count']] <=> [$a['predicted_count'], $a['historical_count']]
+        );
+
+        return [array_slice($rows, 0, 10), $excluded, $considered, $riskCounts];
+    }
+
+    /** The most frequent category in a set, with its share. */
+    protected function leadingCategory(Collection $incidents): ?array
+    {
+        if ($incidents->isEmpty()) {
+            return null;
+        }
+
+        $counts = $incidents->countBy(fn ($i) => $this->categoryOf($i))->sortDesc();
+
+        return [
+            'name' => (string) $counts->keys()->first(),
+            'count' => (int) $counts->first(),
+            'share' => (int) round($counts->first() / $incidents->count() * 100),
+        ];
+    }
+
+    /**
+     * The anchor month against the one before it, in week-of-month buckets. The
+     * anchor month is usually incomplete, which is flagged rather than left for
+     * the reader to mistake for a drop.
+     */
+    protected function monthComparison(string $crimeType, string $barangay, string $caseStatus, Carbon $anchor): array
+    {
+        $current = $anchor->copy()->startOfMonth();
+        $previous = $current->copy()->subMonth();
+
+        $bucketsFor = function (Carbon $month) use ($crimeType, $barangay, $caseStatus) {
+            $rows = CrimeIncident::whereYear('incident_date', $month->year)
+                ->whereMonth('incident_date', $month->month)
+                ->when($crimeType !== '', fn ($q) => $q->where('crime_category_id', $crimeType))
+                ->when($barangay !== '', fn ($q) => $q->where('barangay_id', $barangay))
+                ->when($caseStatus !== '', fn ($q) => $q->where('status', $caseStatus))
+                ->get(['incident_date']);
+
+            $buckets = [0, 0, 0, 0];
+            foreach ($rows as $row) {
+                if (! $row->incident_date) {
+                    continue;
+                }
+                $buckets[min(3, intdiv((int) $row->incident_date->format('j') - 1, 7))]++;
+            }
+
+            return $buckets;
+        };
+
+        return [
+            'labels' => ['Days 1–7', 'Days 8–14', 'Days 15–21', 'Days 22+'],
+            'previous_label' => $previous->format('M Y'),
+            'current_label' => $current->format('M Y'),
+            'previous' => $bucketsFor($previous),
+            'current' => $bucketsFor($current),
+            'current_is_partial' => $anchor->day < $anchor->daysInMonth,
+            'current_through' => $anchor->toDateString(),
+        ];
+    }
+
+    /**
+     * Recent weekly counts against the six-month weekly mean, so "are we above
+     * our own normal" is answerable at a glance.
+     */
+    protected function trendVersusAverage(array $series, Carbon $start, int $weeks, string $crimeType, string $barangay, string $caseStatus, Carbon $anchor): array
+    {
+        $take = max(1, min(self::TREND_COMPARISON_WEEKS, $weeks));
+        $recent = array_slice($series, $weeks - $take);
+
+        $labels = [];
+        for ($i = 0; $i < $take; $i++) {
+            $labels[] = $start->copy()->addDays(($weeks - $take + $i) * 7)->format('M j');
+        }
+
+        $windowDays = 180;
+        $total = CrimeIncident::where('incident_date', '>=', $anchor->copy()->subDays($windowDays)->toDateString())
+            ->where('incident_date', '<=', $anchor->copy()->endOfDay()->toDateTimeString())
+            ->when($crimeType !== '', fn ($q) => $q->where('crime_category_id', $crimeType))
+            ->when($barangay !== '', fn ($q) => $q->where('barangay_id', $barangay))
+            ->when($caseStatus !== '', fn ($q) => $q->where('status', $caseStatus))
+            ->count();
+
+        $average = round($total / ($windowDays / 7), 2);
+
+        return [
+            'labels' => $labels,
+            'current' => array_map('intval', array_values($recent)),
+            'average' => array_fill(0, $take, $average),
+            'average_value' => $average,
+            'window_days' => $windowDays,
+        ];
+    }
+
+    /** Plain-language caveats that belong on screen, not in a footnote. */
+    protected function forecastNotes(int $sampleSize, int $weeks, array $fit, int $excludedStreets, Carbon $anchor): array
+    {
+        $notes = [];
+
+        if ($sampleSize < 30) {
+            $notes[] = "Small sample: {$sampleSize} incidents across {$weeks} weeks. Read the direction as indicative and the exact counts as rough.";
+        }
+        if ($fit['r_squared'] < 0.3) {
+            $notes[] = 'Weak linear fit (R² ' . round($fit['r_squared'], 2) . '): the weekly counts scatter more than they trend, so the projection largely restates the recent average.';
+        }
+        if ($excludedStreets > 0) {
+            $notes[] = $excludedStreets . ' street(s) had fewer than ' . self::MIN_FORECAST_SAMPLE . ' incidents in the window and were left out of the street projections.';
+        }
+        if ($anchor->lt(Carbon::now()->subDays(14))) {
+            $notes[] = 'The newest incident on record is ' . $anchor->format('M j, Y') . '. The forecast runs forward from that date, not from today.';
+        }
+
+        return $notes;
     }
 
     /**
@@ -686,13 +1043,22 @@ class HotspotAnalyticsService
     protected function weeklySeries(Collection $incidents, Carbon $start, int $weeks): array
     {
         $series = array_fill(0, $weeks, 0);
+        $startDay = $start->copy()->startOfDay();
 
         foreach ($incidents as $incident) {
             if (! $incident->incident_date) {
                 continue;
             }
-            $weekIndex = (int) floor($start->diffInDays(Carbon::parse($incident->incident_date)) / 7);
-            if ($weekIndex >= 0 && $weekIndex < $weeks) {
+
+            $offset = (int) floor(
+                $startDay->diffInDays(Carbon::parse($incident->incident_date)->startOfDay(), false)
+            );
+            if ($offset < 0) {
+                continue;
+            }
+
+            $weekIndex = intdiv($offset, 7);
+            if ($weekIndex < $weeks) {
                 $series[$weekIndex]++;
             }
         }
@@ -703,13 +1069,25 @@ class HotspotAnalyticsService
     /**
      * Ordinary least squares over y = a + bx.
      *
-     * @return array{slope: float, intercept: float, r_squared: float}
+     * Also returns the pieces a prediction interval needs — sample size, the
+     * mean of x, the spread of x, and the residual standard error — so callers
+     * can quote a band instead of a bare point estimate.
+     *
+     * @return array{slope: float, intercept: float, r_squared: float, n: int, x_mean: float, ss_xx: float, std_error: float}
      */
     protected function linearFit(array $series): array
     {
         $n = count($series);
         if ($n < 2) {
-            return ['slope' => 0, 'intercept' => $series[0] ?? 0, 'r_squared' => 0];
+            return [
+                'slope' => 0.0,
+                'intercept' => (float) ($series[0] ?? 0),
+                'r_squared' => 0.0,
+                'n' => $n,
+                'x_mean' => 0.0,
+                'ss_xx' => 0.0,
+                'std_error' => 0.0,
+            ];
         }
 
         $xMean = ($n - 1) / 2;
@@ -732,21 +1110,33 @@ class HotspotAnalyticsService
             $ssTot += ($y - $yMean) ** 2;
         }
 
-        $rSquared = $ssTot > 0 ? max(0, 1 - $ssRes / $ssTot) : 0;
+        $rSquared = $ssTot > 0 ? max(0.0, 1 - $ssRes / $ssTot) : 0.0;
+        $stdError = $n > 2 ? sqrt($ssRes / ($n - 2)) : 0.0;
 
-        return ['slope' => $slope, 'intercept' => $intercept, 'r_squared' => $rSquared];
+        return [
+            'slope' => $slope,
+            'intercept' => $intercept,
+            'r_squared' => $rSquared,
+            'n' => $n,
+            'x_mean' => $xMean,
+            'ss_xx' => $ssXX,
+            'std_error' => $stdError,
+        ];
     }
 
     /**
      * Honest confidence: grows with regression fit quality and sample size,
      * capped well below 100% because a linear trend is a simplification.
+     *
+     * Sample credit needs 50 incidents to max out — ten was cheap enough that
+     * a street with a fortnight of data scored the same as one with a year.
      */
     protected function forecastConfidence(float $rSquared, int $weeks, int $sampleSize): int
     {
         $confidence = 35
             + $rSquared * 40
             + min(10, $weeks)
-            + min(10, $sampleSize);
+            + min(10, $sampleSize / 5);
 
         return (int) round(max(35, min(90, $confidence)));
     }
