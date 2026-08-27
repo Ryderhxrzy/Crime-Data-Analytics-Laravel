@@ -129,9 +129,28 @@ if (request()->query('token')) {
                         <!-- Barangay -->
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">Barangay</label>
+                            @php($sanAgustin = $barangays->first(fn ($item) => mb_strtolower(trim($item->barangay_name)) === 'san agustin'))
                             <select id="barangay" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="{{ $sanAgustin?->id ?? '' }}" selected>San Agustin</option>
                                 <option value="">All Barangays</option>
                             </select>
+                        </div>
+
+                        <!-- Street checkbox dropdown -->
+                        <div class="relative" id="streetFilterDropdown">
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Street(s)</label>
+                            <button type="button" id="streetDropdownButton" aria-expanded="false"
+                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white flex items-center justify-between text-left">
+                                <span id="streetDropdownLabel">All streets</span>
+                                <i class="fas fa-chevron-down text-xs text-gray-500"></i>
+                            </button>
+                            <div id="streetDropdownPanel" class="hidden absolute z-30 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg p-2">
+                                <div id="streetCheckboxList" class="max-h-56 overflow-y-auto space-y-1 p-1"></div>
+                                <button type="button" id="removeStreetSelectionBtn" class="hidden mt-2 w-full px-3 py-2 text-sm font-semibold text-red-700 border border-red-200 rounded-lg hover:bg-red-50">
+                                    <i class="fas fa-xmark mr-1"></i>Remove selection
+                                </button>
+                            </div>
+                            <select id="streets" multiple class="hidden" aria-hidden="true" tabindex="-1"></select>
                         </div>
 
                         <!-- Reset Button -->
@@ -436,6 +455,10 @@ if (request()->query('token')) {
                 }
             }
 
+            // Keep incident symbols unobtrusive while viewing the whole
+            // barangay, then let them grow as the user zooms into a street.
+            map.on('zoomend', updateVisualizationScale);
+
             console.log('Map initialized');
         }
 
@@ -444,9 +467,9 @@ if (request()->query('token')) {
         // context, and San Agustin marked active on top. All of it is
         // non-interactive and lives in a pane BELOW the street lines, so it can
         // never swallow a street hover or click.
-        const STYLE_QC_OUTLINE  = { color: '#274d4c', weight: 2,   opacity: 0.9, fill: false };
-        const STYLE_BRGY_IDLE   = { color: '#5b8f8c', weight: 1,   opacity: 0.8, fillColor: '#e8f5f3', fillOpacity: 0.15 };
-        const STYLE_BRGY_ACTIVE = { color: '#274d4c', weight: 2.5, opacity: 1,   fillColor: '#9ed4cb', fillOpacity: 0.22 };
+        const STYLE_QC_OUTLINE  = { color: '#274d4c', weight: 1.25, opacity: 0.8, fill: false };
+        const STYLE_BRGY_IDLE   = { color: '#5b8f8c', weight: 0.65, opacity: 0.65, fillColor: '#e8f5f3', fillOpacity: 0.15 };
+        const STYLE_BRGY_ACTIVE = { color: '#274d4c', weight: 1.5,  opacity: 0.9, fillColor: '#9ed4cb', fillOpacity: 0.22 };
 
         const ACTIVE_BARANGAY = 'san agustin';
 
@@ -536,6 +559,7 @@ if (request()->query('token')) {
 
             loadCrimeCategories();
             loadBarangays();
+            loadStreets();
             setupFilterListeners();
             loadHotspotData();
         }
@@ -550,6 +574,8 @@ if (request()->query('token')) {
             const crimeType = document.getElementById('crimeType').value;
             const caseStatus = document.getElementById('caseStatus').value;
             const barangay = document.getElementById('barangay').value;
+            const streets = Array.from(document.getElementById('streets').selectedOptions)
+                .map(option => option.value);
 
             const params = new URLSearchParams({
                 timePeriod: timePeriod,
@@ -557,6 +583,7 @@ if (request()->query('token')) {
                 caseStatus: caseStatus,
                 barangay: barangay
             });
+            streets.forEach(street => params.append('streets[]', street));
 
             fetch(`/api/crime-hotspots?${params}`)
                 .then(response => response.json())
@@ -618,7 +645,7 @@ if (request()->query('token')) {
 
             if (heatmapPoints.length > 0) {
                 heatmapLayer = L.heatLayer(heatmapPoints, {
-                    radius: heatmapRadius,
+                    radius: visualizationRadiusForZoom(),
                     blur: heatmapBlur,
                     maxZoom: 18,
                     minOpacity: 0.3,
@@ -637,15 +664,16 @@ if (request()->query('token')) {
         // Display markers visualization
         function displayMarkers(data) {
             markerLayer = L.featureGroup();
+            const radius = markerRadiusForZoom();
 
             data.forEach(incident => {
                 const markerColor = incident.color_code || '#274d4c';
 
                 const marker = L.circleMarker([incident.latitude, incident.longitude], {
-                    radius: 6,
+                    radius,
                     fillColor: markerColor,
                     color: markerColor,
-                    weight: 2,
+                    weight: 1.25,
                     opacity: 0.8,
                     fillOpacity: 0.7
                 });
@@ -662,6 +690,31 @@ if (request()->query('token')) {
             });
 
             markerLayer.addTo(map);
+        }
+
+        function markerRadiusForZoom() {
+            const zoom = map ? map.getZoom() : 16;
+            if (zoom <= 14) return 3;
+            if (zoom <= 16) return 4;
+            return 5;
+        }
+
+        function visualizationRadiusForZoom() {
+            const zoom = map ? map.getZoom() : 16;
+            if (zoom <= 14) return 24;
+            if (zoom <= 16) return 32;
+            return heatmapRadius;
+        }
+
+        function updateVisualizationScale() {
+            if (markerLayer) {
+                const radius = markerRadiusForZoom();
+                markerLayer.eachLayer(marker => marker.setRadius(radius));
+            }
+
+            if (heatmapLayer && typeof heatmapLayer.setOptions === 'function') {
+                heatmapLayer.setOptions({ radius: visualizationRadiusForZoom() });
+            }
         }
 
         function calculateCrimeWeight(incident) {
@@ -1058,7 +1111,9 @@ if (request()->query('token')) {
 
                 // Zoom to the street and pick it out from its neighbours
                 if (typeof saStreetsFitStreet === 'function') saStreetsFitStreet(name);
-                if (typeof saStreetsHighlight === 'function') saStreetsHighlight(name);
+                const filteredStreets = Array.from(document.getElementById('streets')?.selectedOptions || [])
+                    .map(option => option.value);
+                if (typeof saStreetsHighlight === 'function') saStreetsHighlight(filteredStreets.length ? filteredStreets : name);
 
                 if (!hotspot) {
                     body.innerHTML = `
@@ -1232,31 +1287,109 @@ if (request()->query('token')) {
                 .then(data => {
                     const select = document.getElementById('barangay');
                     data.forEach(barangay => {
+                        if (Array.from(select.options).some(option => option.value === String(barangay.id))) return;
                         const option = document.createElement('option');
                         option.value = barangay.id;
                         option.textContent = barangay.barangay_name;
                         select.appendChild(option);
                     });
+                    const sanAgustin = data.find(barangay => String(barangay.barangay_name).trim().toLowerCase() === 'san agustin');
+                    if (sanAgustin) {
+                        select.value = sanAgustin.id;
+                        loadHotspotData();
+                    }
                 })
                 .catch(error => console.error('Error loading barangays:', error));
         }
 
+        function selectedStreetNames() {
+            return Array.from(document.getElementById('streets').selectedOptions).map(option => option.value);
+        }
+
+        function syncStreetFilter() {
+            const selected = selectedStreetNames();
+            const label = document.getElementById('streetDropdownLabel');
+            const removeButton = document.getElementById('removeStreetSelectionBtn');
+            label.textContent = selected.length === 0
+                ? 'All streets'
+                : selected.length === 1 ? selected[0] : `${selected.length} streets selected`;
+            removeButton.classList.toggle('hidden', selected.length === 0);
+            if (typeof saStreetsHighlight === 'function') saStreetsHighlight(selected);
+            loadHotspotData();
+        }
+
+        function clearStreetFilter() {
+            document.querySelectorAll('.street-filter-checkbox').forEach(checkbox => checkbox.checked = false);
+            Array.from(document.getElementById('streets').options).forEach(option => option.selected = false);
+            syncStreetFilter();
+        }
+
+        function loadStreets() {
+            fetch('/pattern-detection/street-stats')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('streets');
+                    const list = document.getElementById('streetCheckboxList');
+                    const streets = Object.keys(data.streets || {}).sort((a, b) => a.localeCompare(b));
+                    select.innerHTML = '';
+                    list.innerHTML = '';
+
+                    streets.forEach(street => {
+                        const option = new Option(street, street);
+                        select.add(option);
+
+                        const label = document.createElement('label');
+                        label.className = 'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-alertara-50 text-sm text-gray-700';
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.value = street;
+                        checkbox.className = 'street-filter-checkbox rounded border-gray-300 text-alertara-600 focus:ring-alertara-500';
+                        const name = document.createElement('span');
+                        name.textContent = street;
+                        label.append(checkbox, name);
+                        list.appendChild(label);
+                    });
+                })
+                .catch(error => console.error('Error loading streets:', error));
+        }
         function setupFilterListeners() {
             document.getElementById('timePeriod').addEventListener('change', debounce(loadHotspotData, 500));
             document.getElementById('visualizationMode').addEventListener('change', debounce(loadHotspotData, 500));
             document.getElementById('crimeType').addEventListener('change', debounce(loadHotspotData, 500));
             document.getElementById('caseStatus').addEventListener('change', debounce(loadHotspotData, 500));
             document.getElementById('barangay').addEventListener('change', debounce(loadHotspotData, 500));
+            document.getElementById('streetDropdownButton').addEventListener('click', function () {
+                const panel = document.getElementById('streetDropdownPanel');
+                panel.classList.toggle('hidden');
+                this.setAttribute('aria-expanded', String(!panel.classList.contains('hidden')));
+            });
+            document.getElementById('streetCheckboxList').addEventListener('change', function (event) {
+                if (!event.target.classList.contains('street-filter-checkbox')) return;
+                const option = Array.from(document.getElementById('streets').options)
+                    .find(item => item.value === event.target.value);
+                if (option) option.selected = event.target.checked;
+                syncStreetFilter();
+            });
+            document.getElementById('removeStreetSelectionBtn').addEventListener('click', clearStreetFilter);
+            document.addEventListener('click', function (event) {
+                const dropdown = document.getElementById('streetFilterDropdown');
+                if (!dropdown.contains(event.target)) {
+                    document.getElementById('streetDropdownPanel').classList.add('hidden');
+                    document.getElementById('streetDropdownButton').setAttribute('aria-expanded', 'false');
+                }
+            });
 
             document.getElementById('resetFilterBtn').addEventListener('click', function() {
                 document.getElementById('timePeriod').value = 'all';
                 document.getElementById('visualizationMode').value = 'markers';
                 document.getElementById('crimeType').value = '';
                 document.getElementById('caseStatus').value = '';
-                document.getElementById('barangay').value = '';
+                const barangaySelect = document.getElementById('barangay');
+                const sanAgustin = Array.from(barangaySelect.options).find(option => option.text.trim().toLowerCase() === 'san agustin');
+                barangaySelect.value = sanAgustin ? sanAgustin.value : '';
                 selectedHotspot = null;
                 clearStreetSelection();
-                loadHotspotData();
+                clearStreetFilter();
             });
 
             document.getElementById('downloadCsvBtn').addEventListener('click', downloadCSV);
