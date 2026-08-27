@@ -49,9 +49,20 @@ class HotspotAnalyticsService
      */
     private const MIN_DENSITY_LENGTH_M = 60;
 
-    public function analyze(string $timePeriod, string $crimeType, string $barangay, string $caseStatus = ''): array
+    public function analyze(string $timePeriod, string $crimeType, string $barangay, string $caseStatus = '', array $streets = []): array
     {
         $incidents = $this->baseQuery($timePeriod, $crimeType, $barangay, $caseStatus)->get();
+        $streetKeys = collect($streets)
+            ->map(fn ($street) => mb_strtolower(trim((string) $street)))
+            ->filter()
+            ->unique()
+            ->all();
+
+        if ($streetKeys !== []) {
+            $incidents = $incidents
+                ->filter(fn ($incident) => in_array(mb_strtolower($this->streetOf($incident) ?? ''), $streetKeys, true))
+                ->values();
+        }
 
         $hotspots = $this->rankStreets($incidents, $timePeriod, $crimeType, $caseStatus);
 
