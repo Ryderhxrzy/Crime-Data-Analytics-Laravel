@@ -355,7 +355,7 @@
             <!-- Crime types (multi-select) -->
             <div class="rounded-lg border border-gray-200 bg-white p-3">
                 <label class="block text-xs font-bold text-gray-700 mb-2">
-                    <i class="fas fa-tags mr-1 text-alertara-600"></i>Crime types <span class="text-gray-400 font-normal">(leave all unchecked = all types)</span>
+                    <i class="fas fa-tags mr-1 text-alertara-600"></i>Crime types <span class="text-gray-400 font-normal">(criminal offenses only; leave all unchecked = all types)</span>
                 </label>
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     @foreach($crimeCategories as $category)

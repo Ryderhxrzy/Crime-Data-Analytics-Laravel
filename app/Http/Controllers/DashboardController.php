@@ -1286,7 +1286,18 @@ class DashboardController extends Controller
         extract($authData);
 
         $barangays = Barangay::orderBy('barangay_name')->get();
-        $crimeCategories = CrimeCategory::orderBy('category_name')->get();
+        // The What-If picker models criminal offenses only. Operational reports
+        // (fire/rescue/medical), tips, disasters, and traffic/admin records are
+        // intentionally excluded from its scenario generator.
+        $simulationCrimeCategories = [
+            'Arson', 'Assault', 'Burglary', 'Domestic Violence', 'Drug-Related',
+            'Fraud', 'Homicide', 'Robbery', 'Sexual Offense', 'Theft',
+            'Trespassing', 'Vandalism', 'Vehicle Theft',
+        ];
+        $crimeCategories = CrimeCategory::query()
+            ->whereIn('category_name', $simulationCrimeCategories)
+            ->orderBy('category_name')
+            ->get();
 
         return view('pattern-detection', compact('barangays', 'crimeCategories', 'currentUser', 'userEmail', 'userRole', 'userDepartment', 'departmentName'));
     }
