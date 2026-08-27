@@ -6,7 +6,7 @@ if (request()->query('token')) {
 @endphp
 
 @extends('layouts.app')
-@section('title', 'Crime Forecast')
+@section('title', 'Risk Analysis & Short-Term Projection')
 @section('content')
     <div class="p-4 lg:p-6 pt-0 lg:pt-0 pb-12">
         <!-- Page Header -->
@@ -14,11 +14,11 @@ if (request()->query('token')) {
             <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                 <div>
                     <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">
-                        <i class="fas fa-chart-line mr-3" style="color: #274d4c;"></i>Crime Forecast
+                        <i class="fas fa-chart-line mr-3" style="color: #274d4c;"></i>Risk Analysis &amp; Short-Term Projection
                     </h1>
                     <p class="text-gray-600 mt-1 text-sm lg:text-base">
-                        Trend projection over weekly incident counts &mdash; how many incidents the recent
-                        trend implies for the coming period, and how far that projection can be trusted.
+                        Analyze recorded weekly incident trends to support short-term patrol and prevention planning.
+                        This estimates risk direction and volume; it does not predict an individual crime.
                     </p>
                 </div>
                 <div class="text-xs text-gray-500 lg:text-right shrink-0">
@@ -28,17 +28,17 @@ if (request()->query('token')) {
             </div>
         </div>
 
-        <!-- Forecast Controls -->
+        <!-- Analysis controls -->
         <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
             <div class="mb-4 pb-4 border-b border-gray-200">
                 <h3 class="text-sm font-bold text-gray-900">
-                    <i class="fas fa-filter mr-2 text-alertara-700"></i>Forecast Filters
+                    <i class="fas fa-filter mr-2 text-alertara-700"></i>Choose records to review
                 </h3>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 <!-- Forecast Period -->
                 <div>
-                    <label class="block text-sm font-medium text-alertara-800 mb-2">Forecast Period</label>
+                    <label class="block text-sm font-medium text-alertara-800 mb-2">Planning window</label>
                     <select id="forecastPeriod" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
                         <option value="7" selected>Next 7 Days</option>
                         <option value="14">Next 14 Days</option>
@@ -76,11 +76,12 @@ if (request()->query('token')) {
                 <!-- Barangay -->
                 <div>
                     <label class="block text-sm font-medium text-alertara-800 mb-2">Barangay</label>
+                    @php($sanAgustin = $barangays->first(fn ($item) => mb_strtolower(trim($item->barangay_name)) === 'san agustin'))
                     <select id="targetArea" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                        <option value="" selected>All Barangays</option>
+                        <option value="">All Barangays</option>
                         @if(isset($barangays))
                             @foreach($barangays as $barangay)
-                                <option value="{{ $barangay->id }}">{{ $barangay->barangay_name }}</option>
+                                <option value="{{ $barangay->id }}" @selected($sanAgustin && $barangay->id === $sanAgustin->id)>{{ $barangay->barangay_name }}</option>
                             @endforeach
                         @endif
                     </select>
@@ -98,7 +99,7 @@ if (request()->query('token')) {
                 <div class="flex items-end">
                     <button type="button" id="generateBtn" class="w-full px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-60">
                         <i class="fas fa-chart-line"></i>
-                        <span>Generate</span>
+                        <span>Analyze</span>
                     </button>
                 </div>
             </div>
@@ -108,7 +109,8 @@ if (request()->query('token')) {
         <div id="statusStrip" class="hidden mb-6 rounded-lg border p-4 text-sm"></div>
 
         <!-- Method disclosure -->
-        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+        <details class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+            <summary class="cursor-pointer text-sm font-semibold text-gray-700">How this estimate is calculated</summary>
             <div class="flex items-start gap-3">
                 <i class="fas fa-circle-info text-gray-500 mt-1"></i>
                 <div class="text-xs text-gray-600 leading-relaxed">
@@ -117,6 +119,24 @@ if (request()->query('token')) {
                     <ul id="forecastNotes" class="mt-2 list-disc list-inside space-y-1 text-amber-700"></ul>
                 </div>
             </div>
+        </details>
+
+        <!-- Planning guidance and validation -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-2 flex items-center">
+                    <i class="fas fa-shield-halved mr-2 text-indigo-600"></i>Planning Priorities
+                </h2>
+                <p class="text-sm text-gray-700 mb-4" id="planningPurpose">Loading planning guidance&hellip;</p>
+                <ol id="planningPriorities" class="space-y-3 text-sm text-gray-700"></ol>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-2 flex items-center">
+                    <i class="fas fa-vial-circle-check mr-2 text-alertara-700"></i>How reliable is this guide?
+                </h2>
+                <p class="text-sm text-gray-700" id="validationSummary">Checking the model against the latest recorded weeks&hellip;</p>
+                <p class="text-xs text-gray-500 mt-3" id="validationDetail"></p>
+            </div>
         </div>
 
         <!-- Main Forecast Chart (Full Width) -->
@@ -124,11 +144,11 @@ if (request()->query('token')) {
             <div class="mb-4">
                 <h2 class="text-xl font-bold text-gray-900 flex items-center">
                     <i class="fas fa-chart-line mr-3" style="color: #274d4c;"></i>
-                    Weekly Incidents &mdash; Recorded and Projected
+                    What the recent records show
                 </h2>
                 <p class="text-sm text-gray-600 mt-1">
-                    Solid line is recorded weekly counts &bull; dashed line is the fitted trend projected forward &bull;
-                    the shaded band is the 95% prediction interval, which widens the further ahead it reaches.
+                    Solid line = recorded incidents. Dashed line = possible short-term direction. The shaded area shows
+                    that the estimate can vary, especially farther into the future.
                 </p>
             </div>
             <div style="position: relative; height: 450px;">
@@ -136,36 +156,42 @@ if (request()->query('token')) {
             </div>
         </div>
 
-        <!-- Forecast Summary Cards -->
+        <!-- Quick answers -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <!-- Projected Trend -->
             <div class="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-300 rounded-lg p-6">
-                <h3 class="text-sm font-bold text-gray-900 mb-3">Projected Change</h3>
+                <h3 class="text-sm font-bold text-gray-900 mb-3">Expected direction</h3>
                 <p class="text-3xl font-bold text-blue-700 mb-2" id="predictedTrend">&mdash;</p>
                 <p class="text-xs text-gray-600" id="predictedTrendDetail">vs the same period's historical baseline</p>
             </div>
 
             <!-- Most frequent crime type -->
             <div class="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-300 rounded-lg p-6">
-                <h3 class="text-sm font-bold text-gray-900 mb-3">Most Frequent Type</h3>
+                <h3 class="text-sm font-bold text-gray-900 mb-3">Main type to review</h3>
                 <p class="text-2xl font-bold text-purple-700 mb-2" id="likelyCrimeType">&mdash;</p>
                 <p class="text-xs text-gray-600" id="likelyCrimeTypeDetail">base rate in the historical window</p>
             </div>
 
             <!-- Top projected street -->
             <div class="bg-gradient-to-br from-red-50 to-red-100 border border-red-300 rounded-lg p-6">
-                <h3 class="text-sm font-bold text-gray-900 mb-3">Highest Projected Street</h3>
+                <h3 class="text-sm font-bold text-gray-900 mb-3">First street to review</h3>
                 <p class="text-2xl font-bold text-red-700 mb-2" id="highRiskArea">&mdash;</p>
                 <p class="text-xs text-gray-600" id="highRiskAreaDetail">largest projected volume</p>
             </div>
 
             <!-- Confidence Score -->
             <div class="bg-gradient-to-br from-green-50 to-green-100 border border-green-300 rounded-lg p-6">
-                <h3 class="text-sm font-bold text-gray-900 mb-3">Confidence Index</h3>
+                <h3 class="text-sm font-bold text-gray-900 mb-3">Data reliability guide</h3>
                 <p class="text-3xl font-bold text-green-700 mb-2" id="confidenceScore">&mdash;</p>
                 <p class="text-xs text-gray-600" id="confidenceDetail">from fit quality and sample size</p>
             </div>
         </div>
+
+        <!-- Technical details are available without overwhelming the planning view. -->
+        <details class="bg-white border border-gray-200 rounded-lg shadow-sm mb-8">
+            <summary class="cursor-pointer px-6 py-5 text-sm font-semibold text-alertara-800 hover:bg-gray-50 rounded-lg">
+                Show detailed figures, street table, and model checks
+            </summary>
 
         <!-- Risk Level Classification -->
         <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-8 mb-8">
@@ -211,7 +237,7 @@ if (request()->query('token')) {
         <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-8">
             <h2 class="text-xl font-bold text-gray-900 mb-2 flex items-center">
                 <i class="fas fa-table mr-3" style="color: #274d4c;"></i>
-                Forecast Breakdown
+                Short-Term Projection Breakdown
             </h2>
             <p class="text-sm text-gray-600 mb-6">
                 One row per forecast week. The model is fitted on weekly counts, so a week is the smallest
@@ -244,8 +270,8 @@ if (request()->query('token')) {
                 Street Projections
             </h2>
             <p class="text-sm text-gray-600 mb-6">
-                Each street is fitted separately over the same window. This is a <strong>forward</strong>
-                projection &mdash; for current concentration and risk scoring, see the Crime Hotspots page.
+                Each street is fitted separately over the same window. The table shows why an area is a
+                planning priority: projected volume, change from its own baseline, and leading recorded type.
             </p>
             <div class="overflow-x-auto">
                 <table class="w-full">
@@ -293,20 +319,22 @@ if (request()->query('token')) {
             </div>
         </div>
 
-        <!-- Forecast Summary -->
+        <!-- Analysis Summary -->
         <div class="bg-gradient-to-r from-indigo-50 to-blue-50 border-l-4 border-indigo-500 rounded-lg p-6 mb-8">
             <div class="flex items-start gap-4">
                 <div class="text-2xl text-indigo-600"><i class="fas fa-clipboard-list"></i></div>
                 <div class="flex-1">
-                    <h3 class="text-lg font-bold text-gray-900 mb-2">Forecast Summary</h3>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Analysis Summary</h3>
                     <p class="text-gray-700 text-sm leading-relaxed" id="forecastSummaryText">&mdash;</p>
                     <p class="text-xs text-gray-500 mt-3">
-                        Generated from the figures on this page. For narrative analysis and prevention
-                        recommendations, use the Pattern Detection page.
+                        Use this as an allocation guide, then validate local conditions and operational information
+                        before assigning resources.
                     </p>
                 </div>
             </div>
         </div>
+
+        </details>
 
         <!-- Export Options -->
         <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6 no-print">
@@ -342,6 +370,7 @@ if (request()->query('token')) {
             // History depth per horizon: a longer projection needs a longer run-up
             // before the slope means anything. Clamped server-side to 28-365.
             const HISTORY_DAYS = { 7: 180, 14: 180, 30: 270, 90: 365 };
+            const DEFAULT_BARANGAY = @json($sanAgustin?->id ?? '');
 
             const RISK_COLORS = { HIGH: '#ef4444', MODERATE: '#f59e0b', LOW: '#22c55e' };
 
@@ -372,7 +401,7 @@ if (request()->query('token')) {
                 $('forecastPeriod').value = '7';
                 $('crimeTypeFilter').value = '';
                 $('caseStatus').value = '';
-                $('targetArea').value = '';
+                $('targetArea').value = DEFAULT_BARANGAY;
                 loadForecast();
             }
 
@@ -443,6 +472,7 @@ if (request()->query('token')) {
 
             function render(data) {
                 renderMeta(data);
+                renderPlanning(data);
                 renderCards(data);
                 renderRiskCounts(data);
                 renderMainChart(data);
@@ -469,6 +499,38 @@ if (request()->query('token')) {
                     li.textContent = note;
                     notes.appendChild(li);
                 });
+            }
+
+            function renderPlanning(data) {
+                const planning = data.planning || {};
+                $('planningPurpose').textContent = planning.purpose ||
+                    'No planning guidance is available for the selected records.';
+
+                const priorities = planning.priorities || [];
+                $('planningPriorities').innerHTML = priorities.length
+                    ? priorities.map((item) => `
+                        <li class="bg-white/70 rounded-md p-3 border border-indigo-100">
+                            <span class="font-bold text-indigo-800">${item.rank}. ${esc(item.street)}</span>
+                            <span class="text-xs ml-2">${riskBadge(item.risk_level)}</span>
+                            <p class="mt-1 text-xs"><strong>Why:</strong> ${esc(item.reason)}.</p>
+                            <p class="mt-1 text-xs"><strong>Suggested action:</strong> ${esc(item.action)}</p>
+                        </li>
+                    `).join('')
+                    : '<li class="text-gray-500">No street has enough recorded incidents for a planning priority.</li>';
+
+                const validation = data.validation || {};
+                if (!validation.available) {
+                    $('validationSummary').textContent = 'Not enough past weekly records to check this estimate yet.';
+                    $('validationDetail').textContent = validation.message || 'Use the guide carefully and rely on current local information too.';
+                    return;
+                }
+
+                $('validationSummary').textContent = validation.better_than_baseline
+                    ? 'The recent-trend estimate performed better than a simple historical average in the latest recorded weeks.'
+                    : 'The simple historical average performed as well as or better than the recent-trend estimate in the latest recorded weeks.';
+                $('validationDetail').textContent =
+                    'Checked against ' + validation.tested_weeks + ' recent recorded week(s). Detail: the trend estimate differed by about ' +
+                    validation.model_mae + ' incidents per week on average.';
             }
 
             function renderCards(data) {

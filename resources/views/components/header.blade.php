@@ -20,10 +20,11 @@
                 </div>
             </div>
 
-            <!-- Right: Messages, Notifications, Profile -->
+            <!-- Right: System controls and profile -->
             <div class="flex items-center space-x-6">
 
-                <!-- Messages -->
+                {{-- Messages and notification dropdowns removed from the global header. --}}
+                {{--
                 <div class="relative">
                     <button id="messagesBtn" class="p-2 text-gray-600 hover:bg-gray-100 rounded-md relative transition-colors">
                         <i class="fas fa-envelope text-lg"></i>
@@ -181,6 +182,7 @@
                     </div>
                 </div>
 
+                --}}
                 <!-- Real-time Status -->
                 <div class="flex items-center space-x-2 px-3 py-1 rounded-full bg-gray-100 border border-gray-200">
                     <i id="header-realtime-icon" class="fas fa-circle text-xs text-gray-400"></i>
@@ -493,11 +495,9 @@ if (connectSampleBtn) {
             }
         });
 
-        // Messages and Notifications Dropdown Handlers
-        setupDropdowns();
     });
 
-    // Setup Dropdowns
+    /* Removed header message/notification dropdown handlers.
     function setupDropdowns() {
         const messagesBtn = document.getElementById('messagesBtn');
         const notificationsBtn = document.getElementById('notificationsBtn');
@@ -536,4 +536,5 @@ if (connectSampleBtn) {
             }
         });
     }
+    */
 </script>

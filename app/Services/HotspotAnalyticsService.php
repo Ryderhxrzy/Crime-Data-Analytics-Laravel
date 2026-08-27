@@ -689,8 +689,10 @@ class HotspotAnalyticsService
         [$streets, $excludedStreets, $streetsConsidered, $riskCounts] =
             $this->forecastStreets($incidents, $start, $weeks, $forecastWeeks, $forecastDays);
 
+        $validation = $this->backtestForecast($series);
+
         return [
-            'method' => 'Least-squares linear regression over weekly incident counts, projected per street (trend projection, not machine learning)',
+            'method' => 'Least-squares linear regression over weekly incident counts, projected per street (short-term trend projection, not machine learning)',
             'confidence_note' => 'Confidence is a heuristic index built from the regression fit (R²), sample size and forecast distance — it is not a statistical confidence level and it is not an accuracy figure. The shaded band on the chart is the 95% prediction interval from the same fit.',
             'anchor_date' => $anchor->toDateString(),
             'anchor_is_stale' => $anchor->lt(Carbon::now()->subDays(14)),
@@ -720,11 +722,90 @@ class HotspotAnalyticsService
             'streets_considered' => $streetsConsidered,
             'streets_excluded' => $excludedStreets,
             'risk_counts' => $riskCounts,
+            'validation' => $validation,
+            'planning' => $this->planningPriorities($streets, $forecastDays, $anchor),
             'comparison' => [
                 'months' => $this->monthComparison($crimeType, $barangay, $caseStatus, $anchor),
                 'trend_vs_average' => $this->trendVersusAverage($series, $start, $weeks, $crimeType, $barangay, $caseStatus, $anchor),
             ],
             'notes' => $this->forecastNotes($incidents->count(), $weeks, $fit, $excludedStreets, $anchor),
+        ];
+    }
+
+    /**
+     * Tests the same forecasting method against the latest recorded weeks.
+     * This is a holdout check, not a claim that future results are guaranteed.
+     */
+    protected function backtestForecast(array $series): array
+    {
+        $weeks = count($series);
+        $holdoutWeeks = min(4, max(0, (int) floor($weeks / 4)));
+        $trainingWeeks = $weeks - $holdoutWeeks;
+
+        if ($trainingWeeks < 8 || $holdoutWeeks < 2) {
+            return [
+                'available' => false,
+                'message' => 'At least 10 weeks of history are needed for an out-of-sample validation check.',
+            ];
+        }
+
+        $training = array_slice($series, 0, $trainingWeeks);
+        $actual = array_slice($series, $trainingWeeks);
+        $fit = $this->linearFit($training);
+        $baseline = array_sum($training) / $trainingWeeks;
+        $modelErrors = [];
+        $baselineErrors = [];
+        $insideInterval = 0;
+
+        foreach ($actual as $index => $observed) {
+            $point = $this->predictAt($fit, $trainingWeeks + $index);
+            $modelErrors[] = abs($observed - $point['value']);
+            $baselineErrors[] = abs($observed - $baseline);
+            if ($observed >= $point['lower'] && $observed <= $point['upper']) {
+                $insideInterval++;
+            }
+        }
+
+        $modelMae = array_sum($modelErrors) / $holdoutWeeks;
+        $baselineMae = array_sum($baselineErrors) / $holdoutWeeks;
+
+        return [
+            'available' => true,
+            'training_weeks' => $trainingWeeks,
+            'tested_weeks' => $holdoutWeeks,
+            'model_mae' => round($modelMae, 2),
+            'baseline_mae' => round($baselineMae, 2),
+            'better_than_baseline' => $modelMae < $baselineMae,
+            'interval_coverage_percent' => (int) round($insideInterval / $holdoutWeeks * 100),
+            'message' => $modelMae < $baselineMae
+                ? 'On the latest recorded weeks, the trend projection was closer than a flat historical-average baseline.'
+                : 'On the latest recorded weeks, a flat historical-average baseline was as good as or better than the trend projection.',
+        ];
+    }
+
+    /** Practical planning prompts based on the projected streets. */
+    protected function planningPriorities(array $streets, int $forecastDays, Carbon $anchor): array
+    {
+        $priorities = [];
+        foreach (array_slice($streets, 0, 3) as $index => $street) {
+            $reason = $street['change_percent'] > 0
+                ? abs($street['change_percent']) . '% above its own baseline'
+                : 'the largest projected volume in the selected area';
+
+            $priorities[] = [
+                'rank' => $index + 1,
+                'street' => $street['street'],
+                'risk_level' => $street['risk_level'],
+                'reason' => $reason,
+                'action' => 'Use this street as a patrol and visibility priority; review the recorded ' . ($street['top_category'] ?? 'incident') . ' pattern with the local team.',
+            ];
+        }
+
+        return [
+            'purpose' => 'Use the projection to prioritize short-term patrol, visibility and prevention planning. It does not predict an individual incident.',
+            'recommended_horizon' => min($forecastDays, 30),
+            'anchor_date' => $anchor->toDateString(),
+            'priorities' => $priorities,
         ];
     }
 
