@@ -144,6 +144,14 @@ class PatternDetectionService
         return null;
     }
 
+    private function formatHour12(int $hour, int $minute = 0): string
+    {
+        $suffix = $hour < 12 ? 'AM' : 'PM';
+        $displayHour = $hour % 12 ?: 12;
+
+        return sprintf('%d:%02d %s', $displayHour, $minute, $suffix);
+    }
+
     // ----------------------------------------------------------------- trends
 
     private function crimeTrends(Collection $all, int $days): array
@@ -322,17 +330,17 @@ class PatternDetectionService
         $weekdayDailyAvg = $weekday / 5;
 
         $blocks = [
-            'Early morning (00:00-05:59)' => array_sum(array_slice($byHour, 0, 6)),
-            'Morning (06:00-11:59)'       => array_sum(array_slice($byHour, 6, 6)),
-            'Afternoon (12:00-17:59)'     => array_sum(array_slice($byHour, 12, 6)),
-            'Evening/Night (18:00-23:59)' => array_sum(array_slice($byHour, 18, 6)),
+            'Early morning (12:00 AM-5:59 AM)' => array_sum(array_slice($byHour, 0, 6)),
+            'Morning (6:00 AM-11:59 AM)'       => array_sum(array_slice($byHour, 6, 6)),
+            'Afternoon (12:00 PM-5:59 PM)'     => array_sum(array_slice($byHour, 12, 6)),
+            'Evening/Night (6:00 PM-11:59 PM)' => array_sum(array_slice($byHour, 18, 6)),
         ];
         arsort($blocks);
 
         return [
             'by_hour' => collect($byHour)->map(fn ($c, $h) => [
                 'hour'      => $h,
-                'label'     => sprintf('%02d:00', $h),
+                'label'     => $this->formatHour12($h),
                 'count'     => $c,
                 'real'      => $byHourReal[$h],
                 'simulated' => $byHourSim[$h],
@@ -348,7 +356,9 @@ class PatternDetectionService
             ])->values()->all(),
 
             'peak_hour'       => $peakHour,
-            'peak_hour_label' => $peakHour === null ? null : sprintf('%02d:00-%02d:59', $peakHour, $peakHour),
+            'peak_hour_label' => $peakHour === null
+                ? null
+                : $this->formatHour12($peakHour) . '-' . $this->formatHour12($peakHour, 59),
             'peak_hour_count' => $peakHour === null ? 0 : $byHour[$peakHour],
             'peak_day'        => $peakDow === null ? null : $dowNames[$peakDow],
             'peak_day_count'  => $peakDow === null ? 0 : $byDow[$peakDow],

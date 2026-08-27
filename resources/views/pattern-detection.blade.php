@@ -187,19 +187,22 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Trends -->
             <div class="bg-white rounded-xl border border-gray-200 p-6">
-                <div class="flex items-center justify-between mb-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
                     <h2 class="text-lg font-bold text-gray-900"><i class="fas fa-chart-line mr-2 text-alertara-600"></i>Crime Trends</h2>
                     <span id="trendBadge" class="px-3 py-1 rounded-full text-xs font-bold">&mdash;</span>
                 </div>
                 <p id="trendExplanation" class="text-xs text-gray-600 mb-4"></p>
 
-                <div class="flex gap-2 mb-3">
+                <div id="trendStats" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4"></div>
+
+                <div class="flex flex-wrap items-center gap-2 mb-3">
                     <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="daily">Daily</button>
                     <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="weekly">Weekly</button>
                     <button class="trend-tab px-3 py-1 text-xs font-semibold rounded-lg border" data-grain="monthly">Monthly</button>
-                    <div id="trendLegend" class="ml-auto flex items-center"></div>
+                    <div id="trendLegend" class="sm:ml-auto flex flex-wrap items-center"></div>
                 </div>
-                <div style="height: 260px;"><canvas id="trendChart"></canvas></div>
+                <p id="trendDetailHint" class="text-[11px] text-gray-500 mb-2"></p>
+                <div style="height: 290px;"><canvas id="trendChart"></canvas></div>
             </div>
 
             <!-- Crime type distribution -->
@@ -491,6 +494,7 @@
 
     let latest = null;
     let trendGrain = 'daily';
+    let trendPeriodKey = null;
 
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
@@ -1303,6 +1307,15 @@
         badge.textContent = dir.label.toUpperCase();
         $('trendExplanation').textContent = dir.explanation;
 
+        // Start with a readable aggregation, while keeping all granularities
+        // available through the tabs.
+        const periodDays = latest?.meta?.period_days || 0;
+        const periodKey = periodDays + ':' + (t.daily || []).length;
+        if (trendPeriodKey !== periodKey) {
+            trendGrain = periodDays > 365 ? 'monthly' : periodDays > 90 ? 'weekly' : 'daily';
+            trendPeriodKey = periodKey;
+        }
+
         document.querySelectorAll('.trend-tab').forEach(tab => {
             const active = tab.dataset.grain === trendGrain;
             tab.className = 'trend-tab px-3 py-1 text-xs font-semibold rounded-lg border ' +
@@ -1310,9 +1323,52 @@
         });
 
         const series = t[trendGrain] || [];
+        renderTrendStats(series, dir);
+        $('trendDetailHint').textContent = trendGrain === 'daily' && series.length > 60
+            ? 'Daily detail is shown; date labels are reduced to keep the chart readable.'
+            : 'Showing ' + trendGrain + ' totals for the selected analysis period.';
+
+        const spansMultipleYears = new Set(series.map(point => String(point.label).slice(0, 4))).size > 1;
+        const chartSeries = series.map(point => ({
+            ...point,
+            label: formatTrendLabel(point.label, trendGrain, spansMultipleYears)
+        }));
         // Daily over a long window is far too dense for bars — a line reads it
-        drawChart('trendChart', series, trendGrain === 'daily' ? 'line' : 'bar');
+        drawChart('trendChart', chartSeries, trendGrain === 'daily' ? 'line' : 'bar');
         renderChartLegend('trendLegend', series.some(s => (s.simulated || 0) > 0));
+    }
+
+    function formatTrendLabel(label, grain, showYear = false) {
+        const date = new Date(label + (grain === 'monthly' ? '-01' : '') + 'T00:00:00');
+        if (Number.isNaN(date.getTime())) return label;
+
+        if (grain === 'monthly') {
+            return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        }
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            ...(showYear ? { year: '2-digit' } : {})
+        });
+    }
+
+    function renderTrendStats(series, direction) {
+        const total = series.reduce((sum, item) => sum + (item.count || 0), 0);
+        const change = Number(direction.change_percent || 0);
+        const changeClass = change > 0 ? 'text-red-700' : change < 0 ? 'text-green-700' : 'text-gray-700';
+        const cards = [
+            ['Selected period', total + ' crimes'],
+            ['First half', (direction.first_half ?? 0) + ' crimes'],
+            ['Second half', (direction.second_half ?? 0) + ' crimes'],
+            ['Change', (change > 0 ? '+' : '') + change + '%', changeClass]
+        ];
+
+        $('trendStats').innerHTML = cards.map(([label, value, valueClass = 'text-gray-900']) =>
+            '<div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">' +
+                '<div class="text-[10px] font-bold uppercase tracking-wide text-gray-500">' + label + '</div>' +
+                '<div class="text-sm font-bold ' + valueClass + '">' + value + '</div>' +
+            '</div>'
+        ).join('');
     }
 
     // ---------- charts (Chart.js, loaded globally by the layout) ----------
@@ -1379,7 +1435,7 @@
             borderWidth: 2,
             borderRadius: type === 'bar' ? 4 : 0,
             fill: type === 'line',
-            tension: 0.3,
+            tension: 0,
             pointRadius: series.length > 60 ? 0 : 3,
             pointHoverRadius: 5
         };
@@ -1394,7 +1450,7 @@
             borderWidth: 2,
             borderRadius: type === 'bar' ? 4 : 0,
             fill: type === 'line',
-            tension: 0.3,
+            tension: 0,
             pointRadius: series.length > 60 ? 0 : 3,
             pointHoverRadius: 5
         }];
