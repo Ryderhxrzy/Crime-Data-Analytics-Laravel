@@ -2014,18 +2014,25 @@ class DashboardController extends Controller
             $crimeType = $this->filterValue($request, 'crimeType');
             $barangay = $this->filterValue($request, 'barangay');
             $caseStatus = $this->filterValue($request, 'caseStatus');
+            $streets = collect((array) $request->input('streets', []))
+                ->filter(fn ($street) => is_string($street) && trim($street) !== '')
+                ->map(fn ($street) => trim($street))
+                ->unique(fn ($street) => mb_strtolower($street))
+                ->values()
+                ->all();
 
-            $cacheKey = CacheService::generateCacheKey('hotspot_data_v2', [
+            $cacheKey = CacheService::generateCacheKey('hotspot_data_v3', [
                 'timePeriod' => $timePeriod,
                 'crimeType' => $crimeType,
                 'barangay' => $barangay,
                 'caseStatus' => $caseStatus,
+                'streets' => $streets,
             ]);
 
             $response = \Illuminate\Support\Facades\Cache::remember(
                 $cacheKey,
                 now()->addMinutes(CacheService::HOTSPOT_TTL),
-                fn () => $analytics->analyze($timePeriod, $crimeType, $barangay, $caseStatus)
+                fn () => $analytics->analyze($timePeriod, $crimeType, $barangay, $caseStatus, $streets)
             );
 
             return response()->json($response);
