@@ -584,14 +584,53 @@
             'var CRIMES=' + JSON.stringify(crimes) + ';' +
             'var STREETS=' + JSON.stringify(neededStreets) + ';' +
             'var CATC=' + JSON.stringify(CAT_COLORS) + ';' +
-            'var reportMaps=[],pending=CRIMES.length,actionsReady=false;' +
+            'var reportMaps=[],reportStreetLayers=[],pending=CRIMES.length,actionsReady=false;' +
             'function enableActions(){if(actionsReady)return;actionsReady=true;document.getElementById("downloadPdf").disabled=false;document.getElementById("printReport").disabled=false;}' +
             'function done(){if(--pending<=0){setTimeout(enableActions,500);}}' +
-            'CRIMES.forEach(function(c,i){var m=L.map("map"+i,{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false});reportMaps.push(m);var t=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,crossOrigin:true});t.on("load",done);t.addTo(m);var g=L.featureGroup();var segs=STREETS[(c.street||"").toLowerCase()]||[];segs.forEach(function(coords){var latlngs=coords.map(function(p){return [p[1],p[0]];});L.polyline(latlngs,{color:"#111",weight:8,opacity:.35}).addTo(g);L.polyline(latlngs,{color:"#f59e0b",weight:4,opacity:.95}).addTo(g);});if(c.lat&&c.lng){L.circleMarker([c.lat,c.lng],{radius:9,color:"#fff",weight:2,fillColor:CATC[c.category]||"#dc2626",fillOpacity:1}).addTo(g);}g.addTo(m);setTimeout(function(){m.invalidateSize();var b=g.getBounds();if(b.isValid())m.fitBounds(b.pad(.15),{maxZoom:17});if(c.lat&&c.lng)m.setView([c.lat,c.lng],Math.max(m.getZoom(),17));},30);});' +
+            'CRIMES.forEach(function(c,i){var m=L.map("map"+i,{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false});reportMaps.push(m);var t=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,crossOrigin:true});t.on("load",done);t.addTo(m);var g=L.featureGroup();var segs=STREETS[(c.street||"").toLowerCase()]||[];segs.forEach(function(coords){var latlngs=coords.map(function(p){return [p[1],p[0]];});var casing=L.polyline(latlngs,{color:"#111",weight:8,opacity:.35}).addTo(g);var activeLine=L.polyline(latlngs,{color:"#f59e0b",weight:4,opacity:.95}).addTo(g);reportStreetLayers.push({map:m,layers:[casing,activeLine]});});if(c.lat&&c.lng){L.circleMarker([c.lat,c.lng],{radius:9,color:"#fff",weight:2,fillColor:CATC[c.category]||"#dc2626",fillOpacity:1}).addTo(g);}g.addTo(m);setTimeout(function(){m.invalidateSize();var b=g.getBounds();if(b.isValid())m.fitBounds(b.pad(.15),{maxZoom:17});if(c.lat&&c.lng)m.setView([c.lat,c.lng],Math.max(m.getZoom(),17));},30);});' +
             'document.getElementById("printReport").addEventListener("click",function(){reportMaps.forEach(function(m){m.invalidateSize();});setTimeout(function(){window.print();},250);});' +
             'function safeName(v){return String(v||"report").replace(/[^a-z0-9]+/gi,"-").replace(/^-+|-+$/g,"").toLowerCase()||"report";}' +
             'function pdfFilename(){if(CRIMES.length===1)return safeName(CRIMES[0].street)+"-"+safeName(CRIMES[0].code)+".pdf";return "crime-data-report-"+new Date().toISOString().slice(0,10)+".pdf";}' +
-            'function snapshotMap(m){if(!window.html2canvas)return Promise.reject(new Error("Map snapshot tool failed to load."));m.invalidateSize();return html2canvas(m.getContainer(),{backgroundColor:"#fff",scale:2,useCORS:true,logging:false}).then(function(canvas){return canvas.toDataURL("image/png");});}' +
+            '/* Change this only when the street line needs a PDF-only vertical correction. ' +
+            'Negative moves the street line up; positive moves it down. */' +
+            'const PDF_STREET_LINE_OFFSET_Y = 8;' +
+            'function snapshotMap(map) {' +
+                'if (!window.html2canvas) {' +
+                    'return Promise.reject(new Error("Map snapshot tool failed to load."));' +
+                '}' +
+                'map.invalidateSize();' +
+                'const streetLayers = reportStreetLayers' +
+                    '.filter(entry => entry.map === map)' +
+                    '.flatMap(entry => entry.layers);' +
+                'const originalLatLngs = streetLayers.map(layer => layer.getLatLngs());' +
+                'if (PDF_STREET_LINE_OFFSET_Y !== 0) {' +
+                    'streetLayers.forEach(layer => {' +
+                        'const shiftedLatLngs = layer.getLatLngs().map(latLng => {' +
+                            'const point = map.latLngToContainerPoint(latLng);' +
+                            'point.y += PDF_STREET_LINE_OFFSET_Y;' +
+                            'return map.containerPointToLatLng(point);' +
+                        '});' +
+                        'layer.setLatLngs(shiftedLatLngs);' +
+                    '});' +
+                '}' +
+                'const restoreStreetPositions = () => {' +
+                    'streetLayers.forEach((layer, index) => {' +
+                        'layer.setLatLngs(originalLatLngs[index]);' +
+                    '});' +
+                '};' +
+                'return html2canvas(map.getContainer(), {' +
+                    'backgroundColor: "#fff",' +
+                    'scale: 2,' +
+                    'useCORS: true,' +
+                    'logging: false' +
+                '}).then(canvas => {' +
+                    'restoreStreetPositions();' +
+                    'return canvas.toDataURL("image/png");' +
+                '}, error => {' +
+                    'restoreStreetPositions();' +
+                    'throw error;' +
+                '});' +
+            '}' +
             'document.getElementById("downloadPdf").addEventListener("click",function(){var btn=this;if(!window.html2pdf){alert("PDF generator failed to load. Please try again.");return;}btn.disabled=true;btn.textContent="Preparing maps…";reportMaps.forEach(function(m){m.invalidateSize();});setTimeout(function(){Promise.all(reportMaps.map(snapshotMap)).then(function(images){var copy=document.getElementById("reportContent").cloneNode(true);copy.id="pdfDownloadContent";copy.style.width="190mm";copy.style.background="#fff";copy.style.padding="0";copy.querySelectorAll(".map").forEach(function(el,i){el.innerHTML="";var image=document.createElement("img");image.src=images[i];image.alt="Crime location map";image.style.cssText="display:block;width:100%;height:100%;object-fit:fill;";el.appendChild(image);});var staging=document.createElement("div");staging.style.cssText="position:fixed;left:0;top:0;z-index:-1;width:190mm;background:#fff;";staging.appendChild(copy);document.body.appendChild(staging);btn.textContent="Creating PDF…";return html2pdf().set({margin:[10,10,10,10],filename:pdfFilename(),image:{type:"jpeg",quality:.98},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(copy).save().then(function(){staging.remove();btn.textContent="Download PDF";btn.disabled=false;});}).catch(function(error){console.error("PDF map snapshot failed:",error);alert("The map snapshot could not be created, so no inaccurate PDF was downloaded. Please try again.");btn.textContent="Download PDF";btn.disabled=false;});},250);});' +
             'setTimeout(enableActions,6000);' +
             '<\/scr' + 'ipt></body></html>');
