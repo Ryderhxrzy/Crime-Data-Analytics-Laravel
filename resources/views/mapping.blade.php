@@ -301,7 +301,7 @@ if (request()->query('token')) {
                             <span>Exit Fullscreen</span>
                         </button>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
                         <!-- Visualization Mode -->
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">View Mode</label>
@@ -362,6 +362,14 @@ if (request()->query('token')) {
                             </select>
                         </div>
 
+                        <!-- Street -->
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">Street</label>
+                            <select id="street" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                                <option value="">All Streets</option>
+                            </select>
+                        </div>
+
                         <!-- Buttons -->
                         <div class="flex items-end gap-2">
                             <button id="resetFilterBtn" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
@@ -397,10 +405,6 @@ if (request()->query('token')) {
                                 <div class="text-xs opacity-90 mb-1">Total Crime</div>
                                 <div id="statTotalCrime" class="text-2xl font-bold">0</div>
                             </div>
-                            <div class="bg-gradient-to-br from-amber-600 to-amber-500 text-white p-4 rounded-lg shadow-sm">
-                                <div class="text-xs opacity-90 mb-1">Crimes</div>
-                                <div id="statTotalIncident" class="text-2xl font-bold">0</div>
-                            </div>
                             <div class="bg-gradient-to-br from-green-600 to-green-500 text-white p-4 rounded-lg shadow-sm">
                                 <div class="text-xs opacity-90 mb-1">Cleared Cases</div>
                                 <div id="statCleared" class="text-2xl font-bold">0</div>
@@ -409,7 +413,7 @@ if (request()->query('token')) {
                                 <div class="text-xs opacity-90 mb-1">Uncleared Cases</div>
                                 <div id="statUncleared" class="text-2xl font-bold">0</div>
                             </div>
-                            <div class="bg-gradient-to-br from-blue-600 to-blue-500 text-white p-4 rounded-lg shadow-sm col-span-2">
+                            <div class="bg-gradient-to-br from-blue-600 to-blue-500 text-white p-4 rounded-lg shadow-sm">
                                 <div class="text-xs opacity-90 mb-1">Categories</div>
                                 <div id="statCategories" class="text-2xl font-bold">0</div>
                             </div>
@@ -1363,6 +1367,37 @@ if (request()->query('token')) {
                 (select.selectedOptions[0] || {}).textContent.trim() || null;
         }
 
+        // Streets come from the same incident rows displayed on the map. This
+        // keeps the dropdown limited to real streets that have data for the
+        // currently selected date/category/status/barangay filters.
+        function populateStreetFilter(data) {
+            const streetSelect = document.getElementById('street');
+            const selectedStreet = streetSelect.value;
+            const streets = [...new Set((data || [])
+                .map(incident => (incident.street || '').trim())
+                .filter(Boolean))]
+                .sort((a, b) => a.localeCompare(b));
+
+            streetSelect.innerHTML = '<option value="">All Streets</option>';
+            streets.forEach(street => {
+                const option = document.createElement('option');
+                option.value = street;
+                option.textContent = street;
+                streetSelect.appendChild(option);
+            });
+
+            // If another filter removes the selected street, safely return to
+            // the complete filtered result instead of showing an empty map.
+            streetSelect.value = streets.includes(selectedStreet) ? selectedStreet : '';
+        }
+
+        function filterDataByStreet(data) {
+            const street = document.getElementById('street').value;
+            return street
+                ? data.filter(incident => (incident.street || '').trim() === street)
+                : data;
+        }
+
         // Debug variables
         let eventCounter = 0;
         let debugVisible = false;
@@ -1455,7 +1490,6 @@ if (request()->query('token')) {
                 const stats = await response.json();
                 
                 document.getElementById('statTotalCrime').textContent = stats.total_crime ?? 0;
-                document.getElementById('statTotalIncident').textContent = stats.total_incident ?? 0;
                 document.getElementById('statCleared').textContent = stats.cleared ?? 0;
                 document.getElementById('statUncleared').textContent = stats.uncleared ?? 0;
                 document.getElementById('statCategories').textContent = stats.categories ?? 0;
@@ -1501,10 +1535,13 @@ if (request()->query('token')) {
                 console.log('Data received:', data);
 
                 // Filter data to only show points within QC bounds
-                const filteredData = data.filter(incident => {
+                const dataWithinBounds = data.filter(incident => {
                     if (!qcBounds) return true;
                     return qcBounds.contains([incident.latitude, incident.longitude]);
                 });
+
+                populateStreetFilter(dataWithinBounds);
+                const filteredData = filterDataByStreet(dataWithinBounds);
 
                 // Store data globally for right panel
                 currentData = filteredData;
@@ -2674,9 +2711,10 @@ if (request()->query('token')) {
                 'visualizationMode',
                 'timePeriod',
                 'crimeType',
-                'caseStatus',
-                'clearanceStatus',
-                'barangay'
+                 'caseStatus',
+                 'clearanceStatus',
+                 'barangay',
+                 'street'
             ];
 
             filterElements.forEach(elementId => {
@@ -2702,6 +2740,7 @@ if (request()->query('token')) {
             document.getElementById('caseStatus').value = '';
             document.getElementById('clearanceStatus').value = '';
             document.getElementById('barangay').value = '';
+            document.getElementById('street').value = '';
             document.getElementById('incidentSearch').value = '';
             applyBarangaySelection();   // zooms back out to the whole city
             loadCrimeData();
