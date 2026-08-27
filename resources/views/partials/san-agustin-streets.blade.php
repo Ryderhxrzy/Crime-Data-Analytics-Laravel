@@ -285,8 +285,8 @@
                     // NOT added to the layer here — each street's polylines are
                     // mounted below through one featureGroup, so the group has a
                     // map reference and its tooltip can actually open.
-                    g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 5, opacity: 0.3, pane: 'streetPane' }));
-                    g.inner.push(L.polyline(latlngs, { color: g.color, weight: 2.5, opacity: 0.6, pane: 'streetPane' }));
+                    g.casing.push(L.polyline(latlngs, { color: '#1e293b', weight: 3.5, opacity: 0.25, pane: 'streetPane' }));
+                    g.inner.push(L.polyline(latlngs, { color: g.color, weight: 1.75, opacity: 0.55, pane: 'streetPane' }));
                 });
 
                 // The street modal redraws every street (muted) for context and
@@ -340,10 +340,10 @@
                     const highlight = on => {
                         g.casing.forEach(l => l.setStyle(on
                             ? { weight: 8, color: '#111827', opacity: 0.85 }
-                            : { weight: 5, color: '#1e293b', opacity: 0.3 }));
+                            : { weight: 3.5, color: '#1e293b', opacity: 0.25 }));
                         g.inner.forEach(l => l.setStyle(on
                             ? { weight: 4.5, color: g.color, opacity: 1 }
-                            : { weight: 2.5, color: g.color, opacity: 0.6 }));
+                            : { weight: 1.75, color: g.color, opacity: 0.55 }));
                     };
 
                     // Thin dashed pointer lines from the street to each of its
@@ -490,18 +490,23 @@
 
         // Draw attention to one street: full-strength line, everything else
         // back to its normal weight.
-        function saStreetsHighlight(name) {
+        function saStreetsHighlight(names) {
+            const selected = new Set((Array.isArray(names) ? names : [names])
+                .filter(Boolean)
+                .map(name => String(name).trim()));
+            const isFiltering = selected.size > 0;
+
             ensureSanAgustinStreets().then(function () {
                 Object.keys(saStreetGroupsAll || {}).forEach(function (key) {
                     const g = saStreetGroupsAll[key];
-                    const on = key === name;
+                    const on = !isFiltering || selected.has(key);
                     g.casing.forEach(function (l) {
-                        l.setStyle(on ? { weight: 9, color: '#111827', opacity: 0.9 }
-                                      : { weight: 5, color: '#1e293b', opacity: 0.3 });
+                        l.setStyle(on ? { weight: isFiltering ? 7 : 3.5, color: isFiltering ? '#111827' : '#1e293b', opacity: isFiltering ? 0.9 : 0.65 }
+                                      : { weight: 3.5, color: '#1e293b', opacity: 0.18 });
                     });
                     g.inner.forEach(function (l) {
-                        l.setStyle(on ? { weight: 5, color: g.color, opacity: 1 }
-                                      : { weight: 2.5, color: g.color, opacity: 0.6 });
+                        l.setStyle(on ? { weight: isFiltering ? 4 : 1.75, color: g.color, opacity: 1 }
+                                      : { weight: 1.75, color: g.color, opacity: 0.32 });
                     });
                 });
             });
