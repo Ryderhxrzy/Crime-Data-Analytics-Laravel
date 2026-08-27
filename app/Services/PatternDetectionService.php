@@ -107,7 +107,7 @@ class PatternDetectionService
             ->where('incident_date', '>=', now()->subDays($days))
             ->get([
                 'id', 'incident_code', 'incident_title', 'incident_date', 'incident_time',
-                'latitude', 'longitude', 'category_name', 'barangay_name', 'record_type',
+                'latitude', 'longitude', 'address_details', 'category_name', 'barangay_name', 'record_type',
                 'status', 'clearance_status',
             ])
             ->map(function ($i) {
@@ -124,6 +124,7 @@ class PatternDetectionService
                     'dow'           => $date->dayOfWeek,           // 0 = Sunday
                     'latitude'      => (float) $i->latitude,
                     'longitude'     => (float) $i->longitude,
+                    'street'        => trim(explode(',', (string) $i->address_details)[0] ?? ''),
                     'category'      => $i->category_name ?: 'Uncategorized',
                     'barangay'      => $i->barangay_name,
                     'record_type'   => $i->record_type ?: 'crime',
@@ -252,12 +253,15 @@ class PatternDetectionService
             if (!$i['latitude'] || !$i['longitude']) {
                 continue;
             }
-            $key = round($i['latitude'] / self::HOTSPOT_CELL) . ':' . round($i['longitude'] / self::HOTSPOT_CELL);
+            $latCell = round($i['latitude'] / self::HOTSPOT_CELL);
+            $lngCell = round($i['longitude'] / self::HOTSPOT_CELL);
+            $key = $latCell . ':' . $lngCell;
 
             if (!isset($cells[$key])) {
                 $cells[$key] = [
                     'count' => 0, 'sum_lat' => 0.0, 'sum_lng' => 0.0,
-                    'categories' => [], 'real' => 0, 'simulated' => 0,
+                    'categories' => [], 'streets' => [], 'real' => 0, 'simulated' => 0,
+                    'lat_cell' => $latCell, 'lng_cell' => $lngCell,
                 ];
             }
 
@@ -265,14 +269,18 @@ class PatternDetectionService
             $cells[$key]['sum_lat'] += $i['latitude'];
             $cells[$key]['sum_lng'] += $i['longitude'];
             $cells[$key]['categories'][$i['category']] = ($cells[$key]['categories'][$i['category']] ?? 0) + 1;
+            if (!empty($i['street'])) {
+                $cells[$key]['streets'][$i['street']] = ($cells[$key]['streets'][$i['street']] ?? 0) + 1;
+            }
             $i['is_simulated'] ? $cells[$key]['simulated']++ : $cells[$key]['real']++;
         }
 
         $total = max(1, $all->count());
 
-        $hotspots = collect($cells)
+        $hotspots = collect($this->mergeAdjacentHotspotCells($cells))
             ->map(function ($c) use ($total) {
                 arsort($c['categories']);
+                arsort($c['streets']);
 
                 return [
                     'latitude'          => round($c['sum_lat'] / $c['count'], 6),
@@ -282,8 +290,9 @@ class PatternDetectionService
                     'simulated_count'   => $c['simulated'],
                     'share_percent'     => round(($c['count'] / $total) * 100, 1),
                     'dominant_category' => array_key_first($c['categories']),
+                    'area_name'         => array_key_first($c['streets']) ?: 'Approximate mapped area',
                     'categories'        => $c['categories'],
-                    'radius_meters'     => (int) round(self::HOTSPOT_CELL * 111000 / 2),
+                    'radius_meters'     => (int) round(self::HOTSPOT_CELL * 111000),
                 ];
             })
             ->sortByDesc('count')
@@ -295,6 +304,56 @@ class PatternDetectionService
             ->values()
             ->map(fn ($h, $idx) => $h + ['rank' => $idx + 1])
             ->all();
+    }
+
+    /**
+     * Merge only cells close to the strongest cell in an area. This avoids
+     * transitive chain-merging, where a long series of touching cells turns an
+     * entire barangay into one misleading hotspot.
+     */
+    private function mergeAdjacentHotspotCells(array $cells): array
+    {
+        $merged = [];
+        $remaining = $cells;
+        $mergeDistanceMeters = self::HOTSPOT_CELL * 111000;
+
+        while ($remaining) {
+            uasort($remaining, fn ($a, $b) => $b['count'] <=> $a['count']);
+            $seedKey = array_key_first($remaining);
+            $seed = $remaining[$seedKey];
+            $seedLat = $seed['sum_lat'] / $seed['count'];
+            $seedLng = $seed['sum_lng'] / $seed['count'];
+
+            $group = [
+                'count' => 0, 'sum_lat' => 0.0, 'sum_lng' => 0.0,
+                'categories' => [], 'streets' => [], 'real' => 0, 'simulated' => 0,
+            ];
+
+            foreach ($remaining as $key => $cell) {
+                $cellLat = $cell['sum_lat'] / $cell['count'];
+                $cellLng = $cell['sum_lng'] / $cell['count'];
+                if ($this->metersBetween($seedLat, $seedLng, $cellLat, $cellLng) > $mergeDistanceMeters) {
+                    continue;
+                }
+
+                $group['count'] += $cell['count'];
+                $group['sum_lat'] += $cell['sum_lat'];
+                $group['sum_lng'] += $cell['sum_lng'];
+                $group['real'] += $cell['real'];
+                $group['simulated'] += $cell['simulated'];
+
+                foreach (['categories', 'streets'] as $field) {
+                    foreach ($cell[$field] as $name => $count) {
+                        $group[$field][$name] = ($group[$field][$name] ?? 0) + $count;
+                    }
+                }
+                unset($remaining[$key]);
+            }
+
+            $merged[] = $group;
+        }
+
+        return $merged;
     }
 
     // ---------------------------------------------------------- time patterns

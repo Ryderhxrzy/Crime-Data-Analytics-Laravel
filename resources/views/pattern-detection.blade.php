@@ -736,9 +736,9 @@
 
         const dir = String(f.direction || 'stable').toLowerCase();
         const style = {
-            increase: { card: 'border-red-300 bg-red-50',   badge: 'bg-red-200 text-red-900',   label: 'CRIME LIKELY TO INCREASE', icon: 'fa-arrow-trend-up' },
-            decrease: { card: 'border-green-300 bg-green-50', badge: 'bg-green-200 text-green-900', label: 'CRIME LIKELY TO DECREASE', icon: 'fa-arrow-trend-down' },
-            stable:   { card: 'border-gray-300 bg-gray-50',  badge: 'bg-gray-200 text-gray-800',  label: 'CRIME LIKELY STABLE', icon: 'fa-arrows-left-right' }
+            increase: { card: 'border-red-300 bg-red-50',   badge: 'bg-red-200 text-red-900',   label: 'RECORDED ACTIVITY INCREASING', icon: 'fa-arrow-trend-up' },
+            decrease: { card: 'border-green-300 bg-green-50', badge: 'bg-green-200 text-green-900', label: 'RECORDED ACTIVITY DECREASING', icon: 'fa-arrow-trend-down' },
+            stable:   { card: 'border-gray-300 bg-gray-50',  badge: 'bg-gray-200 text-gray-800',  label: 'RECORDED ACTIVITY STABLE', icon: 'fa-arrows-left-right' }
         }[dir] || { card: 'border-gray-300 bg-gray-50', badge: 'bg-gray-200 text-gray-800', label: dir.toUpperCase(), icon: 'fa-minus' };
 
         $(p + 'ForecastCard').className = 'rounded-xl border-2 p-5 ' + style.card;
@@ -746,7 +746,7 @@
         $(p + 'ForecastBadge').innerHTML = '<i class="fas ' + style.icon + ' mr-1"></i>' + style.label;
 
         const pct = Number(f.expected_change_percent);
-        $(p + 'ForecastPercent').textContent = isFinite(pct) ? ((pct > 0 ? '+' : '') + pct + '% projected') : '';
+        $(p + 'ForecastPercent').textContent = isFinite(pct) ? ((pct > 0 ? '+' : '') + pct + '% observed change') : '';
         $(p + 'ForecastPercent').className = 'text-sm font-bold ' + (pct > 0 ? 'text-red-700' : pct < 0 ? 'text-green-700' : 'text-gray-700');
 
         $(p + 'Confidence').textContent = 'CONFIDENCE: ' + String(f.confidence || 'low').toUpperCase();
@@ -1304,7 +1304,12 @@
             stable: 'bg-gray-100 text-gray-700'
         };
         badge.className = 'px-3 py-1 rounded-full text-xs font-bold ' + (styles[dir.label] || 'bg-gray-100 text-gray-700');
-        badge.textContent = dir.label.toUpperCase();
+        badge.textContent = {
+            increasing: 'RECENT ACTIVITY UP',
+            decreasing: 'RECENT ACTIVITY DOWN',
+            stable: 'RECENT ACTIVITY STABLE',
+            'insufficient data': 'INSUFFICIENT DATA'
+        }[dir.label] || dir.label.toUpperCase();
         $('trendExplanation').textContent = dir.explanation;
 
         // Start with a readable aggregation, while keeping all granularities
@@ -1568,10 +1573,12 @@
                     '<div class="text-sm font-semibold text-gray-900">' + esc(h.dominant_category) +
                         (h.simulated_count > 0 ? ' <span class="text-amber-700 text-xs font-normal">(' + h.simulated_count + ' sim)</span>' : '') +
                     '</div>' +
+                    '<div class="text-xs font-semibold text-alertara-700 mt-0.5"><i class="fas fa-road mr-1"></i>' + esc(h.area_name || 'Approximate mapped area') + '</div>' +
                     '<div class="text-xs text-gray-500 mt-0.5">' + h.count + ' crimes · ' + h.share_percent + '% of all · ~' + h.radius_meters + 'm radius</div>' +
                     '<div class="text-[11px] text-gray-400 font-mono mt-0.5">' + h.latitude + ', ' + h.longitude + '</div>' +
                 '</div>' +
-            '</div>').join('');
+            '</div>').join('') +
+            '<p class="text-[11px] text-gray-400 mt-3"><i class="fas fa-circle-info mr-1"></i>Nearby map cells are combined into one area. Locations use recorded incident coordinates.</p>';
     }
 
     function renderClusters(clusters) {
