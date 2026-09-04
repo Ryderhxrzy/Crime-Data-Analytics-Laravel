@@ -48,15 +48,14 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        // TODO: Fix Cloudflare Turnstile widget - temporarily disabled for Reverb testing
-        // The widget is not generating tokens due to Cloudflare challenge interference
-
-        // // Verify CAPTCHA
-        // $captchaToken = $request->input('cf-turnstile-response');
-        // $captchaValid = $this->verifyCaptcha($captchaToken);
-        // if (!$captchaValid) {
-        //     return back()->withErrors(['cf-turnstile-response' => 'Security verification failed. Please try again.']);
-        // }
+        // The widget on the page proves nothing on its own: anything that posts
+        // straight to this route skips it entirely. Only this check makes the
+        // CAPTCHA real, so it has to run before the credentials are looked at.
+        if (!$this->verifyCaptcha($request->input('cf-turnstile-response'))) {
+            return back()->withErrors([
+                'cf-turnstile-response' => 'Security verification failed. Please try again.',
+            ])->onlyInput('email');
+        }
 
         $credentials = $request->validate([
             'email' => 'required|email',
