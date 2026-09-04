@@ -47,7 +47,11 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // to the centralized portal. The ?token= JWT flow in ValidateJWTViaAPI still
 // works if a token is passed, but is no longer the entry point.
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+// Throttled per IP. The account lockout in the controller counts failures per
+// account, which does nothing against one attacker walking a list of accounts.
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('throttle:10,1')
+    ->name('login.submit');
 Route::get('/unlock-account/{token}', [AuthController::class, 'unlockAccount'])->name('unlock-account');
 
 // Google login routes

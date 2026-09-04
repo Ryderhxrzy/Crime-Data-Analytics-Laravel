@@ -62,6 +62,9 @@
             @if ($errors->has('cf-turnstile-response'))
                 <p class="text-sm text-red-600 mt-2">{{ $errors->first('cf-turnstile-response') }}</p>
             @endif
+            <p id="captchaPending" class="hidden text-sm text-red-600 mt-2">
+                Please wait for the security check to finish, then try again.
+            </p>
 
             <div>
                 <button type="submit" id="submitBtn"
@@ -118,11 +121,14 @@
 
             loginForm.addEventListener('submit', function(e) {
                 const token = document.getElementById('cf-turnstile-response').value;
-                console.log('Form submitted. Turnstile token present:', token.length > 0);
-                console.log('Token value:', token.substring(0, 20) + '...');
 
+                // The server rejects an empty token now, so stop here instead
+                // of spending a throttle slot and coming back with an error
+                // that looks like the password was wrong.
                 if (!token) {
-                    console.error('❌ No Turnstile token! Widget may not have completed.');
+                    e.preventDefault();
+                    document.getElementById('captchaPending').classList.remove('hidden');
+                    return;
                 }
 
                 // Disable the button to prevent double submission

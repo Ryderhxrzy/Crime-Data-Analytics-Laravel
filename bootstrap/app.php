@@ -13,6 +13,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Traefik terminates TLS and forwards to this container over plain
+        // HTTP, so without trusting it Laravel reads the scheme as http: form
+        // actions and redirects come out as http:// on an https site, and the
+        // session cookie loses its Secure flag. APP_URL does not cover this -
+        // the URL generator follows the live request, not the configured root.
+        // The container is only reachable through the proxy, so '*' is safe.
+        $middleware->trustProxies(at: '*');
+
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
         $middleware->alias([
             'jwt.api' => \App\Http\Middleware\ValidateJWTViaAPI::class,
