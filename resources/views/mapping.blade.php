@@ -28,17 +28,17 @@ if (request()->query('token')) {
     <!-- Leaflet Heatmap Plugin - jsDelivr CDN -->
     <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
     <!-- Shared base map (tiles, zoom limits) - also used by Add Crime Record -->
-    <script src="{{ asset('js/crime-map-base.js') }}"></script>
+    <script src="{{ asset('js/crime-map-base.js') }}?v={{ filemtime(public_path('js/crime-map-base.js')) }}"></script>
     <!-- Street-Segment Heatmap view: road segments coloured by crime count -->
-    <script src="{{ asset('js/street-segment-heatmap.js') }}"></script>
+    <script src="{{ asset('js/street-segment-heatmap.js') }}?v={{ filemtime(public_path('js/street-segment-heatmap.js')) }}"></script>
     <!-- 3D view: MapLibre GL with free OpenFreeMap vector tiles (no API key) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
-    <script src="{{ asset('js/crime-map-3d.js') }}"></script>
+    <script src="{{ asset('js/crime-map-3d.js') }}?v={{ filemtime(public_path('js/crime-map-3d.js')) }}"></script>
     <meta name="google-maps-key" content="{{ config('services.google_maps.key') }}">
     <!-- Google Maps (default map engine): loaded once via the official bootstrap loader -->
-    <script src="{{ asset('js/google-maps-loader.js') }}"></script>
-    <script src="{{ asset('js/crime-map-google.js') }}"></script>
+    <script src="{{ asset('js/google-maps-loader.js') }}?v={{ filemtime(public_path('js/google-maps-loader.js')) }}"></script>
+    <script src="{{ asset('js/crime-map-google.js') }}?v={{ filemtime(public_path('js/crime-map-google.js')) }}"></script>
     <style>
         .map-3d-btn.on { background: #274d4c !important; color: #fff !important; border-color: #274d4c !important; }
     </style>
@@ -932,6 +932,7 @@ if (request()->query('token')) {
                         getIncidents: () => currentData,
                         getMode: () => document.getElementById('visualizationMode').value,
                         modeSelect: document.getElementById('visualizationMode'),
+                        streetView: true,   // native Pegman / Street View on this map
                     });
                 } catch (e) { console.warn('Google Maps view unavailable:', e); }
             }

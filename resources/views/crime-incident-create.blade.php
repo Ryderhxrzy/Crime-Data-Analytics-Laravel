@@ -5,9 +5,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- The same base map Crime Mapping uses (2D fallback): tiles, zoom limits, San Agustin boundary -->
-    <script src="{{ asset('js/crime-map-base.js') }}"></script>
+    <script src="{{ asset('js/crime-map-base.js') }}?v={{ filemtime(public_path('js/crime-map-base.js')) }}"></script>
     <!-- Google Maps (default engine, Hybrid imagery): loaded once via the official bootstrap loader -->
-    <script src="{{ asset('js/google-maps-loader.js') }}"></script>
+    <script src="{{ asset('js/google-maps-loader.js') }}?v={{ filemtime(public_path('js/google-maps-loader.js')) }}"></script>
+    <script src="{{ asset('js/crime-map-google.js') }}?v={{ filemtime(public_path('js/crime-map-google.js')) }}"></script>
     <!-- 3D engine: MapLibre GL with free OpenFreeMap vector tiles (no API key) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
@@ -213,11 +214,18 @@
                             <label class="field-label">Street <span class="req">*</span></label>
                             <select id="streetSelect" class="field-input" required>
                                 <option value="">Select a street</option>
-                                @foreach ($activeStreets as $st)
-                                    <option value="{{ $st['name'] }}" data-active="1" {{ old('street') === $st['name'] ? 'selected' : '' }}>{{ $st['name'] }} ({{ $st['count'] }} recorded)</option>
-                                @endforeach
+                                <optgroup label="Streets with recorded crimes">
+                                    @foreach ($activeStreets as $st)
+                                        <option value="{{ $st['name'] }}" data-active="1" {{ old('street') === $st['name'] ? 'selected' : '' }}>{{ $st['name'] }} ({{ $st['count'] }} recorded)</option>
+                                    @endforeach
+                                </optgroup>
+                                <optgroup label="Other streets (no crime yet)">
+                                    @foreach ($otherStreets as $st)
+                                        <option value="{{ $st['name'] }}" {{ old('street') === $st['name'] ? 'selected' : '' }}>{{ $st['name'] }}</option>
+                                    @endforeach
+                                </optgroup>
                             </select>
-                            <p class="field-hint">Only active streets, the ones with recorded crimes, can be picked. Once picked, the map shows that street alone.</p>
+                            <p class="field-hint">Every San Agustin street is listed; the ones with recorded crimes come first. Once picked, the map shows that street alone.</p>
                         </div>
                         <div id="streetTextWrap" class="hidden">
                             <label class="field-label">Street <span class="req">*</span></label>
@@ -537,7 +545,7 @@
                 ? '<div>' + count + ' crime' + (count === 1 ? '' : 's') + (pr.top ? ' · mostly ' + esc(pr.top) : '') + '</div>' +
                   (pr.peaks ? '<div style="color:#c4b5fd;">Peak hours: ' + esc(pr.peaks) + '</div>' : '')
                 : '<div>No recorded crimes — cleared</div>') +
-            (+pr.active ? '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> Click to pick this street</div>' : '');
+            '<div style="margin-top:3px;color:#93c5fd;font-weight:600;"><i class="fas fa-hand-pointer"></i> Click to pick this street</div>';
     }
 
     // ------------------------------------------------------------------
@@ -643,7 +651,7 @@
                 map.on('mousemove', 'sa-streets-line', e => {
                     const f = e.features && e.features[0];
                     if (!f) return;
-                    map.getCanvas().style.cursor = +f.properties.active ? 'pointer' : 'default';
+                    map.getCanvas().style.cursor = 'pointer';
                     map.setFilter('sa-streets-hover', ['==', ['get', 'name'], f.properties.name]);
                     tip.setLngLat(e.lngLat).setHTML(streetTipHtml(f.properties)).addTo(map);
                 });
@@ -705,7 +713,12 @@
     // ------------------------------------------------------------------
     function createGoogleEngine(onFail) {
         const el = document.getElementById('addCrimeMapGoogle');
-        let map = null, ready = false, marker = null, streetsLayer = null, boundaryLayer = null, tip = null;
+        // The map gets its own child so the Street View inset can shrink it
+        // while the panorama fills the pane (same as Crime Mapping).
+        const mapEl = document.createElement('div');
+        mapEl.style.cssText = 'position:absolute;inset:0;';
+        el.appendChild(mapEl);
+        let map = null, ready = false, marker = null, streetsLayer = null, boundaryLayer = null, tip = null, sv = null, saRings = [];
         let selected = null, streetsVisible = true, streetsAdded = false, pendingPin = null, pendingFit = null;
         if (engineBadge) engineBadge.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading Google Maps';
 
@@ -713,15 +726,21 @@
             setTimeout(() => onFail('Google Maps API key is not configured (GOOGLE_MAPS_API_KEY in .env)'), 0);
         } else {
             GoogleMapsLoader.load(['maps']).then(google => {
-                map = new google.maps.Map(el, {
+                map = new google.maps.Map(mapEl, {
                     center: { lat: SA_CENTER[0], lng: SA_CENTER[1] }, zoom: 17,
                     mapTypeId: google.maps.MapTypeId.HYBRID,
                     mapTypeControl: true,
                     mapTypeControlOptions: { mapTypeIds: [google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.SATELLITE, google.maps.MapTypeId.HYBRID], style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR, position: google.maps.ControlPosition.TOP_LEFT },
-                    streetViewControl: false, fullscreenControl: false, rotateControl: false, tilt: 0,
+                    streetViewControl: true, fullscreenControl: false, rotateControl: false, tilt: 0,
+                    streetViewControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+                    zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
                     clickableIcons: false, gestureHandling: 'greedy',
                 });
                 tip = new google.maps.InfoWindow({ disableAutoPan: true, headerDisabled: true, pixelOffset: new google.maps.Size(0, -8) });
+                // Native Pegman + Google-style inset map, limited to the barangay
+                if (typeof CrimeMapGoogle !== 'undefined') {
+                    sv = CrimeMapGoogle.attachStreetView(google, map, el, mapEl, { inside: (lat, lng) => CrimeMapGoogle.insideRings(saRings, lat, lng) });
+                }
 
                 // Barangay boundaries: San Agustin outlined, neighbours faint
                 boundaryLayer = new google.maps.Data({ map: map });
@@ -734,6 +753,10 @@
                     const sa = (geo.features || []).find(f => String((f.properties || {}).code || '') === SA_CODE);
                     if (!sa) return;
                     saBounds = boundsOfGeometry(sa.geometry);
+                    if (typeof CrimeMapGoogle !== 'undefined') {
+                        saRings = CrimeMapGoogle.ringsOf(sa.geometry);
+                        CrimeMapGoogle.outsideMask(map, saRings);   // outside dimmed, inside clear
+                    }
                     const b = new google.maps.LatLngBounds({ lat: saBounds.minLat, lng: saBounds.minLng }, { lat: saBounds.maxLat, lng: saBounds.maxLng });
                     new google.maps.Marker({ map: map, position: b.getCenter(), clickable: false, icon: { path: 'M 0 0', scale: 0 }, label: { text: 'San Agustin', className: 'gm-street-label' } });
                     const padLat = (saBounds.maxLat - saBounds.minLat) * 1.2, padLng = (saBounds.maxLng - saBounds.minLng) * 1.2;
@@ -743,6 +766,7 @@
 
                 streetsLayer = new google.maps.Data({ map: map });
                 map.addListener('click', e => {
+                    if (sv && sv.isOpen()) return;
                     if (!currentStreet() && isSanAgustin()) return;
                     userPlaced(e.latLng.lat(), e.latLng.lng());
                 });
@@ -766,7 +790,7 @@
                 const isSel = !!selected && name === selected;
                 return {
                     visible: streetsVisible && (!selected || isSel),
-                    clickable: active,
+                    clickable: true,
                     strokeColor: isSel ? '#facc15' : sev.color,
                     strokeWeight: isSel ? 6 : (active ? 4 : 2.5),
                     strokeOpacity: 0.95,

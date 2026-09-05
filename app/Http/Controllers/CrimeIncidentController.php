@@ -106,6 +106,7 @@ class CrimeIncidentController extends Controller
             'barangays'       => $barangays,
             'defaultBarangay' => $sanAgustin['id'] ?? null,
             'activeStreets'   => $active,
+            'otherStreets'    => $others,
             'statuses'        => ['reported', 'under_investigation', 'solved', 'closed', 'archived'],
             'weather'         => ['Clear', 'Cloudy', 'Rainy', 'Stormy', 'Foggy', 'Unknown'],
             'recentManual'    => $this->recentManualEntries(),

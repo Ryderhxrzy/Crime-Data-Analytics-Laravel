@@ -93,15 +93,15 @@
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
     <!-- Street-Segment Heatmap (default): road segments coloured by crime count -->
-    <script src="{{ asset('js/street-segment-heatmap.js') }}"></script>
+    <script src="{{ asset('js/street-segment-heatmap.js') }}?v={{ filemtime(public_path('js/street-segment-heatmap.js')) }}"></script>
     <!-- 3D view: MapLibre GL with free OpenFreeMap vector tiles (no API key) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
-    <script src="{{ asset('js/crime-map-3d.js') }}"></script>
+    <script src="{{ asset('js/crime-map-3d.js') }}?v={{ filemtime(public_path('js/crime-map-3d.js')) }}"></script>
     <meta name="google-maps-key" content="{{ config('services.google_maps.key') }}">
     <!-- Google Maps (default map engine): loaded once via the official bootstrap loader -->
-    <script src="{{ asset('js/google-maps-loader.js') }}"></script>
-    <script src="{{ asset('js/crime-map-google.js') }}"></script>
+    <script src="{{ asset('js/google-maps-loader.js') }}?v={{ filemtime(public_path('js/google-maps-loader.js')) }}"></script>
+    <script src="{{ asset('js/crime-map-google.js') }}?v={{ filemtime(public_path('js/crime-map-google.js')) }}"></script>
     <style>
         .map-3d-btn.on { background: #2f7d7b !important; color: #fff !important; border-color: #2f7d7b !important; }
     </style>
@@ -252,7 +252,7 @@
     @endif
 
     <!-- Map Initialization Script -->
-    <script src="{{ asset('js/landing-map.js') }}"></script>
+    <script src="{{ asset('js/landing-map.js') }}?v={{ filemtime(public_path('js/landing-map.js')) }}"></script>
 
     <script>
         // Reveal-on-scroll, mirroring the landing page's Reveal component.

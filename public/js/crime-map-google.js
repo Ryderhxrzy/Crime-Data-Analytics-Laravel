@@ -11,11 +11,16 @@
  *       wrapper: document.getElementById('mapContainer'),
  *       getIncidents: () => currentData,
  *       getMode: () => document.getElementById('visualizationMode').value,
+ *       streetView: true,   // native Pegman with the Google-style inset map
  *   });
  *   gmap.refresh();   // after the page reloads its data
  *
- * CrimeMapGoogle.switcher() ties the engines of a page (google, 3d, classic
- * 2D) to a group of buttons and remembers the choice.
+ * Shared helpers (also used by the Add Crime Record page's own Google map):
+ *   CrimeMapGoogle.ringsOf(geometry)                -> [[ [lat,lng], ... ], ...]
+ *   CrimeMapGoogle.insideRings(rings, lat, lng)     -> boolean
+ *   CrimeMapGoogle.outsideMask(map, rings)          -> dims everything outside the rings
+ *   CrimeMapGoogle.attachStreetView(google, map, hostEl, mapEl, { inside })
+ *   CrimeMapGoogle.switcher({ engines, buttons, defaultEngine, storageKey })
  */
 (function (global) {
     'use strict';
@@ -45,9 +50,26 @@
             .cmg-overlay.on { display: block; }
             .cmg-map { position: absolute; inset: 0; }
             .cmg-badge { position: absolute; bottom: 24px; left: 10px; z-index: 5; background: rgba(255,255,255,.94); border: 1px solid #e5e7eb; border-radius: 9999px; padding: 3px 10px; font-size: 10.5px; font-weight: 700; color: #374151; }
-            .cmg-legend { position: absolute; bottom: 24px; right: 10px; z-index: 5; background: rgba(255,255,255,.96); border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; font-size: 11px; color: #374151; line-height: 1.7; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+            .cmg-legend { position: absolute; top: 10px; right: 10px; z-index: 5; background: rgba(255,255,255,.96); border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; font-size: 11px; color: #374151; line-height: 1.7; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
             .cmg-legend b { display: block; font-size: 11px; color: #111827; }
             .cmg-legend span { display: inline-block; width: 20px; height: 5px; border-radius: 3px; margin-right: 7px; vertical-align: middle; }
+            /* Street View like Google Maps: the panorama fills the host and the SAME map
+               (streets + crime circles) becomes an inset box at the bottom left */
+            .cmg-pano { position: absolute; inset: 0; display: none; background: #111; z-index: 3; }
+            .cmg-sv-host.cmg-split .cmg-pano { display: block; }
+            .cmg-sv-host.cmg-split .cmg-sv-map { top: auto !important; right: auto !important; left: 12px !important; bottom: 12px !important; width: 34% !important; min-width: 240px; height: 38% !important; min-height: 170px; z-index: 8; border: 3px solid #fff; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.45); overflow: hidden; transition: width .25s, height .25s; }
+            .cmg-sv-host.cmg-split.cmg-inset-big .cmg-sv-map { width: 60% !important; height: 62% !important; }
+            .cmg-overlay.cmg-split .cmg-legend, .cmg-overlay.cmg-split .cmg-badge { display: none; }
+            .cmg-inset-btn { position: absolute; display: none; z-index: 9; left: calc(12px + 34% - 34px); bottom: calc(12px + 38% - 34px); width: 28px; height: 28px; border-radius: 6px; background: #fff; border: 1px solid #d1d5db; color: #374151; font-size: 12px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+            .cmg-sv-host.cmg-split .cmg-inset-btn { display: block; }
+            .cmg-sv-host.cmg-split.cmg-inset-big .cmg-inset-btn { left: calc(12px + 60% - 34px); bottom: calc(12px + 62% - 34px); }
+            .cmg-split-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 9; background: rgba(17,24,39,.85); color: #fff; border-radius: 9999px; padding: 4px 12px; font-size: 11px; font-weight: 700; display: none; pointer-events: none; }
+            .cmg-sv-host.cmg-split .cmg-split-hint { display: block; }
+            .cmg-sv-toast { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 12; background: #b45309; color: #fff; border-radius: 9999px; padding: 6px 14px; font-size: 12px; font-weight: 700; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.3); pointer-events: none; }
+            @media (max-width: 767px) {
+                .cmg-sv-host.cmg-split .cmg-sv-map { width: 55% !important; min-width: 160px; height: 34% !important; min-height: 130px; }
+                .cmg-inset-btn { display: none !important; }
+            }
             .cmg-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; color: #374151; font-size: 13px; background: #f9fafb; z-index: 4; }
             .cmg-tip { background: #111827; color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 11.5px; line-height: 1.45; }
             .cmg-pop { font-size: 12px; line-height: 1.45; min-width: 190px; color: #111827; }
@@ -57,6 +79,165 @@
         document.head.appendChild(st);
     }
 
+    // ------------------------------------------------------------------
+    // Shared geometry helpers
+    // ------------------------------------------------------------------
+    function ringsOf(geom) {
+        const rings = [];
+        if (!geom) return rings;
+        const polys = geom.type === 'MultiPolygon' ? geom.coordinates : (geom.type === 'Polygon' ? [geom.coordinates] : []);
+        polys.forEach(poly => (poly || []).forEach(ring => rings.push(ring.map(c => [+c[1], +c[0]]))));
+        return rings;
+    }
+
+    // Ray casting: inside if the point is inside any ring (holes are negligible here)
+    function insideRings(rings, lat, lng) {
+        if (!rings || !rings.length) return true;   // boundary not loaded yet: do not block
+        return rings.some(ring => {
+            let inside = false;
+            for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                const yi = ring[i][0], xi = ring[i][1], yj = ring[j][0], xj = ring[j][1];
+                if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+            }
+            return inside;
+        });
+    }
+
+    /**
+     * Everything outside the rings is dimmed: the coverage area reads at a
+     * glance, and Street View's blue coverage lines never show outside it
+     * (the mask sits above Google's coverage layer).
+     */
+    function outsideMask(map, rings, opacity) {
+        const google = global.google;
+        if (!google || !rings || !rings.length) return null;
+        // Google fills a polygon by winding: the hole must run OPPOSITE to the
+        // outer ring. Winding is computed, not assumed. The outer ring is a
+        // box around Metro Manila: a ring from lng -180 to 180 collapses
+        // because Google joins consecutive points the short way round.
+        const signedArea = pts => { let a = 0; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j].lng * pts[i].lat) - (pts[i].lng * pts[j].lat); return a / 2; };
+        let outer = [{ lat: 16.0, lng: 119.5 }, { lat: 16.0, lng: 122.5 }, { lat: 13.5, lng: 122.5 }, { lat: 13.5, lng: 119.5 }];
+        if (signedArea(outer) > 0) outer = outer.reverse();
+        const holes = rings.map(r => {
+            let ring = r.map(p => ({ lat: p[0], lng: p[1] }));
+            if (signedArea(ring) < 0) ring = ring.reverse();
+            return ring;
+        });
+        return new google.maps.Polygon({
+            map: map, paths: [outer, ...holes], clickable: false, zIndex: 5,
+            strokeWeight: 0, fillColor: '#0b1220', fillOpacity: opacity == null ? 0.72 : opacity,
+        });
+    }
+
+    /**
+     * Street View the way Google Maps does it, on an EXISTING map.
+     *
+     * The panorama is bound to the map (map.setStreetView) so Pegman, the
+     * coverage lines while dragging, navigation and the close button are all
+     * Google's own. While it is open the panorama fills hostEl and the map
+     * element becomes an inset at the bottom left, keeping every overlay;
+     * Google's own Pegman on the inset shows where you stand. Pegman cannot
+     * be dropped, or walked, outside opts.inside(lat, lng).
+     *
+     * Returns { pano, isOpen() }.
+     */
+    function attachStreetView(google, map, hostEl, mapEl, opts) {
+        const o = Object.assign({ inside: () => true, limitMessage: 'Street View is limited to Barangay San Agustin', keepControls: false }, opts || {});
+        injectCss();
+        hostEl.classList.add('cmg-sv-host');
+        mapEl.classList.add('cmg-sv-map');
+
+        const panoEl = document.createElement('div'); panoEl.className = 'cmg-pano';
+        const hint = document.createElement('span'); hint.className = 'cmg-split-hint';
+        hint.innerHTML = '<i class="fas fa-street-view mr-1"></i>Street View · the inset map follows you';
+        const toast = document.createElement('span'); toast.className = 'cmg-sv-toast';
+        const insetBtn = document.createElement('button'); insetBtn.type = 'button'; insetBtn.className = 'cmg-inset-btn'; insetBtn.title = 'Expand / shrink the map'; insetBtn.innerHTML = '<i class="fas fa-expand"></i>';
+        hostEl.append(panoEl, hint, toast, insetBtn);
+
+        const pano = new google.maps.StreetViewPanorama(panoEl, {
+            visible: false, enableCloseButton: true, addressControl: true,
+            fullscreenControl: false, motionTracking: false, motionTrackingControl: false,
+        });
+        map.setStreetView(pano);
+        map.setOptions({ streetViewControl: true });
+
+        let lastGood = null, toastTimer = null, restoring = false;
+        const savedOptions = {};
+
+        function say(text) {
+            toast.textContent = text;
+            toast.style.display = 'block';
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 2800);
+        }
+
+        // Google draws the (single) Pegman on the map at the panorama's
+        // position and heading; the inset only has to keep it in view.
+        function follow() {
+            const pos = pano.getPosition();
+            if (!pos) return;
+            if (!map.getBounds() || !map.getBounds().contains(pos)) map.panTo(pos);
+        }
+
+        function enforceBoundary() {
+            const pos = pano.getPosition();
+            if (!pos || restoring) return true;
+            if (o.inside(pos.lat(), pos.lng())) { lastGood = pos; return true; }
+            restoring = true;
+            say(o.limitMessage);
+            if (lastGood) pano.setPosition(lastGood); else pano.setVisible(false);
+            setTimeout(() => { restoring = false; }, 0);
+            return false;
+        }
+
+        function enterSplit() {
+            hostEl.classList.add('cmg-split');
+            ['mapTypeControl', 'zoomControl'].forEach(k => { savedOptions[k] = map.get(k); });
+            if (!o.keepControls) map.setOptions({ mapTypeControl: false, zoomControl: false });
+            const c = pano.getPosition() || map.getCenter();
+            google.maps.event.trigger(map, 'resize');
+            if (c) { map.setCenter(c); if (map.getZoom() < 17) map.setZoom(17); }
+            follow();
+        }
+
+        function exitSplit() {
+            hostEl.classList.remove('cmg-split', 'cmg-inset-big');
+            map.setOptions({ mapTypeControl: savedOptions.mapTypeControl !== false, zoomControl: savedOptions.zoomControl !== false, streetViewControl: true });
+            const c = lastGood || map.getCenter();
+            google.maps.event.trigger(map, 'resize');
+            if (c) map.setCenter(c);
+            lastGood = null;
+        }
+
+        pano.addListener('visible_changed', () => {
+            if (pano.getVisible()) { if (enforceBoundary()) enterSplit(); }
+            else exitSplit();
+        });
+        pano.addListener('position_changed', () => { if (pano.getVisible() && enforceBoundary()) follow(); });
+
+        // Clicking the inset moves Pegman there when Street View covers that spot
+        const svService = new google.maps.StreetViewService();
+        map.addListener('click', e => {
+            if (!pano.getVisible()) return;
+            if (!o.inside(e.latLng.lat(), e.latLng.lng())) { say(o.limitMessage); return; }
+            svService.getPanorama({ location: e.latLng, radius: 40, source: google.maps.StreetViewSource.OUTDOOR }).then(r => {
+                if (r && r.data && r.data.location && r.data.location.pano) pano.setPano(r.data.location.pano);
+                else say('No Street View at that spot');
+            }).catch(() => say('No Street View at that spot'));
+        });
+
+        insetBtn.addEventListener('click', () => {
+            hostEl.classList.toggle('cmg-inset-big');
+            const c = pano.getPosition() || map.getCenter();
+            setTimeout(() => { google.maps.event.trigger(map, 'resize'); if (c) map.setCenter(c); }, 260);
+        });
+
+        return { pano: pano, isOpen: () => pano.getVisible() };
+    }
+
+    // ------------------------------------------------------------------
+    // Overlay view for the crime pages
+    // ------------------------------------------------------------------
     function create(opts) {
         const o = Object.assign({
             wrapper: null,
@@ -68,6 +249,9 @@
             zoom: 16,
             mapTypeId: 'hybrid',
             onReady: null,
+            // Native Street View (Pegman) on the SAME map instance, with the
+            // Google-style inset map. Off by default; Crime Mapping turns it on.
+            streetView: false,
         }, opts || {});
         if (!o.wrapper) throw new Error('CrimeMapGoogle: wrapper element required');
         injectCss();
@@ -85,9 +269,10 @@
         const badge = overlay.querySelector('.cmg-badge');
 
         let map = null, ready = false, failed = false, shown = false, initPromise = null;
-        let streetLayer = null, boundaryLayer = null, heat = null, streetTip = null, infoWin = null, labelMarker = null;
+        let streetLayer = null, boundaryLayer = null, heat = null, streetTip = null, infoWin = null, labelMarker = null, mask = null, sv = null;
         let markers = [];
         let streetGeo = null, saBounds = null, pending = null, streetCountsCache = {};
+        let saRings = [];
 
         function showMessage(text) {
             let m = overlay.querySelector('.cmg-msg');
@@ -113,7 +298,9 @@
                         style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
                         position: google.maps.ControlPosition.TOP_LEFT,
                     },
-                    streetViewControl: false,           // no Street View
+                    streetViewControl: !!o.streetView,  // Pegman only where a page asks for it
+                    streetViewControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+                    zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
                     fullscreenControl: false,           // the pages have their own fullscreen
                     rotateControl: false,
                     tilt: 0,                            // flat imagery, not 45° / 3D tiles
@@ -125,6 +312,7 @@
 
                 addBoundary(google);
                 if (o.showStreets) addStreets(google);
+                if (o.streetView) sv = attachStreetView(google, map, overlay, mapEl, { inside: (lat, lng) => insideRings(saRings, lat, lng) });
                 ready = true;
                 badge.innerHTML = '<i class="fab fa-google mr-1"></i>Google Maps';
                 setIncidents(pending || o.getIncidents() || []);
@@ -150,6 +338,8 @@
                 });
                 const sa = (geo.features || []).find(f => String((f.properties || {}).code || '') === SA_CODE);
                 if (!sa) return;
+                saRings = ringsOf(sa.geometry);
+                mask = outsideMask(map, saRings);
                 const b = new google.maps.LatLngBounds();
                 (function walk(c) { if (typeof c[0] === 'number') b.extend({ lat: c[1], lng: c[0] }); else c.forEach(walk); })(sa.geometry.coordinates);
                 saBounds = b;
@@ -270,7 +460,7 @@
                         title: p.i.incident_title || p.i.category_name || '',
                         icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: p.i.color_code || '#274d4c', fillOpacity: 0.95, strokeColor: '#ffffff', strokeWeight: 1.5 },
                     });
-                    m.addListener('click', () => { infoWin.setContent(incidentPopup(p.i)); infoWin.open({ map: map, anchor: m }); });
+                    m.addListener('click', () => { if (sv && sv.isOpen()) return; infoWin.setContent(incidentPopup(p.i)); infoWin.open({ map: map, anchor: m }); });
                     markers.push(m);
                 });
             }
@@ -310,11 +500,6 @@
 
     /**
      * Ties a page's map engines to a button group and remembers the choice.
-     *   CrimeMapGoogle.switcher({
-     *       engines: { google: gmap, '3d': view3d },   // each has show()/hide(); '2d' = none shown
-     *       buttons: { google: el, '3d': el, '2d': el },
-     *       defaultEngine: 'google', storageKey: 'crimeMapEngine'
-     *   });
      */
     function switcher(cfg) {
         const engines = cfg.engines || {};
@@ -345,5 +530,5 @@
         return { activate, current: () => current };
     }
 
-    global.CrimeMapGoogle = { create: create, switcher: switcher };
+    global.CrimeMapGoogle = { create, switcher, ringsOf, insideRings, outsideMask, attachStreetView, injectCss };
 })(window);
