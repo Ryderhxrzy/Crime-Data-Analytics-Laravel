@@ -35,6 +35,10 @@ if (request()->query('token')) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
     <script src="{{ asset('js/crime-map-3d.js') }}"></script>
+    <meta name="google-maps-key" content="{{ config('services.google_maps.key') }}">
+    <!-- Google Maps (default map engine): loaded once via the official bootstrap loader -->
+    <script src="{{ asset('js/google-maps-loader.js') }}"></script>
+    <script src="{{ asset('js/crime-map-google.js') }}"></script>
     <style>
         .map-3d-btn.on { background: #274d4c !important; color: #fff !important; border-color: #274d4c !important; }
     </style>
@@ -306,9 +310,17 @@ if (request()->query('token')) {
                         <i class="fas fa-map mr-2 text-alertara-600"></i>Crime Map
                     </h2>
                     <div class="flex items-center gap-2">
-                        <button id="map3dBtn" type="button" class="map-3d-btn px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm" title="Switch to the 3D map">
-                            <i class="fas fa-cube"></i><span class="hidden sm:inline ml-1">3D</span>
-                        </button>
+                        <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm" role="group" aria-label="Map engine">
+                            <button id="mapGoogleBtn" type="button" class="map-engine-btn px-3 py-2 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1" title="Google Maps (satellite + roads)">
+                                <i class="fab fa-google"></i><span class="hidden sm:inline">Google</span>
+                            </button>
+                            <button id="map2dBtn" type="button" class="map-engine-btn px-3 py-2 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1 border-l border-gray-300" title="Classic 2D map (heat map, clusters, street segments)">
+                                <i class="fas fa-map"></i><span class="hidden sm:inline">Classic</span>
+                            </button>
+                            <button id="map3dBtn" type="button" class="map-engine-btn px-3 py-2 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1 border-l border-gray-300" title="3D map">
+                                <i class="fas fa-cube"></i><span class="hidden sm:inline">3D</span>
+                            </button>
+                        </div>
                         <button id="mapFullscreenBtn" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm" title="Toggle Fullscreen Map">
                             <i class="fas fa-expand"></i>
                             <span class="hidden sm:inline">Fullscreen</span>
@@ -909,16 +921,37 @@ if (request()->query('token')) {
             // Create the map with default QC view (shared component)
             map = createCrimeMap('map');
 
-            // 3D view (MapLibre) mounted over the same container; it shows
-            // whatever currentData holds, so filters keep working in 3D.
-            if (typeof CrimeMap3D !== 'undefined') {
+            // Google Maps (default, Hybrid imagery) and the 3D view are mounted
+            // over the same container; both show whatever currentData holds,
+            // so the filters keep working in every engine.
+            const engines = {};
+            if (typeof CrimeMapGoogle !== 'undefined') {
                 try {
-                    window.crimeMap3D = CrimeMap3D.create({
+                    window.crimeMapGoogle = engines.google = CrimeMapGoogle.create({
                         wrapper: document.getElementById('mapContainer'),
                         getIncidents: () => currentData,
-                        toggleButton: document.getElementById('map3dBtn'),
+                        getMode: () => document.getElementById('visualizationMode').value,
+                        modeSelect: document.getElementById('visualizationMode'),
+                    });
+                } catch (e) { console.warn('Google Maps view unavailable:', e); }
+            }
+            if (typeof CrimeMap3D !== 'undefined') {
+                try {
+                    window.crimeMap3D = engines['3d'] = CrimeMap3D.create({
+                        wrapper: document.getElementById('mapContainer'),
+                        getIncidents: () => currentData,
+                        getMode: () => document.getElementById('visualizationMode').value,
+                        modeSelect: document.getElementById('visualizationMode'),
                     });
                 } catch (e) { console.warn('3D view unavailable:', e); }
+            }
+            if (typeof CrimeMapGoogle !== 'undefined') {
+                CrimeMapGoogle.switcher({
+                    engines: engines,
+                    buttons: { google: document.getElementById('mapGoogleBtn'), '2d': document.getElementById('map2dBtn'), '3d': document.getElementById('map3dBtn') },
+                    defaultEngine: 'google',
+                    storageKey: 'crimeMappingEngine',
+                });
             }
 
             // Boundaries get their own pane BELOW the default overlayPane (z-index 400).
@@ -1573,6 +1606,7 @@ if (request()->query('token')) {
                 currentData = filteredData;
                 selectedIncidentId = null;
                 if (window.crimeMap3D) window.crimeMap3D.refresh();
+                if (window.crimeMapGoogle) window.crimeMapGoogle.refresh();
 
                 // Update right panel with statistics and incident list
                 updateStatistics(filteredData);
@@ -3435,6 +3469,7 @@ if (request()->query('token')) {
 
             // Update statistics and incident list
             if (window.crimeMap3D) window.crimeMap3D.refresh();
+            if (window.crimeMapGoogle) window.crimeMapGoogle.refresh();
             updateStatistics(currentData);
             loadTotalStats(); // Refresh total stats
             currentListData = currentData;
