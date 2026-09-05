@@ -53,7 +53,7 @@ class ValidateJWTViaAPI
 
             if (!$cachedUser) {
                 // No token and no cached user - check for local Laravel auth (for development)
-                if (!auth()->check()) {
+                if (!auth()->check() && !auth('staff')->check()) {
                     // No token, no cached user, and no local auth - redirect to login
                     return redirect('/login');
                 }

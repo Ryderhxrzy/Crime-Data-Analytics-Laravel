@@ -20,6 +20,17 @@ if (request()->query('token')) {
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <!-- 3D view: MapLibre GL with free OpenFreeMap vector tiles (no API key) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+    <script src="{{ asset('js/crime-map-3d.js') }}?v={{ filemtime(public_path('js/crime-map-3d.js')) }}"></script>
+    <meta name="google-maps-key" content="{{ config('services.google_maps.key') }}">
+    <!-- Google Maps (default map engine): loaded once via the official bootstrap loader -->
+    <script src="{{ asset('js/google-maps-loader.js') }}?v={{ filemtime(public_path('js/google-maps-loader.js')) }}"></script>
+    <script src="{{ asset('js/crime-map-google.js') }}?v={{ filemtime(public_path('js/crime-map-google.js')) }}"></script>
+    <style>
+        .map-3d-btn.on { background: #274d4c !important; color: #fff !important; border-color: #274d4c !important; }
+    </style>
 
     <style>
         /* Barangay name on the polygon - same treatment as the crime map */
@@ -167,9 +178,7 @@ if (request()->query('token')) {
                 <div class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-purple-200 bg-purple-50 p-3">
                     <i class="fas fa-shield-halved text-purple-700"></i>
                     <p class="flex-1 text-sm text-purple-900">
-                        <span class="font-bold">Click a street to analyse it.</span>
-                        Its modal opens with the crime breakdown, peak hours, trend and risk level, the crimes
-                        themselves and prevention suggestions — and the map zooms to that street behind it.
+                        <span class="font-bold">Click a street</span> on the map or in the ranking for its breakdown and prevention plan.
                     </p>
                     <button type="button" id="zoomToStreetsBtn"
                             class="px-3 py-1.5 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors text-xs font-bold flex items-center gap-2">
@@ -179,6 +188,11 @@ if (request()->query('token')) {
                         <input type="checkbox" id="toggleStreetLayer" checked>
                         Show streets
                     </label>
+                    <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-xs font-semibold ml-auto" role="group" aria-label="Map engine">
+                        <button id="mapGoogleBtn" type="button" class="map-engine-btn px-3 py-1.5 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1" title="Google Maps (satellite + roads)"><i class="fab fa-google"></i><span class="hidden sm:inline">Google</span></button>
+                        <button id="map2dBtn" type="button" class="map-engine-btn px-3 py-1.5 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1 border-l border-gray-300" title="Classic 2D map (street modal, heat map)"><i class="fas fa-map"></i><span class="hidden sm:inline">Classic</span></button>
+                        <button id="map3dBtn" type="button" class="map-engine-btn px-3 py-1.5 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1 border-l border-gray-300" title="3D map"><i class="fas fa-cube"></i><span class="hidden sm:inline">3D</span></button>
+                    </div>
                 </div>
 
                 <!-- Map and Right Panel Side-by-Side -->
@@ -204,15 +218,18 @@ if (request()->query('token')) {
                         <!-- Top High-Risk Areas -->
                         <div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                             <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0;">
-                                    <i class="fas fa-list-ol mr-2 text-red-600"></i>Top 10 Hotspot Streets
+                                <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-list-ol text-red-600"></i>Top 10 Hotspot Streets
+                                    <i class="fas fa-circle-info text-gray-400 cursor-help" style="font-size: 12px;"
+                                       title="Risk score out of 100 = 40% volume + 20% density (crimes per 100 m) + 25% severity + 15% trend"></i>
+                                    <span style="margin-left: auto; display: flex; gap: 8px; font-size: 10px; font-weight: 600; color: #6b7280;">
+                                        <span><i class="fas fa-layer-group mr-1"></i>incidents</span>
+                                        <span><i class="fas fa-arrow-trend-up mr-1"></i>trend</span>
+                                        <span><i class="fas fa-clock mr-1"></i>peak</span>
+                                    </span>
                                 </h3>
-                                <p style="font-size: 10.5px; color: #6b7280; margin: 6px 0 0;">
-                                    Risk score = 40% volume + 20% density (crimes per 100 m of street)
-                                    + 25% severity + 15% trend. Click a street to analyse it.
-                                </p>
                             </div>
-                            <div id="topHotspots" style="overflow-y: auto; max-height: 280px;">
+                            <div id="topHotspots" style="overflow-y: auto; max-height: 380px;">
                                 <!-- Will be populated by JavaScript -->
                                 <div style="padding: 20px; text-align: center; color: #999;">
                                     <i class="fas fa-spinner fa-spin text-2xl"></i>
@@ -264,7 +281,8 @@ if (request()->query('token')) {
                                 <i class="fas fa-fire mr-1"></i>Critical/High-Risk Streets
                             </p>
                             <p class="text-2xl font-bold text-red-700" id="highRiskCount">0</p>
-                            <p class="text-xs text-red-600 mt-1">Composite risk score ≥ 45</p>
+                            <div class="mt-2 h-1.5 w-40 max-w-full rounded-full bg-white/70 overflow-hidden"><div id="highRiskBar" class="h-full rounded-full" style="width:0%;background:#dc2626;"></div></div>
+                            <p class="text-[11px] mt-1 opacity-80" id="highRiskBarLabel">&nbsp;</p>
                         </div>
                     </div>
                 </div>
@@ -275,7 +293,8 @@ if (request()->query('token')) {
                                 <i class="fas fa-exclamation-triangle mr-1"></i>Medium-Risk Streets
                             </p>
                             <p class="text-2xl font-bold text-yellow-700" id="mediumRiskCount">0</p>
-                            <p class="text-xs text-yellow-600 mt-1">Composite risk score 25-44</p>
+                            <div class="mt-2 h-1.5 w-40 max-w-full rounded-full bg-white/70 overflow-hidden"><div id="mediumRiskBar" class="h-full rounded-full" style="width:0%;background:#f59e0b;"></div></div>
+                            <p class="text-[11px] mt-1 opacity-80" id="mediumRiskBarLabel">&nbsp;</p>
                         </div>
                     </div>
                 </div>
@@ -286,7 +305,8 @@ if (request()->query('token')) {
                                 <i class="fas fa-check-circle mr-1"></i>Low-Risk Streets
                             </p>
                             <p class="text-2xl font-bold text-green-700" id="lowRiskCount">0</p>
-                            <p class="text-xs text-green-600 mt-1">Composite risk score < 25</p>
+                            <div class="mt-2 h-1.5 w-40 max-w-full rounded-full bg-white/70 overflow-hidden"><div id="lowRiskBar" class="h-full rounded-full" style="width:0%;background:#16a34a;"></div></div>
+                            <p class="text-[11px] mt-1 opacity-80" id="lowRiskBarLabel">&nbsp;</p>
                         </div>
                     </div>
                 </div>
@@ -297,7 +317,8 @@ if (request()->query('token')) {
                                 <i class="fas fa-chart-line mr-1"></i>Total Incidents
                             </p>
                             <p class="text-2xl font-bold text-blue-700" id="totalIncidentsCount">0</p>
-                            <p class="text-xs text-blue-600 mt-1">In the selected period</p>
+                            <div class="mt-2 flex h-1.5 w-40 max-w-full rounded-full bg-white/70 overflow-hidden" id="totalIncidentsBar"></div>
+                            <p class="text-[11px] mt-1 text-blue-700 opacity-80" id="totalIncidentsLabel">&nbsp;</p>
                         </div>
                     </div>
                 </div>
@@ -310,28 +331,53 @@ if (request()->query('token')) {
                     <h3 class="text-lg font-bold text-gray-900 mb-4">
                         <i class="fas fa-arrow-trend-up mr-2 text-alertara-700"></i>Trend Analysis
                     </h3>
-                    <div id="trendAnalysis" class="space-y-3">
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-700">Overall Trend</span>
-                            <span id="overallTrend" class="text-sm font-bold text-gray-900">
-                                <i class="fas fa-arrow-up mr-1 text-red-600"></i>Increasing
-                            </span>
+                    <div id="trendAnalysis">
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <div class="text-[11px] font-bold text-gray-500 uppercase">Overall Trend</div>
+                                <div id="overallTrend" class="text-sm font-bold text-gray-900 mt-1">
+                                    <i class="fas fa-arrows-left-right mr-1 text-gray-500"></i>—
+                                </div>
+                            </div>
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <div class="text-[11px] font-bold text-gray-500 uppercase">Highest Risk Street</div>
+                                <div id="highestDensity" class="text-sm font-bold text-gray-900 mt-1 truncate">—</div>
+                            </div>
                         </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-700">Highest Risk Street</span>
-                            <span id="highestDensity" class="text-sm font-bold text-gray-900">—</span>
+
+                        <!-- The rates drawn, not just quoted: clearance, day vs night, risk mix -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="border border-gray-200 rounded-lg p-3">
+                                <div class="text-[11px] font-bold text-gray-500 uppercase mb-1">Case clearance</div>
+                                <div style="position: relative; height: 120px;">
+                                    <canvas id="clearanceCanvas"></canvas>
+                                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
+                                        <span id="clearanceRate" class="text-lg font-bold text-green-600 leading-none">0%</span>
+                                        <span class="text-[10px] text-gray-500">cleared</span>
+                                    </div>
+                                </div>
+                                <div class="text-[11px] text-gray-600 text-center mt-1"><span id="unsolvedCount" class="font-bold text-red-600">0</span> unsolved cases</div>
+                            </div>
+                            <div class="border border-gray-200 rounded-lg p-3">
+                                <div class="text-[11px] font-bold text-gray-500 uppercase mb-1">Day vs night</div>
+                                <div style="position: relative; height: 120px;">
+                                    <canvas id="dayNightCanvas"></canvas>
+                                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
+                                        <span id="nightPercent" class="text-lg font-bold text-indigo-600 leading-none">0%</span>
+                                        <span class="text-[10px] text-gray-500">at night</span>
+                                    </div>
+                                </div>
+                                <div class="text-[11px] text-gray-600 text-center mt-1">6 PM – 6 AM counts as night</div>
+                            </div>
                         </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-700">Clearance Rate</span>
-                            <span id="clearanceRate" class="text-sm font-bold text-green-600">0%</span>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-700">Unsolved Cases</span>
-                            <span id="unsolvedCount" class="text-sm font-bold text-red-600">0</span>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-700">Night-time Incidents</span>
-                            <span id="nightPercent" class="text-sm font-bold text-indigo-600">0%</span>
+
+                        <div class="border border-gray-200 rounded-lg p-3 mt-3">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[11px] font-bold text-gray-500 uppercase">Street risk mix</span>
+                                <span id="riskMixTotal" class="text-[11px] text-gray-500">0 streets</span>
+                            </div>
+                            <div id="riskMixBar" class="flex h-3 rounded-full overflow-hidden bg-gray-100"></div>
+                            <div id="riskMixLegend" class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px] text-gray-600"></div>
                         </div>
                     </div>
                 </div>
@@ -372,13 +418,61 @@ if (request()->query('token')) {
                 </div>
             </div>
 
-            <!-- Analytical Insights Section -->
+            <!-- Ranking & weekday charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <h3 class="text-lg font-bold text-gray-900 mb-1">
+                        <i class="fas fa-ranking-star mr-2 text-alertara-700"></i>Risk Score by Street
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">Top 10 streets, composite score out of 100 - bar colour is the risk level</p>
+                    <div id="riskScoreChart" style="position: relative; height: 300px;">
+                        <canvas id="riskScoreCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <h3 class="text-lg font-bold text-gray-900 mb-1">
+                        <i class="fas fa-calendar-week mr-2 text-alertara-700"></i>Day of Week
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                        Incidents per weekday - busiest: <span id="peakDayLabel" class="font-bold text-gray-900">--</span>
+                    </p>
+                    <div id="weekdayChart" style="position: relative; height: 300px;">
+                        <canvas id="weekdayCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytical Insights Section: findings on the left, the charts
+                 that back them on the right -->
             <div class="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-6 shadow-sm mt-6">
                 <h3 class="text-lg font-bold text-purple-900 mb-4">
                     <i class="fas fa-lightbulb mr-2"></i>Analytical Insights & Recommendations
                 </h3>
-                <div id="aiInsights" class="space-y-3">
-                    <!-- Populated by JavaScript -->
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div id="aiInsights">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-white border border-purple-200 rounded-lg p-4">
+                            <div class="text-sm font-bold text-gray-900 mb-0.5">
+                                <i class="fas fa-arrow-trend-up mr-1 text-purple-700"></i>Rising vs falling streets
+                            </div>
+                            <p class="text-xs text-gray-500 mb-2">Change vs the previous period. Red bars are rising, green are falling.</p>
+                            <div style="position: relative; height: 220px;">
+                                <canvas id="trendByStreetCanvas"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-purple-200 rounded-lg p-4">
+                            <div class="text-sm font-bold text-gray-900 mb-0.5">
+                                <i class="fas fa-folder-open mr-1 text-purple-700"></i>Cleared vs open cases by street
+                            </div>
+                            <p class="text-xs text-gray-500 mb-2">Where the unsolved cases pile up.</p>
+                            <div style="position: relative; height: 220px;">
+                                <canvas id="clearanceByStreetCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -417,6 +511,38 @@ if (request()->query('token')) {
 
         function initializeMap() {
             map = L.map('hotspotMap').setView([14.6349, 121.0388], 13);
+
+            // Google Maps (default, Hybrid imagery) and the 3D view over the
+            // same container, both fed by currentData
+            const engines = {};
+            if (typeof CrimeMapGoogle !== 'undefined') {
+                try {
+                    window.crimeMapGoogle = engines.google = CrimeMapGoogle.create({
+                        wrapper: document.getElementById('mapContainer'),
+                        getIncidents: () => currentData,
+                        getMode: () => document.getElementById('visualizationMode').value,
+                        modeSelect: document.getElementById('visualizationMode'),
+                    });
+                } catch (e) { console.warn('Google Maps view unavailable:', e); }
+            }
+            if (typeof CrimeMap3D !== 'undefined') {
+                try {
+                    window.crimeMap3D = engines['3d'] = CrimeMap3D.create({
+                        wrapper: document.getElementById('mapContainer'),
+                        getIncidents: () => currentData,
+                        getMode: () => document.getElementById('visualizationMode').value,
+                        modeSelect: document.getElementById('visualizationMode'),
+                    });
+                } catch (e) { console.warn('3D view unavailable:', e); }
+            }
+            if (typeof CrimeMapGoogle !== 'undefined') {
+                CrimeMapGoogle.switcher({
+                    engines: engines,
+                    buttons: { google: document.getElementById('mapGoogleBtn'), '2d': document.getElementById('map2dBtn'), '3d': document.getElementById('map3dBtn') },
+                    defaultEngine: 'google',
+                    storageKey: 'crimeHotspotEngine',
+                });
+            }
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
@@ -593,6 +719,8 @@ if (request()->query('token')) {
 
                     currentData = hotspotsData;
                     currentVisualizationMode = visualizationMode;
+                    if (window.crimeMap3D) window.crimeMap3D.refresh();
+                    if (window.crimeMapGoogle) window.crimeMapGoogle.refresh();
 
                     // Clear current visualization
                     clearCurrentVisualization();
@@ -751,44 +879,35 @@ if (request()->query('token')) {
 
             topHotspotsDiv.innerHTML = hotspots.map((h) => {
                 const style = RISK_STYLES[h.risk_level] || RISK_STYLES.LOW;
+                const color = RISK_BAR_COLOR[h.risk_level] || '#9ca3af';
+                const total = Math.max(1, h.incident_count);
 
-                // Top three types by name; the tail is folded into "Others"
-                const shown = h.categories.slice(0, 3);
-                const others = h.categories.slice(3).reduce((sum, c) => sum + c.count, 0);
-                const chips = shown.map(c =>
-                    `<span class="inline-flex items-center gap-1 text-[11px] text-gray-700">
-                        <span style="width:8px;height:8px;border-radius:9999px;background:${c.color};display:inline-block;"></span>
-                        ${c.name}: <b>${c.count}</b>
-                     </span>`).join('<span class="text-gray-300 mx-1">·</span>');
+                // Crime mix as a stacked bar: one segment per type, in the
+                // type's own colour, hover for the count
+                const stack = h.categories.map(c =>
+                    `<div style="width:${c.count / total * 100}%;background:${c.color};" title="${escapeHtml(c.name)}: ${c.count}"></div>`).join('');
+                const pc = h.trend_percent;
+                const trendColor = pc > 0 ? '#b91c1c' : pc < 0 ? '#15803d' : '#6b7280';
+                const trendIcon = pc > 0 ? 'fa-arrow-trend-up' : pc < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right';
 
                 return `
-                <div class="border-b border-gray-100 p-3 hover:bg-gray-50 cursor-pointer transition-colors hotspot-item" data-street="${h.area_name}">
-                    <div class="flex items-start justify-between mb-1.5">
-                        <div class="font-semibold text-gray-900 text-sm">
-                            <span class="mr-1">${style.icon}</span>#${h.rank} ${h.area_name}
+                <div class="border-b border-gray-100 px-3 py-2.5 hover:bg-gray-50 cursor-pointer transition-colors hotspot-item" data-street="${escapeHtml(h.area_name)}">
+                    <div class="flex items-center gap-2.5">
+                        <span class="inline-flex items-center justify-center rounded-lg text-white text-[11px] font-black" style="width:24px;height:24px;background:${color};flex-shrink:0;">${h.rank}</span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-gray-900 text-sm truncate">${escapeHtml(h.area_name)}</span>
+                                <span class="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full ${style.badge}">${h.risk_level}</span>
+                            </div>
+                            <div class="flex h-2 rounded-full overflow-hidden bg-gray-100 mt-1.5">${stack}</div>
+                            <div class="flex items-center gap-3 mt-1.5 text-[11px] font-semibold text-gray-600">
+                                <span title="Incidents"><i class="fas fa-layer-group mr-1 text-gray-400"></i>${h.incident_count}</span>
+                                <span title="Trend vs previous period" style="color:${trendColor}"><i class="fas ${trendIcon} mr-1"></i>${pc > 0 ? '+' : ''}${pc}%</span>
+                                ${h.peak_period ? `<span title="Peak hours"><i class="fas fa-clock mr-1 text-gray-400"></i>${escapeHtml(h.peak_period)}</span>` : ''}
+                                ${h.density_per_100m !== null ? `<span title="Crimes per 100 m" class="hidden xl:inline"><i class="fas fa-compress mr-1 text-gray-400"></i>${h.density_per_100m}</span>` : ''}
+                            </div>
                         </div>
-                        <div class="text-right shrink-0 ml-2">
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${style.badge}">${h.risk_level}</span>
-                            <div class="text-[10px] text-gray-400 mt-0.5 font-bold">score ${h.risk_score}</div>
-                        </div>
-                    </div>
-
-                    <div class="text-xs text-gray-700 mb-1">
-                        <b>${h.incident_count}</b> incidents · ${trendArrow(h.trend_direction, h.trend_percent)}
-                    </div>
-
-                    <div class="flex flex-wrap items-center mb-1">
-                        ${chips}${others ? `<span class="text-gray-300 mx-1">·</span><span class="text-[11px] text-gray-500">Others: <b>${others}</b></span>` : ''}
-                    </div>
-
-                    <div class="text-[11px] text-gray-500 mb-2">
-                        ${h.peak_period ? `<i class="fas fa-clock mr-1"></i>Peak ${h.peak_period}` : ''}
-                        ${h.density_per_100m !== null ? ` · <i class="fas fa-compress mr-1"></i>${h.density_per_100m}/100m` : ''}
-                        · <i class="fas fa-location-dot mr-1"></i>${h.affected_locations} spot${h.affected_locations === 1 ? '' : 's'}
-                    </div>
-
-                    <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                        <div class="h-full ${style.bar}" style="width: ${Math.min(h.risk_score, 100)}%"></div>
+                        ${ringSvg(h.risk_score, color, 40, h.risk_score)}
                     </div>
                 </div>
             `}).join('');
@@ -804,6 +923,9 @@ if (request()->query('token')) {
             renderCrimeDistributionChart();
             renderMonthlyTrendChart();
             renderHourlyChart();
+            renderWeekdayChart();
+            renderRiskScoreChart();
+            renderInsightCharts();
             generateInsights();
         }
 
@@ -812,10 +934,42 @@ if (request()->query('token')) {
             const summary = analyticsData?.summary;
             if (!summary) return;
 
-            document.getElementById('highRiskCount').textContent = summary.risk_counts.critical + summary.risk_counts.high;
-            document.getElementById('mediumRiskCount').textContent = summary.risk_counts.medium;
-            document.getElementById('lowRiskCount').textContent = summary.risk_counts.low;
+            const rc = summary.risk_counts;
+            const high = rc.critical + rc.high;
+            const streets = high + rc.medium + rc.low;
+            const share = (n) => streets ? Math.round(n / streets * 100) : 0;
+            document.getElementById('highRiskCount').textContent = high;
+            document.getElementById('mediumRiskCount').textContent = rc.medium;
+            document.getElementById('lowRiskCount').textContent = rc.low;
             document.getElementById('totalIncidentsCount').textContent = summary.total_incidents;
+
+            // Share of all ranked streets, as a bar under each number
+            [['highRiskBar', high], ['mediumRiskBar', rc.medium], ['lowRiskBar', rc.low]].forEach(([id, n]) => {
+                document.getElementById(id).style.width = share(n) + '%';
+                document.getElementById(id + 'Label').textContent = `${share(n)}% of ${streets} street${streets === 1 ? '' : 's'}`;
+            });
+
+            // Incidents split cleared vs unsolved
+            const unsolved = summary.unsolved_count || 0;
+            const cleared = Math.max(0, summary.total_incidents - unsolved);
+            const pct = summary.total_incidents ? Math.round(cleared / summary.total_incidents * 100) : 0;
+            document.getElementById('totalIncidentsBar').innerHTML =
+                `<div style="width:${pct}%;background:#16a34a;" title="Cleared: ${cleared}"></div><div style="width:${100 - pct}%;background:#ef4444;" title="Unsolved: ${unsolved}"></div>`;
+            document.getElementById('totalIncidentsLabel').innerHTML =
+                `<span style="color:#15803d;font-weight:700;">${cleared} cleared</span> · <span style="color:#b91c1c;font-weight:700;">${unsolved} open</span>`;
+        }
+
+        // Small SVG progress ring with the value in the middle - used wherever
+        // a percentage or score used to be printed as text
+        function ringSvg(pct, color, size, label, sub) {
+            const v = Math.max(0, Math.min(100, Number(pct) || 0));
+            return `<svg viewBox="0 0 36 36" width="${size}" height="${size}" style="flex-shrink:0;">
+                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#e5e7eb" stroke-width="3.6"/>
+                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="${color}" stroke-width="3.6" stroke-linecap="round"
+                        stroke-dasharray="${v} 100" transform="rotate(-90 18 18)"/>
+                <text x="18" y="${sub ? 17 : 18.6}" text-anchor="middle" dominant-baseline="middle" font-size="${sub ? 8.5 : 9.5}" font-weight="800" fill="#111827">${label}</text>
+                ${sub ? `<text x="18" y="24.5" text-anchor="middle" dominant-baseline="middle" font-size="5" font-weight="700" fill="#6b7280">${sub}</text>` : ''}
+            </svg>`;
         }
 
         // Update trend analysis indicators from real server data
@@ -835,6 +989,204 @@ if (request()->query('token')) {
                        : 'arrows-left-right text-gray-500';
             document.getElementById('overallTrend').innerHTML =
                 `<i class="fas fa-${icon} mr-1"></i>${label} ${trend.percent > 0 ? '+' : ''}${trend.percent}% <span class="text-xs text-gray-400 font-normal">(vs prev ${trend.window_days}d)</span>`;
+
+            renderClearanceDonut(summary);
+            renderDayNightDonut(analyticsData.day_night);
+            renderRiskMix(summary.risk_counts);
+        }
+
+        // Small doughnuts behind the clearance / night figures, so the rate
+        // reads at a glance instead of as a number in a row
+        const MINI_DONUT = (labels, values, colors) => ({
+            type: 'doughnut',
+            data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: '#fff', borderWidth: 2 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '70%',
+                plugins: { legend: { display: false },
+                           tooltip: { callbacks: { label: (it) => ` ${it.label}: ${it.parsed}` } } }
+            }
+        });
+
+        let clearanceChartInstance = null;
+        function renderClearanceDonut(summary) {
+            const ctx = document.getElementById('clearanceCanvas');
+            if (!ctx) return;
+            if (clearanceChartInstance) clearanceChartInstance.destroy();
+            const cleared = Math.max(0, (summary.total_incidents || 0) - (summary.unsolved_count || 0));
+            clearanceChartInstance = new Chart(ctx, MINI_DONUT(['Cleared', 'Unsolved'], [cleared, summary.unsolved_count || 0], ['#16a34a', '#ef4444']));
+        }
+
+        let dayNightChartInstance = null;
+        function renderDayNightDonut(dayNight) {
+            const ctx = document.getElementById('dayNightCanvas');
+            if (!ctx || !dayNight) return;
+            if (dayNightChartInstance) dayNightChartInstance.destroy();
+            dayNightChartInstance = new Chart(ctx, MINI_DONUT(
+                ['Day (6AM-6PM)', 'Night (6PM-6AM)', 'No time recorded'],
+                [dayNight.day || 0, dayNight.night || 0, dayNight.unknown_time || 0],
+                ['#60a5fa', '#4338ca', '#e5e7eb']));
+        }
+
+        // Stacked bar of how many streets sit in each risk band
+        function renderRiskMix(counts) {
+            const bar = document.getElementById('riskMixBar');
+            const legend = document.getElementById('riskMixLegend');
+            if (!bar || !counts) return;
+            const bands = [
+                ['Critical', counts.critical || 0, '#7f1d1d'],
+                ['High', counts.high || 0, '#dc2626'],
+                ['Medium', counts.medium || 0, '#f59e0b'],
+                ['Low', counts.low || 0, '#16a34a'],
+            ];
+            const total = bands.reduce((sum, b) => sum + b[1], 0);
+            document.getElementById('riskMixTotal').textContent = `${total} street${total === 1 ? '' : 's'}`;
+            bar.innerHTML = total
+                ? bands.filter(b => b[1] > 0).map(b =>
+                    `<div title="${b[0]}: ${b[1]}" style="width:${b[1] / total * 100}%;background:${b[2]};"></div>`).join('')
+                : '';
+            legend.innerHTML = bands.map(b =>
+                `<span class="inline-flex items-center gap-1"><span style="width:8px;height:8px;border-radius:9999px;background:${b[2]};display:inline-block;"></span>${b[0]} <b>${b[1]}</b></span>`).join('');
+        }
+
+        // Incidents per weekday, busiest day highlighted
+        let weekdayChartInstance = null;
+        function renderWeekdayChart() {
+            const weekday = analyticsData?.weekday;
+            const ctx = document.getElementById('weekdayCanvas');
+            if (!ctx || !weekday) return;
+
+            document.getElementById('peakDayLabel').textContent = weekday.peak_day || 'no data';
+            if (weekdayChartInstance) weekdayChartInstance.destroy();
+
+            const peak = Math.max(...weekday.values);
+            weekdayChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: weekday.labels,
+                    datasets: [{
+                        label: 'Incidents',
+                        data: weekday.values,
+                        backgroundColor: weekday.values.map(v => v === peak && peak > 0 ? '#274d4c' : '#9ed4cb'),
+                        borderRadius: 6,
+                        maxBarThickness: 44
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false },
+                               tooltip: { callbacks: { label: (it) => `${it.parsed.y} incident(s)` } } },
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+        }
+
+        // Horizontal ranking of the top 10 streets by composite risk score
+        const RISK_BAR_COLOR = { CRITICAL: '#7f1d1d', HIGH: '#dc2626', MEDIUM: '#f59e0b', LOW: '#16a34a' };
+        let riskScoreChartInstance = null;
+        function renderRiskScoreChart() {
+            const hotspots = (analyticsData?.hotspots || []).slice(0, 10);
+            const ctx = document.getElementById('riskScoreCanvas');
+            if (!ctx) return;
+            if (riskScoreChartInstance) riskScoreChartInstance.destroy();
+            if (!hotspots.length) return;
+
+            riskScoreChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: hotspots.map(h => h.area_name),
+                    datasets: [{
+                        label: 'Risk score',
+                        data: hotspots.map(h => h.risk_score),
+                        backgroundColor: hotspots.map(h => RISK_BAR_COLOR[h.risk_level] || '#9ca3af'),
+                        borderRadius: 5,
+                        maxBarThickness: 22
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    onClick: (evt, els) => {
+                        if (!els.length) return;
+                        const h = hotspots[els[0].index];
+                        if (h) selectHotspot(h.area_name, h);
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: {
+                            label: (it) => {
+                                const h = hotspots[it.dataIndex];
+                                return [` Score ${h.risk_score}/100 · ${h.risk_level}`, ` ${h.incident_count} incidents · ${h.trend_percent > 0 ? '+' : ''}${h.trend_percent}% trend`];
+                            }
+                        } }
+                    },
+                    scales: {
+                        x: { beginAtZero: true, max: 100, grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } },
+                        y: { grid: { display: false }, ticks: { font: { size: 11 }, autoSkip: false } }
+                    }
+                }
+            });
+        }
+
+        // The two charts beside the insights: per-street trend and clearance
+        let trendByStreetChartInstance = null;
+        let clearanceByStreetChartInstance = null;
+        function renderInsightCharts() {
+            const hotspots = analyticsData?.hotspots || [];
+
+            const trendCtx = document.getElementById('trendByStreetCanvas');
+            if (trendCtx) {
+                if (trendByStreetChartInstance) trendByStreetChartInstance.destroy();
+                const movers = hotspots.filter(h => h.trend_percent !== 0)
+                    .sort((a, b) => Math.abs(b.trend_percent) - Math.abs(a.trend_percent)).slice(0, 8)
+                    .sort((a, b) => b.trend_percent - a.trend_percent);
+                if (movers.length) {
+                    trendByStreetChartInstance = new Chart(trendCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: movers.map(h => h.area_name),
+                            datasets: [{
+                                data: movers.map(h => h.trend_percent),
+                                backgroundColor: movers.map(h => h.trend_percent > 0 ? '#dc2626' : '#16a34a'),
+                                borderRadius: 4, maxBarThickness: 18
+                            }]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                            plugins: { legend: { display: false },
+                                       tooltip: { callbacks: { label: (it) => ` ${it.parsed.x > 0 ? '+' : ''}${it.parsed.x}% vs previous period` } } },
+                            scales: {
+                                x: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 }, callback: (v) => (v > 0 ? '+' : '') + v + '%' } },
+                                y: { grid: { display: false }, ticks: { font: { size: 10 }, autoSkip: false } }
+                            }
+                        }
+                    });
+                }
+            }
+
+            const clrCtx = document.getElementById('clearanceByStreetCanvas');
+            if (clrCtx) {
+                if (clearanceByStreetChartInstance) clearanceByStreetChartInstance.destroy();
+                const top = hotspots.slice(0, 8);
+                if (top.length) {
+                    clearanceByStreetChartInstance = new Chart(clrCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: top.map(h => h.area_name),
+                            datasets: [
+                                { label: 'Cleared', data: top.map(h => h.cleared), backgroundColor: '#16a34a', borderRadius: 3, maxBarThickness: 18 },
+                                { label: 'Open', data: top.map(h => h.uncleared), backgroundColor: '#ef4444', borderRadius: 3, maxBarThickness: 18 }
+                            ]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                            plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+                            scales: {
+                                x: { stacked: true, beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { precision: 0, font: { size: 10 } } },
+                                y: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 }, autoSkip: false } }
+                            }
+                        }
+                    });
+                }
+            }
         }
 
         // Crime Distribution Chart (server-computed distribution)
@@ -976,106 +1328,85 @@ if (request()->query('token')) {
         }
 
         function generateInsights() {
-            const insights = [];
             const hotspots = analyticsData?.hotspots || [];
             const summary = analyticsData?.summary;
             const dayNight = analyticsData?.day_night;
+            const insightsDiv = document.getElementById('aiInsights');
 
             if (!hotspots.length || !summary) {
-                insights.push({
-                    type: 'neutral',
-                    icon: 'info-circle',
-                    title: 'No Data',
-                    description: 'No crime data available for the selected filters.'
-                });
-            } else {
-                const top = hotspots[0];
-
-                // Top risk area, explained via its composite score components
-                insights.push({
-                    type: top.risk_level === 'CRITICAL' || top.risk_level === 'HIGH' ? 'danger' : 'info',
-                    icon: 'fire',
-                    title: `Highest Risk: ${top.area_name} (score ${top.risk_score}/100)`,
-                    description: `${top.incident_count} incidents, mostly ${top.top_category}${top.peak_period ? `, peaking ${top.peak_period}` : ''}${top.density_per_100m !== null ? `, ${top.density_per_100m} crimes per 100 m of street` : ''}. Severity index ${top.severity_index}/4. <a href="/pattern-detection" class="underline font-semibold">Simulate interventions →</a>`
-                });
-
-                // Rising areas
-                const rising = hotspots.filter(h => h.trend_direction === 'increasing');
-                if (rising.length > 0) {
-                    insights.push({
-                        type: 'warning',
-                        icon: 'arrow-trend-up',
-                        title: `${rising.length} Street(s) with Rising Incidents`,
-                        description: `${rising.slice(0, 3).map(h => `${h.area_name} (+${h.trend_percent}%)`).join(', ')}${rising.length > 3 ? '…' : ''} vs the previous period. Prioritize preventive deployment before these harden into hotspots.`
-                    });
-                }
-
-                // Night-time concentration
-                if (dayNight && dayNight.night_percent >= 50) {
-                    insights.push({
-                        type: 'warning',
-                        icon: 'moon',
-                        title: `${dayNight.night_percent}% of Incidents Happen at Night`,
-                        description: 'Night-heavy pattern detected (6PM–6AM). Street lighting and night patrol interventions are most applicable — test them in the Pattern Detection simulator.'
-                    });
-                }
-
-                // Clearance rate insight (real)
-                if (summary.clearance_rate < 50) {
-                    insights.push({
-                        type: 'warning',
-                        icon: 'triangle-exclamation',
-                        title: 'Low Clearance Rate',
-                        description: `Only ${summary.clearance_rate}% of cases are cleared (${summary.unsolved_count} unsolved). Focus on case resolution strategies.`
-                    });
-                } else {
-                    insights.push({
-                        type: 'success',
-                        icon: 'check-circle',
-                        title: 'Good Clearance Performance',
-                        description: `${summary.clearance_rate}% of cases are cleared. Maintain current investigation efforts.`
-                    });
-                }
-
-                // Citywide trend
-                const trend = summary.citywide_trend;
-                if (trend.direction !== 'stable') {
-                    insights.push({
-                        type: trend.direction === 'increasing' ? 'danger' : 'success',
-                        icon: trend.direction === 'increasing' ? 'arrow-up' : 'arrow-down',
-                        title: `Citywide Incidents ${trend.direction === 'increasing' ? 'Up' : 'Down'} ${Math.abs(trend.percent)}%`,
-                        description: `Compared to the previous ${trend.window_days}-day period across all filtered areas.`
-                    });
-                }
+                insightsDiv.innerHTML = `
+                    <div class="bg-white border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
+                        <i class="fas fa-info-circle text-blue-600 mr-2"></i>No crime data for the selected filters.
+                    </div>`;
+                return;
             }
 
-            const insightsDiv = document.getElementById('aiInsights');
-            insightsDiv.innerHTML = insights.map(insight => {
-                const bgClass = insight.type === 'danger' ? 'bg-red-50 border-red-200' :
-                               insight.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
-                               insight.type === 'success' ? 'bg-green-50 border-green-200' :
-                               'bg-blue-50 border-blue-200';
-                const textClass = insight.type === 'danger' ? 'text-red-900' :
-                                 insight.type === 'warning' ? 'text-yellow-900' :
-                                 insight.type === 'success' ? 'text-green-900' :
-                                 'text-blue-900';
-                const iconColor = insight.type === 'danger' ? 'text-red-600' :
-                                 insight.type === 'warning' ? 'text-yellow-600' :
-                                 insight.type === 'success' ? 'text-green-600' :
-                                 'text-blue-600';
-
+            // Each card = one visual (ring / big number) + a few words. The
+            // charts to the right carry the detail.
+            const tone = {
+                danger:  { border: 'border-red-200',    bg: 'bg-red-50',    text: 'text-red-900',    accent: '#dc2626' },
+                warning: { border: 'border-amber-200',  bg: 'bg-amber-50',  text: 'text-amber-900',  accent: '#d97706' },
+                success: { border: 'border-green-200',  bg: 'bg-green-50',  text: 'text-green-900',  accent: '#16a34a' },
+                info:    { border: 'border-blue-200',   bg: 'bg-blue-50',   text: 'text-blue-900',   accent: '#2563eb' },
+                night:   { border: 'border-indigo-200', bg: 'bg-indigo-50', text: 'text-indigo-900', accent: '#4338ca' },
+            };
+            const card = (type, visual, title, sub, extra) => {
+                const t = tone[type] || tone.info;
                 return `
-                    <div class="border ${bgClass} rounded-lg p-4">
-                        <div class="flex gap-3">
-                            <i class="fas fa-${insight.icon} ${iconColor} text-lg flex-shrink-0 mt-0.5"></i>
-                            <div>
-                                <h4 class="font-semibold ${textClass} mb-1">${insight.title}</h4>
-                                <p class="text-sm ${textClass} opacity-80">${insight.description}</p>
-                            </div>
+                    <div class="border ${t.border} ${t.bg} rounded-lg p-3 flex items-center gap-3">
+                        <div class="flex-shrink-0">${visual}</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-bold ${t.text} text-sm leading-tight">${title}</div>
+                            ${sub ? `<div class="text-[11.5px] ${t.text} opacity-75 mt-0.5 leading-snug">${sub}</div>` : ''}
+                            ${extra || ''}
                         </div>
-                    </div>
-                `;
-            }).join('');
+                    </div>`;
+            };
+            const bigNum = (value, color, icon) => `
+                <div class="flex flex-col items-center justify-center rounded-xl bg-white border border-gray-100" style="width:54px;height:54px;">
+                    ${icon ? `<i class="fas ${icon}" style="color:${color};font-size:12px;"></i>` : ''}
+                    <span class="font-black leading-none" style="color:${color};font-size:${String(value).length > 4 ? 13 : 16}px;">${value}</span>
+                </div>`;
+
+            const cards = [];
+            const top = hotspots[0];
+            const topTone = (top.risk_level === 'CRITICAL' || top.risk_level === 'HIGH') ? 'danger' : 'info';
+            cards.push(card(topTone,
+                ringSvg(top.risk_score, RISK_BAR_COLOR[top.risk_level] || '#9ca3af', 54, top.risk_score, 'SCORE'),
+                `Highest risk: ${escapeHtml(top.area_name)}`,
+                `${top.incident_count} incidents · mostly ${escapeHtml(top.top_category)}${top.peak_period ? ` · peak ${escapeHtml(top.peak_period)}` : ''}`,
+                `<a href="/pattern-detection" class="inline-flex items-center gap-1 mt-1.5 text-[11px] font-bold text-purple-700 hover:underline"><i class="fas fa-flask"></i>Simulate interventions</a>`));
+
+            const rising = hotspots.filter(h => h.trend_direction === 'increasing');
+            const falling = hotspots.filter(h => h.trend_direction === 'decreasing');
+            cards.push(card(rising.length ? 'warning' : 'success',
+                bigNum(rising.length, rising.length ? '#d97706' : '#16a34a', rising.length ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'),
+                rising.length ? `${rising.length} street${rising.length === 1 ? '' : 's'} rising` : 'No street is rising',
+                rising.length
+                    ? rising.slice(0, 3).map(h => `${escapeHtml(h.area_name)} <b>+${h.trend_percent}%</b>`).join(' · ') + (rising.length > 3 ? ' …' : '')
+                    : `${falling.length} falling vs the previous period`));
+
+            if (dayNight) {
+                cards.push(card(dayNight.night_percent >= 50 ? 'night' : 'info',
+                    ringSvg(dayNight.night_percent, '#4338ca', 54, dayNight.night_percent + '%', 'NIGHT'),
+                    dayNight.night_percent >= 50 ? 'Night-heavy pattern' : 'Mostly daytime crime',
+                    dayNight.night_percent >= 50 ? 'Lighting and night patrols apply best (6 PM – 6 AM)' : 'Daytime presence and CCTV apply best'));
+            }
+
+            cards.push(card(summary.clearance_rate < 50 ? 'warning' : 'success',
+                ringSvg(summary.clearance_rate, summary.clearance_rate < 50 ? '#d97706' : '#16a34a', 54, summary.clearance_rate + '%', 'CLEARED'),
+                summary.clearance_rate < 50 ? 'Low clearance rate' : 'Good clearance rate',
+                `<b>${summary.unsolved_count}</b> unsolved of ${summary.total_incidents} cases`));
+
+            const trend = summary.citywide_trend;
+            if (trend.direction !== 'stable') {
+                cards.push(card(trend.direction === 'increasing' ? 'danger' : 'success',
+                    bigNum(`${trend.percent > 0 ? '+' : ''}${trend.percent}%`, trend.direction === 'increasing' ? '#dc2626' : '#16a34a', trend.direction === 'increasing' ? 'fa-arrow-up' : 'fa-arrow-down'),
+                    `Incidents ${trend.direction === 'increasing' ? 'up' : 'down'} overall`,
+                    `vs the previous ${trend.window_days} days, all filtered streets`));
+            }
+
+            insightsDiv.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-3">${cards.join('')}</div>`;
         }
 
         // ---------------------------------------------------------------
@@ -1140,29 +1471,40 @@ if (request()->query('token')) {
                     .reduce((sum, c) => sum + c.count, 0);
 
                 const badge = (label, count, color) => `
-                    <div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
-                        <span class="flex items-center gap-2 text-sm text-gray-700">
-                            <span style="width:10px;height:10px;border-radius:9999px;background:${color};display:inline-block;"></span>
-                            ${escapeHtml(label)}
-                        </span>
-                        <span class="font-bold text-sm text-gray-900">${count}</span>
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-700 rounded-full border border-gray-200 bg-white px-2 py-0.5">
+                        <span style="width:8px;height:8px;border-radius:9999px;background:${color};display:inline-block;"></span>
+                        ${escapeHtml(label)} <b class="text-gray-900">${count}</b>
+                    </span>`;
+
+                // Icon tile: one fact, one glance
+                const tile = (icon, label, value, color) => `
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2 min-w-0">
+                        <div class="text-[10px] font-bold text-gray-500 uppercase truncate"><i class="fas ${icon} mr-1" style="color:${color || '#9ca3af'}"></i>${label}</div>
+                        <div class="text-sm font-bold text-gray-900 truncate mt-0.5">${value}</div>
                     </div>`;
 
-                const stat = (label, value) => `
-                    <div class="flex items-center justify-between py-1.5">
-                        <span class="text-sm text-gray-600">${label}</span>
-                        <span class="text-sm font-bold text-gray-900">${value}</span>
-                    </div>`;
+                // Recent incidents as a compact timeline of chips
+                const recent = (hotspot.recent_incidents || []).slice(0, 4).map(i => `
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2 py-1 border ${i.cleared ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}" title="${escapeHtml(i.category)} · ${escapeHtml(i.date || '')} ${escapeHtml(i.time || '')} · ${i.cleared ? 'cleared' : 'open'}">
+                        <i class="fas ${i.cleared ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i>${escapeHtml((i.date || '').slice(5))} · ${escapeHtml(i.category)}
+                    </span>`).join('');
 
-                const recent = (hotspot.recent_incidents || []).map(i => `
-                    <div class="flex items-baseline gap-2 py-1 text-xs border-t border-gray-100">
-                        <span class="font-semibold text-gray-900">${escapeHtml(i.date || '')}</span>
-                        ${i.time ? `<span class="text-gray-500">${escapeHtml(i.time)}</span>` : ''}
-                        <span class="text-gray-700">${escapeHtml(i.category)}</span>
-                        <span class="ml-auto font-bold ${i.cleared ? 'text-green-600' : 'text-amber-600'}">
-                            ${i.cleared ? 'CLEARED' : 'OPEN'}
-                        </span>
-                    </div>`).join('');
+                const barColor = RISK_BAR_COLOR[hotspot.risk_level] || '#9ca3af';
+                const meter = (label, left, right, leftColor, rightColor, leftLabel, rightLabel) => {
+                    const total = left + right;
+                    const pct = total ? Math.round(left / total * 100) : 0;
+                    return `
+                    <div class="py-1.5">
+                        <div class="flex items-center justify-between text-xs mb-1">
+                            <span class="text-gray-600">${label}</span>
+                            <span class="font-bold"><span style="color:${leftColor}">${left}</span> <span class="text-gray-400">/</span> <span style="color:${rightColor}">${right}</span></span>
+                        </div>
+                        <div class="flex h-2 rounded-full overflow-hidden bg-gray-100">
+                            <div style="width:${pct}%;background:${leftColor};" title="${leftLabel}: ${left}"></div>
+                            <div style="width:${100 - pct}%;background:${rightColor};" title="${rightLabel}: ${right}"></div>
+                        </div>
+                    </div>`;
+                };
 
                 body.innerHTML = `
                     <div class="flex items-center gap-2 mb-3">
@@ -1171,33 +1513,42 @@ if (request()->query('token')) {
                         <span class="ml-auto text-[11px] font-bold text-gray-500">#${hotspot.rank}</span>
                     </div>
 
-                    <div class="bg-gray-50 rounded-lg p-3 mb-3 text-center">
-                        <div class="text-3xl font-bold text-gray-900">${hotspot.incident_count}</div>
-                        <div class="text-xs text-gray-600">total crime incidents</div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div class="bg-gray-50 rounded-lg p-3 text-center flex flex-col justify-center">
+                            <div class="text-3xl font-bold text-gray-900">${hotspot.incident_count}</div>
+                            <div class="text-xs text-gray-600">total crime incidents</div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden mt-2" title="Risk score ${hotspot.risk_score}/100">
+                                <div class="h-full" style="width:${Math.min(hotspot.risk_score, 100)}%;background:${barColor};"></div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-2" style="position:relative;height:110px;">
+                            <canvas id="streetPanelDonut"></canvas>
+                        </div>
                     </div>
 
-                    <div class="mb-3">
-                        <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Breakdown by type</div>
+                    <div class="flex flex-wrap gap-1.5 mb-3">
                         ${shown.map(c => badge(c.name, c.count, c.color)).join('')}
                         ${otherCount ? badge('Others', otherCount, '#9ca3af') : ''}
                     </div>
 
                     <div class="mb-3 border-t border-gray-100 pt-2">
-                        ${stat('Most common crime', escapeHtml(hotspot.top_category ?? 'N/A'))}
-                        ${stat('Highest crime period', escapeHtml(hotspot.peak_period ?? 'No time recorded'))}
-                        ${stat('Trend', `<span class="${trendClass}"><i class="fas ${trendIcon} mr-1"></i>${pc > 0 ? '+' : ''}${pc}%</span>`)}
-                        ${stat('Affected locations', hotspot.affected_locations)}
-                        ${stat('Crime density', hotspot.density_per_100m !== null
-                            ? `${hotspot.density_per_100m} / 100 m`
-                            : '<span class="text-gray-400 font-normal">street too short</span>')}
-                        ${stat('Cleared / open', `<span class="text-green-600">${hotspot.cleared}</span> / <span class="text-red-600">${hotspot.uncleared}</span>`)}
-                        ${stat('Night-time share', `${hotspot.night_percent}%`)}
+                        ${meter('Cleared vs open', hotspot.cleared, hotspot.uncleared, '#16a34a', '#ef4444', 'Cleared', 'Open')}
+                        ${meter('Night vs day', Math.round(hotspot.incident_count * hotspot.night_percent / 100), hotspot.incident_count - Math.round(hotspot.incident_count * hotspot.night_percent / 100), '#4338ca', '#60a5fa', 'Night', 'Day')}
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        ${tile('fa-tag', 'Top crime', escapeHtml(hotspot.top_category ?? 'N/A'), '#dc2626')}
+                        ${tile('fa-clock', 'Peak', escapeHtml(hotspot.peak_period ?? '—'), '#4338ca')}
+                        ${tile(trendIcon, 'Trend', `<span class="${trendClass}">${pc > 0 ? '+' : ''}${pc}%</span>`, pc > 0 ? '#dc2626' : pc < 0 ? '#16a34a' : '#9ca3af')}
+                        ${tile('fa-location-dot', 'Locations', hotspot.affected_locations, '#0ea5e9')}
+                        ${tile('fa-compress', 'Per 100 m', hotspot.density_per_100m !== null ? hotspot.density_per_100m : '—', '#f59e0b')}
+                        ${tile('fa-ranking-star', 'Rank', `#${hotspot.rank} of ${(analyticsData?.hotspots || []).length}`, '#7c3aed')}
                     </div>
 
                     ${recent ? `
                         <div class="mb-3">
-                            <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Recent incidents</div>
-                            ${recent}
+                            <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Latest incidents</div>
+                            <div class="flex flex-wrap gap-1.5">${recent}</div>
                         </div>` : ''}
 
                     <button type="button" class="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold open-street-modal" data-street="${escapeHtml(hotspot.area_name)}">
@@ -1206,10 +1557,32 @@ if (request()->query('token')) {
                 `;
 
                 wireStreetPanelButtons();
+                renderStreetPanelDonut(hotspot);
                 if (scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } catch (error) {
                 console.error('Error selecting hotspot:', error);
             }
+        }
+
+        // Crime-type doughnut in the street panel, same colours as the map
+        let streetPanelDonutInstance = null;
+        function renderStreetPanelDonut(hotspot) {
+            const ctx = document.getElementById('streetPanelDonut');
+            if (streetPanelDonutInstance) { streetPanelDonutInstance.destroy(); streetPanelDonutInstance = null; }
+            if (!ctx || !hotspot || !hotspot.categories?.length) return;
+            const cats = hotspot.categories;
+            streetPanelDonutInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: cats.map(c => c.name),
+                    datasets: [{ data: cats.map(c => c.count), backgroundColor: cats.map(c => c.color), borderColor: '#fff', borderWidth: 2 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '55%',
+                    plugins: { legend: { display: false },
+                               tooltip: { callbacks: { label: (it) => ` ${it.label}: ${it.parsed} (${Math.round(it.parsed / hotspot.incident_count * 100)}%)` } } }
+                }
+            });
         }
 
         function wireStreetPanelButtons() {

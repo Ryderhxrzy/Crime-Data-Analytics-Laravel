@@ -294,19 +294,26 @@ if (request()->query('token')) {
                 <h2 class="text-lg font-bold text-gray-900 mb-4">
                     <i class="fas fa-lightbulb mr-2" style="color: #f59e0b;"></i>Key Insights & Recommendations
                 </h2>
-                <div id="keyInsights" class="space-y-3">
-                    <p class="text-gray-600">
-                        <i class="fas fa-check-circle text-alertara-600 mr-2"></i>
-                        <span id="insight1">Loading insights...</span>
-                    </p>
-                    <p class="text-gray-600">
-                        <i class="fas fa-check-circle text-alertara-600 mr-2"></i>
-                        <span id="insight2">Analyzing patterns...</span>
-                    </p>
-                    <p class="text-gray-600">
-                        <i class="fas fa-check-circle text-alertara-600 mr-2"></i>
-                        <span id="insight3">Generating recommendations...</span>
-                    </p>
+                <div id="keyInsights" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white rounded-xl border border-gray-200 p-4">
+                        <p class="text-[11px] font-bold uppercase tracking-wide text-gray-500"><i class="fas fa-calendar-day mr-1 text-alertara-600"></i>Peak day</p>
+                        <p class="text-2xl font-extrabold text-gray-900 mt-1" id="insight1Stat">—</p>
+                        <p class="text-xs text-gray-500" id="insight1Sub">Loading…</p>
+                        <p class="mt-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-alertara-50 text-alertara-800 text-xs font-semibold"><i class="fas fa-shield-halved"></i><span id="insight1">Increase patrol presence on this day</span></p>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-200 p-4">
+                        <p class="text-[11px] font-bold uppercase tracking-wide text-gray-500"><i class="fas fa-clock mr-1 text-alertara-600"></i>Peak hour</p>
+                        <p class="text-2xl font-extrabold text-gray-900 mt-1" id="insight2Stat">—</p>
+                        <p class="text-xs text-gray-500" id="insight2Sub">Analyzing…</p>
+                        <p class="mt-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-alertara-50 text-alertara-800 text-xs font-semibold"><i class="fas fa-shield-halved"></i><span id="insight2">Strengthen operations in this window</span></p>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-200 p-4">
+                        <p class="text-[11px] font-bold uppercase tracking-wide text-gray-500"><i class="fas fa-briefcase mr-1 text-alertara-600"></i>Weekday share</p>
+                        <p class="text-2xl font-extrabold text-gray-900 mt-1" id="insight3Stat">—</p>
+                        <div class="h-2 rounded-full bg-gray-100 overflow-hidden mt-2"><div id="insight3Bar" class="h-full rounded-full bg-alertara-600" style="width:0%"></div></div>
+                        <p class="text-xs text-gray-500 mt-1" id="insight3Sub">Weekday vs weekend</p>
+                        <p class="mt-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-alertara-50 text-alertara-800 text-xs font-semibold"><i class="fas fa-shield-halved"></i><span id="insight3">Allocate resources for weekday operations</span></p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -544,9 +551,17 @@ if (request()->query('token')) {
             const peakDayName = dayLabels[peakDayIdx] || 'Unknown day';
             const peakHourStr = hourLabels[peakHourIdx] || 'Unknown time';
 
-            document.getElementById('insight1').textContent = peakDayName + ' has the highest crime incidents (' + maxDayCount + ') - increase patrol presence during this day.';
-            document.getElementById('insight2').textContent = 'Peak crime hour is around ' + peakHourStr + ' with ' + maxHourCount + ' incidents - strengthen operations during this time window.';
-            document.getElementById('insight3').textContent = 'Weekday crimes account for ' + weekdayPercent + '% of total incidents - allocate more resources for weekday operations.';
+            const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+            setText('insight1Stat', peakDayName);
+            setText('insight1Sub', maxDayCount + ' incidents, the highest of any day');
+            setText('insight1', 'Increase patrol presence every ' + peakDayName);
+            setText('insight2Stat', peakHourStr);
+            setText('insight2Sub', maxHourCount + ' incidents in this hour');
+            setText('insight2', 'Strengthen operations around ' + peakHourStr);
+            setText('insight3Stat', weekdayPercent + '%');
+            setText('insight3Sub', weekdaySum + ' weekday vs ' + weekendSum + ' weekend incidents');
+            setText('insight3', (weekdayPercent >= 50 ? 'Weight resources toward weekdays' : 'Weekends need the extra coverage'));
+            const bar = document.getElementById('insight3Bar'); if (bar) bar.style.width = weekdayPercent + '%';
         }
 
         // Load the real Day-vs-Hour heatmap from the database

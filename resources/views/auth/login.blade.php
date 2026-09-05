@@ -22,7 +22,7 @@
                 Crime Data Analytics
             </h2>
             <p class="mt-2 text-xs sm:text-sm text-gray-600">
-                Sign in to continue
+                Sign in with your admin or staff account
             </p>
         </div>
         

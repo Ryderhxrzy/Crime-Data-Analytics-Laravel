@@ -11,9 +11,10 @@
             </h2>
 
             <p class="mx-auto mt-4 text-base leading-relaxed text-ink-muted sm:text-lg">
-                Crime density rendered as a single heat layer. The teal boundary marks Barangay
-                San Agustin, Quezon City — the coverage area for this data. Neighbouring barangays
-                are shown faintly for orientation only.
+                Real satellite imagery with roads and street names, and every road segment
+                coloured by the incidents recorded along it. The teal boundary marks Barangay
+                San Agustin, Quezon City — the coverage area for this data. Switch to the classic
+                heat map or the 3D view with the buttons below.
             </p>
         </div>
 
@@ -32,6 +33,26 @@
                 </select>
             </div>
 
+            <div class="flex flex-col gap-2">
+                <label for="heatStyleFilter" class="text-xs font-semibold uppercase tracking-widest text-ink-subtle">
+                    Heat style
+                </label>
+                <select id="heatStyleFilter"
+                        class="cursor-pointer rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand focus:border-brand focus:outline-none">
+                    <option value="street" selected>Street-Segment Heatmap</option>
+                    <option value="area">Area density</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <span class="text-xs font-semibold uppercase tracking-widest text-ink-subtle">View</span>
+                <div class="inline-flex overflow-hidden rounded-xl border border-line bg-white text-sm font-semibold text-ink" role="group" aria-label="Map engine">
+                    <button id="mapGoogleBtn" type="button" class="map-engine-btn px-4 py-2.5 transition-colors hover:bg-surface" title="Google Maps (satellite + roads)"><i class="fab fa-google"></i><span class="ml-1">Google</span></button>
+                    <button id="map2dBtn" type="button" class="map-engine-btn border-l border-line px-4 py-2.5 transition-colors hover:bg-surface" title="Classic heat map"><i class="fas fa-map"></i><span class="ml-1">Classic</span></button>
+                    <button id="map3dBtn" type="button" class="map-engine-btn border-l border-line px-4 py-2.5 transition-colors hover:bg-surface" title="3D map"><i class="fas fa-cube"></i><span class="ml-1">3D</span></button>
+                </div>
+            </div>
+
             <p class="text-xs text-ink-subtle sm:text-right">
                 Pan and zoom to explore. Density only — individual incidents are not pinned.
             </p>
@@ -39,11 +60,13 @@
 
         <!-- Map container -->
         <div data-reveal style="animation-delay: 140ms" class="mt-6">
+            <div id="crimeMapWrap" class="relative overflow-hidden rounded-card">
             <div id="crimeMap" class="relative z-0 h-96 w-full overflow-hidden rounded-card border border-line shadow-xl shadow-brand/5 md:h-[550px]">
                 <div id="mapLoader" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white">
                     <i class="fas fa-spinner fa-spin mb-3 text-3xl text-brand"></i>
                     <p class="text-sm text-ink-muted">Loading heatmap…</p>
                 </div>
+            </div>
             </div>
         </div>
 
@@ -64,8 +87,8 @@
                 </div>
 
                 <p class="mt-4 text-xs leading-relaxed text-ink-muted">
-                    Colour reflects how many incidents were recorded in an area, not how severe
-                    they were. Zooming changes the visible detail, not the underlying data.
+                    Colour reflects how many incidents were recorded on a street segment, not how
+                    severe they were. Grey segments have none. Hover a street for its count.
                 </p>
             </div>
 
@@ -79,7 +102,7 @@
                     </li>
                     <li class="flex gap-2.5">
                         <i class="fas fa-check mt-0.5 shrink-0 text-brand"></i>
-                        <span><strong class="font-semibold text-ink">Heat layer only:</strong> incidents are aggregated into density — no individual case is identifiable.</span>
+                        <span><strong class="font-semibold text-ink">Per-street totals only:</strong> incidents are aggregated onto road segments — no individual case is identifiable.</span>
                     </li>
                     <li class="flex gap-2.5">
                         <i class="fas fa-check mt-0.5 shrink-0 text-brand"></i>

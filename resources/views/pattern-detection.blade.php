@@ -75,7 +75,7 @@
                 </button>
             </div>
         </div>
-        <p class="text-xs text-gray-500 mb-4">The system reviews recorded San Agustin crimes street by street, forecasts whether crime will rise or fall, and suggests what to do per street — with a detailed suggestion for every crime type committed there. Instant, no AI quota used.</p>
+        <p class="text-xs text-gray-500 mb-4">Street-by-street forecast, charts and prevention plan from recorded San Agustin crimes. Instant, no AI quota used.</p>
 
         <!-- placeholder -->
         <div id="aiPlaceholder" class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
@@ -113,10 +113,13 @@
                 <p id="aiForecastSummary" class="text-sm text-gray-800"></p>
             </div>
 
+            <!-- KPI tiles + charts built from the report numbers -->
+            <div id="aiDash"></div>
+
             <!-- Key findings -->
             <div>
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-magnifying-glass-chart mr-1"></i>Key Findings</h3>
-                <ul id="aiFindings" class="space-y-2"></ul>
+                <ul id="aiFindings" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2"></ul>
             </div>
 
             <!-- Recommendations -->
@@ -129,8 +132,11 @@
 
         <!-- Saved AI reports -->
         <div id="savedReportsWrap" class="hidden mt-6 pt-4 border-t border-gray-200">
-            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-box-archive mr-1"></i>Saved AI Reports</h3>
-            <div id="savedReportsList" class="space-y-2 max-h-72 overflow-y-auto"></div>
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide"><i class="fas fa-box-archive mr-1"></i>Saved AI Reports <span id="savedReportsCount" class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600"></span></h3>
+                <a href="{{ authUrl('saved-ai-reports') }}" class="text-xs font-bold text-violet-700 hover:underline"><i class="fas fa-up-right-from-square mr-1"></i>Open all with charts</a>
+            </div>
+            <div id="savedReportsList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1"></div>
         </div>
     </div>
 
@@ -181,7 +187,7 @@
         <!-- Summary insights -->
         <div class="bg-white rounded-xl border border-gray-200 p-6">
             <h2 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-lightbulb mr-2 text-alertara-600"></i>Summary Insights</h2>
-            <div id="insightsList" class="space-y-3"></div>
+            <div id="insightsList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -208,7 +214,8 @@
             <!-- Crime type distribution -->
             <div class="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-chart-pie mr-2 text-alertara-600"></i>Crime Type Distribution</h2>
-                <div id="typeDistribution" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                <div style="height: 230px;" class="mb-4"><canvas id="typeChart"></canvas></div>
+                <div id="typeDistribution" class="space-y-2 max-h-56 overflow-y-auto"></div>
             </div>
         </div>
 
@@ -229,7 +236,8 @@
             <!-- Hotspots -->
             <div class="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-location-crosshairs mr-2 text-alertara-600"></i>Ranked Hotspots</h2>
-                <div id="hotspotList" class="space-y-2 max-h-[28rem] overflow-y-auto"></div>
+                <div style="height: 210px;" class="mb-4"><canvas id="hotspotChart"></canvas></div>
+                <div id="hotspotList" class="space-y-2 max-h-72 overflow-y-auto"></div>
             </div>
         </div>
 
@@ -463,9 +471,11 @@
                     <p id="simForecastSummary" class="text-sm text-gray-800"></p>
                 </div>
 
+                <div id="simDash"></div>
+
                 <div>
                     <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-magnifying-glass-chart mr-1"></i>Key Findings</h3>
-                    <ul id="simFindings" class="space-y-2"></ul>
+                    <ul id="simFindings" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2"></ul>
                 </div>
 
                 <div>
@@ -591,10 +601,12 @@
             if (data.error) throw new Error(data.message || data.error);
 
             latest = data;
-            render(data);
 
+            // Show the container first: the charts size themselves from a
+            // laid-out canvas, which a hidden container cannot give them
             $('loadingState').classList.add('hidden');
             $('results').classList.remove('hidden');
+            render(data);
         } catch (e) {
             console.error('Pattern detection failed:', e);
             $('loadingState').classList.add('hidden');
@@ -659,8 +671,8 @@
             if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
 
             latestAi = data;
-            renderAiInto('ai', data, 'violet');
             showAiResults('ai');
+            renderAiInto('ai', data, 'violet');
             resetSaveBtn('aiSaveBtn', 'violet');
         } catch (e) {
             console.error('AI analysis failed:', e);
@@ -695,8 +707,8 @@
             if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
 
             latestSimAi = data;
-            renderAiInto('sim', data, 'amber');
             showAiResults('sim');
+            renderAiInto('sim', data, 'amber');
             resetSaveBtn('simSaveBtn', 'amber');
         } catch (e) {
             console.error('AI simulation failed:', e);
@@ -753,10 +765,14 @@
         $(p + 'ForecastSummary').textContent = (isTl() && f.summary_tl) ? f.summary_tl : (f.summary || '');
 
         const findings = (isTl() && a.key_findings_tl) ? a.key_findings_tl : (a.key_findings || []);
-        $(p + 'Findings').innerHTML = findings.map(k =>
-            '<li class="flex items-start gap-2 text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3">' +
-                '<i class="fas fa-circle-check text-' + accent + '-600 mt-0.5"></i><span>' + esc(k) + '</span>' +
+        const FIND_ICONS = ['fa-fire', 'fa-clock', 'fa-moon', 'fa-folder-open', 'fa-calendar-day', 'fa-chart-line', 'fa-road', 'fa-triangle-exclamation'];
+        $(p + 'Findings').innerHTML = findings.map((k, i) =>
+            '<li class="flex items-start gap-2.5 text-xs text-gray-800 bg-white border border-gray-200 rounded-lg p-3 leading-snug">' +
+                '<span class="flex-shrink-0 w-7 h-7 rounded-lg bg-' + accent + '-50 text-' + accent + '-600 flex items-center justify-center"><i class="fas ' + FIND_ICONS[i % FIND_ICONS.length] + '"></i></span>' +
+                '<span>' + esc(k) + '</span>' +
             '</li>').join('') || '<li class="text-sm text-gray-500">No findings returned.</li>';
+
+        pdRenderDash(p, a, meta, accent);
 
         const prio = {
             high:   'bg-red-100 text-red-800 border-red-200',
@@ -770,36 +786,186 @@
             // Rule-engine shape: one section per street, one block per crime
             // type inside — same structure as the crime-mapping street modal
             recWrap.className = 'space-y-3';
-            recWrap.innerHTML = streetSecs.map((sec, i) => pdStreetSection(sec, i)).join('');
+            recWrap.innerHTML = streetSecs.map((sec, i) => pdStreetSection(sec, i, p)).join('');
+            pdDrawStreetMinis(streetSecs, p);
             return;
         }
 
         recWrap.className = 'grid grid-cols-1 lg:grid-cols-2 gap-3';
-        recWrap.innerHTML = (a.recommendations || []).map(r => {
-            const imp = r.expected_impact || {};
-            const impDir = String(imp.direction || '').toLowerCase();
-            const impPct = Number(imp.estimated_change_percent);
-            const good = impDir === 'decrease' || impPct < 0;
-            const pr = String(r.priority || 'low').toLowerCase();
+        recWrap.innerHTML = (a.recommendations || []).map(r => pdSuggCard(r, true)).join('')
+            || '<p class="text-sm text-gray-500">No recommendations returned.</p>';
+    }
 
-            return '<div class="rounded-xl border border-gray-200 p-4 flex flex-col gap-2">' +
-                '<div class="flex items-start justify-between gap-2">' +
-                    '<div class="text-sm font-bold text-gray-900"><i class="fas fa-shield-halved text-' + accent + '-600 mr-1"></i>' + esc(r.action) + '</div>' +
-                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (prio[pr] || prio.low) + '">' + pr.toUpperCase() + '</span>' +
-                '</div>' +
-                (r.location ? '<div class="text-xs text-gray-600"><i class="fas fa-location-dot text-gray-400 mr-1"></i>' + esc(r.location) + '</div>' : '') +
-                (r.rationale ? '<p class="text-xs text-gray-600">' + esc(r.rationale) + '</p>' : '') +
-                '<div class="mt-auto rounded-lg p-3 border ' + (good ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200') + '">' +
-                    '<div class="text-[10px] font-bold uppercase tracking-wide ' + (good ? 'text-green-700' : 'text-red-700') + '">If implemented</div>' +
-                    '<div class="text-sm font-bold ' + (good ? 'text-green-800' : 'text-red-800') + '">' +
-                        '<i class="fas ' + (good ? 'fa-arrow-trend-down' : 'fa-arrow-trend-up') + ' mr-1"></i>' +
-                        'Crime expected to ' + (good ? 'decrease' : impDir === 'increase' ? 'increase' : 'stay stable') +
-                        (isFinite(impPct) ? ' by ~' + Math.abs(impPct) + '%' : '') +
-                    '</div>' +
-                    (imp.explanation ? '<p class="text-[11px] mt-1 ' + (good ? 'text-green-700' : 'text-red-700') + '">' + esc(imp.explanation) + '</p>' : '') +
-                '</div>' +
+    // ---------- report dashboard: KPI tiles + charts from the section stats ----------
+    const PD_HOURS = Array.from({ length: 24 }, (_, h) => (h % 12 || 12) + (h < 12 ? 'AM' : 'PM'));
+    const PD_RISK_COLOR = { high: '#dc2626', medium: '#f59e0b', low: '#16a34a' };
+    const PD_PRIO_COLOR = { high: '#dc2626', medium: '#f59e0b', low: '#9ca3af' };
+    const pdDays = () => isTl() ? ['Lun', 'Mar', 'Miy', 'Huw', 'Biy', 'Sab', 'Lin'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const pdCatColor = (cat) => PD_CAT_COLORS[cat] || ['#64748b', '#0ea5e9', '#84cc16', '#f472b6', '#a78bfa', '#fb923c'][String(cat).length % 6];
+
+    function pdChart(id, cfg) {
+        destroyChart(id);
+        const el = $(id);
+        if (!el || typeof Chart === 'undefined') return null;
+        charts[id] = new Chart(el, cfg);
+        return charts[id];
+    }
+    const pdOpts = (extra) => Object.assign({
+        responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+        plugins: { legend: { display: false } }
+    }, extra || {});
+    const pdAxis = (o) => Object.assign({ grid: { display: false }, ticks: { font: { size: 9 }, color: TICK } }, o || {});
+    const pdYAxis = (o) => Object.assign({ beginAtZero: true, grid: { color: GRID }, ticks: { precision: 0, font: { size: 9 }, color: TICK } }, o || {});
+
+    function pdRenderDash(p, a, meta, accent) {
+        const dash = $(p + 'Dash');
+        if (!dash) return;
+        const T = isTl();
+        const secs = ((isTl() && a.streets_tl && a.streets_tl.length) ? a.streets_tl : a.streets) || [];
+        const flat = (a.recommendations && a.recommendations.length) ? a.recommendations
+            : secs.reduce((acc, sec) => acc.concat((sec.suggestions || []).map(sg => Object.assign({ street: sec.street }, sg))), []);
+        if (!secs.length && !flat.length) { dash.innerHTML = ''; return; }
+
+        // ---- aggregate ----
+        let total = 0, resolved = 0, unresolved = 0, night = 0, day = 0, recent = 0, earlier = 0, hasHour = false;
+        const hourly = new Array(24).fill(0), weekday = new Array(7).fill(0), monthly = new Array(12).fill(0);
+        let monthLabels = null;
+        const cats = {};
+        secs.forEach(sec => {
+            total += Number(sec.total) || 0;
+            const st = sec.stats || {};
+            resolved += st.resolved || 0; unresolved += st.unresolved || 0;
+            night += st.night || 0; day += st.day || 0; recent += st.recent || 0; earlier += st.earlier || 0;
+            (st.hourly || []).forEach((v, i) => { if (i < 24) { hourly[i] += v || 0; if (v) hasHour = true; } });
+            (st.weekday || []).forEach((v, i) => { if (i < 7) weekday[i] += v || 0; });
+            if (st.monthly && st.monthly.values) { if (!monthLabels) monthLabels = st.monthly.labels; st.monthly.values.forEach((v, i) => { if (i < 12) monthly[i] += v || 0; }); }
+            (sec.categories || []).forEach(cb => {
+                const k = cb.category || cb.category_label;
+                if (!cats[k]) cats[k] = { label: cb.category_label || cb.category, count: 0 };
+                cats[k].count += cb.count || 0;
+            });
+        });
+        const catList = Object.keys(cats).map(k => Object.assign({ key: k }, cats[k])).sort((x, y) => y.count - x.count);
+        const highPrio = flat.filter(r => String(r.priority || '').toLowerCase() === 'high').length;
+        const withTime = night + day;
+        const nightPct = withTime ? Math.round(night / withTime * 100) : null;
+        const trendFlat = recent === earlier, trendUp = recent > earlier;
+        const trendPct = earlier > 0 ? Math.round((recent - earlier) / earlier * 100) : (recent > 0 ? 100 : 0);
+        const peakHour = hasHour ? hourly.indexOf(Math.max(...hourly)) : -1;
+        const peakDay = Math.max(...weekday) > 0 ? weekday.indexOf(Math.max(...weekday)) : -1;
+        const ranked = secs.slice().sort((x, y) => (y.total || 0) - (x.total || 0)).slice(0, 10);
+        const impact = flat.map(r => ({
+            label: r.action || '', street: r.street || r.location || '',
+            pct: Math.abs(Number((r.expected_impact || {}).estimated_change_percent) || 0),
+            priority: String(r.priority || 'low').toLowerCase()
+        })).filter(r => r.pct > 0).sort((x, y) => y.pct - x.pct).slice(0, 8);
+        const prioCounts = ['high', 'medium', 'low'].map(k => flat.filter(r => String(r.priority || 'low').toLowerCase() === k).length);
+
+        const kpi = (label, value, sub, color) =>
+            '<div class="rounded-lg border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 min-w-0">' +
+                '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide">' + label + '</div>' +
+                '<div class="text-lg font-extrabold leading-tight mt-0.5" style="color:' + (color || '#111827') + '">' + value + '</div>' +
+                (sub ? '<div class="text-[10px] text-gray-500">' + sub + '</div>' : '') +
             '</div>';
-        }).join('') || '<p class="text-sm text-gray-500">No recommendations returned.</p>';
+        const card = (id, title, icon, note, wide, tall) =>
+            '<div class="rounded-lg border border-gray-200 bg-white p-3 min-w-0" style="overflow:hidden;' + (wide ? 'grid-column:1 / -1;' : '') + '">' +
+                '<div class="text-[10px] font-bold text-gray-700 uppercase flex items-center gap-1.5 mb-1"><i class="fas ' + icon + ' text-' + accent + '-600"></i>' + title + '</div>' +
+                '<div style="position:relative;height:' + (tall ? 200 : 160) + 'px;"><canvas id="' + id + '"></canvas></div>' +
+                (note ? '<div class="text-[10px] text-gray-500 mt-1">' + note + '</div>' : '') +
+            '</div>';
+
+        let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px;">';
+        if (secs.length) {
+            html += kpi(T ? 'Kabuuang krimen' : 'Total crimes', total, T ? secs.length + ' kalye' : secs.length + ' street' + (secs.length === 1 ? '' : 's'));
+            html += kpi(T ? 'Di pa resolbado' : 'Unresolved', unresolved, (total ? Math.round(unresolved / total * 100) : 0) + (T ? '% ng kaso' : '% of cases'), unresolved ? '#b91c1c' : '#15803d');
+            html += kpi(T ? 'Sa gabi' : 'Night-time', nightPct === null ? '—' : nightPct + '%', '6 PM – 6 AM', '#4338ca');
+            html += kpi('Trend', '<i class="fas ' + (trendFlat ? 'fa-arrows-left-right' : trendUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down') + ' mr-1 text-sm"></i>' + (trendFlat ? (T ? 'steady' : 'flat') : (trendPct > 0 ? '+' : '') + trendPct + '%'),
+                recent + (T ? ' kamakailan vs ' : ' recent vs ') + earlier, trendFlat ? '#6b7280' : trendUp ? '#b91c1c' : '#15803d');
+            html += kpi(T ? 'Pinaka-abalang kalye' : 'Busiest street', ranked.length ? '<span class="text-sm truncate block">' + esc(ranked[0].street) + '</span>' : '—', ranked.length ? ranked[0].total + (T ? ' krimen' : ' crimes') : '');
+        } else {
+            html += kpi(T ? 'Mga tala' : 'Records', (meta.records_used || 0).toLocaleString(), (meta.period_days || 0) + 'd');
+        }
+        html += kpi(T ? 'Mga aksyon' : 'Actions', flat.length, highPrio ? highPrio + ' high priority' : (T ? 'walang high priority' : 'no high priority'), highPrio ? '#7c3aed' : undefined);
+        html += '</div>';
+
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">';
+        if (ranked.length > 1) html += card(p + 'DashStreets', T ? 'Krimen bawat kalye' : 'Crimes per street', 'fa-road', T ? 'Kulay = antas ng panganib' : 'Bar colour = risk level', true, true);
+        if (catList.length) html += card(p + 'DashCats', T ? 'Uri ng krimen' : 'Crime mix', 'fa-chart-pie', catList.length ? (T ? 'Pinaka-madalas: ' : 'Most common: ') + esc(catList[0].label) + ' (' + catList[0].count + ')' : '', false, ranked.length > 1);
+        if (secs.length) html += card(p + 'DashStatus', T ? 'Estado ng kaso' : 'Case status', 'fa-folder-open', resolved + (T ? ' resolbado · ' : ' resolved · ') + unresolved + (T ? ' bukas' : ' open'), false, ranked.length > 1);
+        if (hasHour) html += card(p + 'DashHours', T ? 'Oras ng araw' : 'Time of day', 'fa-clock', peakHour >= 0 ? 'Peak ' + PD_HOURS[peakHour] + (T ? ' · madilim = gabi' : ' · dark = night') : '');
+        if (peakDay >= 0) html += card(p + 'DashDays', T ? 'Araw ng linggo' : 'Day of week', 'fa-calendar-week', (T ? 'Pinaka-abala: ' : 'Busiest: ') + pdDays()[peakDay]);
+        if (monthLabels) html += card(p + 'DashMonths', T ? '12-buwang trend' : '12-month trend', 'fa-chart-line', T ? 'Krimen kada buwan' : 'Crimes per month', true);
+        if (impact.length) html += card(p + 'DashImpact', T ? 'Inaasahang pagbaba kada aksyon' : 'Expected reduction per action', 'fa-arrow-trend-down', T ? 'Pula = high priority' : 'Red = high priority', true, true);
+        else if (flat.length) html += card(p + 'DashPrio', T ? 'Priyoridad ng aksyon' : 'Action priorities', 'fa-flag', '', false);
+        html += '</div>';
+        dash.innerHTML = html;
+
+        // ---- draw ----
+        if (ranked.length > 1) pdChart(p + 'DashStreets', {
+            type: 'bar',
+            data: { labels: ranked.map(x => x.street), datasets: [{ data: ranked.map(x => x.total || 0), backgroundColor: ranked.map(x => PD_RISK_COLOR[String(x.risk_level || 'low').toLowerCase()] || '#9ca3af'), borderRadius: 4, maxBarThickness: 16 }] },
+            options: pdOpts({ indexAxis: 'y', scales: { x: pdYAxis(), y: pdAxis({ ticks: { font: { size: 9.5 }, color: '#374151', autoSkip: false } }) },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: it => ' ' + it.parsed.x + (T ? ' krimen · ' : ' crimes · ') + String(ranked[it.dataIndex].risk_level || '').toUpperCase() + ' risk' } } } })
+        });
+        if (catList.length) pdChart(p + 'DashCats', {
+            type: 'doughnut',
+            data: { labels: catList.map(c => c.label), datasets: [{ data: catList.map(c => c.count), backgroundColor: catList.map(c => pdCatColor(c.key)), borderColor: '#fff', borderWidth: 2 }] },
+            options: pdOpts({ cutout: '58%', plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 9, font: { size: 9.5 }, padding: 6 } },
+                tooltip: { callbacks: { label: it => ' ' + it.label + ': ' + it.parsed + ' (' + Math.round(it.parsed / Math.max(1, total) * 100) + '%)' } } } })
+        });
+        if (secs.length) pdChart(p + 'DashStatus', ranked.length > 1 ? {
+            type: 'bar',
+            data: { labels: ranked.map(x => x.street), datasets: [
+                { label: T ? 'Resolbado' : 'Resolved', data: ranked.map(x => (x.stats || {}).resolved || 0), backgroundColor: '#22c55e', borderRadius: 3, maxBarThickness: 14 },
+                { label: T ? 'Di pa resolbado' : 'Unresolved', data: ranked.map(x => (x.stats || {}).unresolved || 0), backgroundColor: '#ef4444', borderRadius: 3, maxBarThickness: 14 }] },
+            options: pdOpts({ indexAxis: 'y', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 9.5 } } } },
+                scales: { x: pdYAxis({ stacked: true }), y: pdAxis({ stacked: true, ticks: { font: { size: 9 }, color: '#374151', autoSkip: false } }) } })
+        } : {
+            type: 'doughnut',
+            data: { labels: [T ? 'Resolbado' : 'Resolved', T ? 'Di pa resolbado' : 'Unresolved'], datasets: [{ data: [resolved, unresolved], backgroundColor: ['#22c55e', '#ef4444'], borderColor: '#fff', borderWidth: 2 }] },
+            options: pdOpts({ cutout: '60%', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 9.5 } } } } })
+        });
+        if (hasHour) pdChart(p + 'DashHours', {
+            type: 'bar',
+            data: { labels: PD_HOURS, datasets: [{ data: hourly, backgroundColor: hourly.map((_, h) => (h >= 18 || h < 6) ? '#4338ca' : '#93c5fd'), borderRadius: 2 }] },
+            options: pdOpts({ scales: { x: pdAxis({ ticks: { font: { size: 8 }, color: TICK, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } }), y: pdYAxis() } })
+        });
+        if (peakDay >= 0) pdChart(p + 'DashDays', {
+            type: 'bar',
+            data: { labels: pdDays(), datasets: [{ data: weekday, backgroundColor: weekday.map((_, i) => i === peakDay ? '#7c3aed' : '#c4b5fd'), borderRadius: 4, maxBarThickness: 26 }] },
+            options: pdOpts({ scales: { x: pdAxis(), y: pdYAxis() } })
+        });
+        if (monthLabels) pdChart(p + 'DashMonths', {
+            type: 'line',
+            data: { labels: monthLabels, datasets: [{ data: monthly, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.12)', fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: '#7c3aed', pointBorderColor: '#fff', pointBorderWidth: 1.5 }] },
+            options: pdOpts({ scales: { x: pdAxis({ ticks: { font: { size: 9 }, color: TICK, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }), y: pdYAxis() } })
+        });
+        if (impact.length) pdChart(p + 'DashImpact', {
+            type: 'bar',
+            data: { labels: impact.map(r => r.label.length > 46 ? r.label.slice(0, 45) + '…' : r.label), datasets: [{ data: impact.map(r => r.pct), backgroundColor: impact.map(r => PD_PRIO_COLOR[r.priority] || PD_PRIO_COLOR.low), borderRadius: 4, maxBarThickness: 14 }] },
+            options: pdOpts({ indexAxis: 'y', scales: { x: pdYAxis({ ticks: { precision: 0, font: { size: 9 }, callback: v => '-' + v + '%' } }), y: pdAxis({ ticks: { font: { size: 9 }, color: '#374151', autoSkip: false } }) },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { title: its => { const r = impact[its[0].dataIndex]; return (r.street ? r.street + ' — ' : '') + r.label; }, label: it => ' ~' + it.parsed.x + '% ' + (T ? 'mas kaunting krimen' : 'fewer crimes') } } } })
+        });
+        else if (flat.length) pdChart(p + 'DashPrio', {
+            type: 'doughnut',
+            data: { labels: ['High', 'Medium', 'Low'], datasets: [{ data: prioCounts, backgroundColor: ['#dc2626', '#f59e0b', '#9ca3af'], borderColor: '#fff', borderWidth: 2 }] },
+            options: pdOpts({ cutout: '60%', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 9.5 } } } } })
+        });
+    }
+
+    // Mini hourly bars inside each street section (multi-street reports)
+    function pdDrawStreetMinis(secs, p) {
+        (secs || []).forEach((sec, idx) => {
+            const st = sec.stats || {};
+            const id = p + 'SecHour' + idx;
+            if (!st.hourly || !$(id)) return;
+            pdChart(id, {
+                type: 'bar',
+                data: { labels: PD_HOURS, datasets: [{ data: st.hourly, backgroundColor: st.hourly.map((_, h) => (h >= 18 || h < 6) ? '#4338ca' : '#93c5fd'), borderRadius: 1 }] },
+                options: pdOpts({ animation: false, scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { title: its => its[0].label, label: it => ' ' + it.parsed.y } } } })
+            });
+        });
     }
 
     // ---------- per-street / per-crime-type renderer (rule engine) ----------
@@ -850,29 +1016,9 @@
     function pdEvidenceBlock(ev) {
         if (!ev || !ev.cases) return '';
         const T = isTl();
-        const row = (icon, html) =>
-            '<div class="flex gap-1.5 text-[11px] text-amber-900 leading-relaxed"><i class="fas ' + icon + ' text-amber-600 mt-0.5 flex-shrink-0"></i><span>' + html + '</span></div>';
-        const sev = esc(String(ev.severity || '').toUpperCase());
         return '<div class="mt-2 rounded-lg bg-amber-50 border border-amber-200 p-2.5">' +
             '<div class="text-[9.5px] font-bold text-amber-800 uppercase tracking-wide mb-1"><i class="fas fa-magnifying-glass mr-1"></i>' + (T ? 'Basehan — mga naitalang krimen' : 'Basis — recorded crimes') + '</div>' +
-            row('fa-hashtag', T
-                ? '<b>' + ev.cases + ' naitalang kaso</b> (' + ev.share + '% ng krimen sa kalyeng ito) — ang tindi ay <b>' + sev + '</b>.'
-                : '<b>' + ev.cases + ' recorded case' + (ev.cases === 1 ? '' : 's') + '</b> (' + ev.share + '% of this street\'s crimes) — severity assessed as <b>' + sev + '</b>.') +
-            (ev.modus && ev.modus.length ? row('fa-user-ninja', (T ? 'Paano ginawa: ' : 'How they were committed: ') + ev.modus.map(esc).join('; ') + '.') : '') +
-            (typeof ev.unresolved === 'number' ? row('fa-folder-open', (ev.unresolved > 0
-                ? (T
-                    ? '<b>' + ev.unresolved + ' sa ' + ev.cases + ' ang hindi pa naresolba</b> — i-follow up sa mga nakatalagang opisyal.'
-                    : '<b>' + ev.unresolved + ' of ' + ev.cases + ' still unresolved</b> — follow up with the assigned officers.')
-                : (T
-                    ? 'Lahat ng ' + ev.cases + ' kaso ay naresolba na.'
-                    : 'All ' + ev.cases + ' cases already resolved.'))) : '') +
-            ((ev.busiest_day || ev.latest) ? row('fa-calendar-day',
-                (ev.busiest_day ? (T
-                    ? 'Karamihan ng kaso ay tuwing <b>' + esc(ev.busiest_day) + '</b>. '
-                    : 'Most cases fall on <b>' + esc(ev.busiest_day) + 's</b>. ') : '') +
-                (ev.latest ? (T
-                    ? 'Pinakahuling kaso: <b>' + esc(ev.latest) + '</b>.'
-                    : 'Most recent case: <b>' + esc(ev.latest) + '</b>.') : '')) : '') +
+            (ev.modus && ev.modus.length ? '<div class="flex gap-1.5 text-[11px] text-amber-900 leading-relaxed"><i class="fas fa-user-ninja text-amber-600 mt-0.5 flex-shrink-0"></i><span>' + (T ? 'Paano ginawa: ' : 'How they were committed: ') + ev.modus.map(esc).join('; ') + '.</span></div>' : '') +
             pdCaseLog(ev.cases_list) +
         '</div>';
     }
@@ -901,69 +1047,115 @@
         '</div>';
     }
 
-    function pdSuggCard(s) {
+    function pdSuggCard(s, showStreet) {
         const imp = s.expected_impact || {};
         const d = s.details || {};
+        const ev = d.evidence || {};
         const pct = Number(imp.estimated_change_percent);
         const pr = String(s.priority || 'low').toLowerCase();
+        const T = isTl();
         const prio = {
             high:   'bg-red-100 text-red-800 border-red-200',
             medium: 'bg-amber-100 text-amber-800 border-amber-200',
             low:    'bg-gray-100 text-gray-700 border-gray-200'
         };
-        const infoRow = (icon, label, text) => text
-            ? '<div class="text-[11px] text-gray-600 mt-1"><i class="fas ' + icon + ' mr-1 text-violet-500"></i><span class="font-semibold text-gray-700">' + label + ':</span> ' + esc(text) + '</div>'
-            : '';
+        const chip = (icon, html, cls) =>
+            '<span class="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full ' + (cls || 'bg-gray-100 text-gray-700') + '"><i class="fas ' + icon + ' text-[9.5px] opacity-80"></i>' + html + '</span>';
+
+        let chips = '';
+        const where = s.street || s.location;
+        if (showStreet && where) chips += chip('fa-road', esc(where), 'bg-orange-50 text-orange-800');
+        if (s.time_window) chips += chip('fa-clock', esc(s.time_window), 'bg-violet-50 text-violet-800');
+        if (ev.cases) chips += chip('fa-hashtag', ev.cases + (T ? ' kaso' : ' case' + (ev.cases === 1 ? '' : 's')) + (ev.share ? ' · ' + ev.share + '%' : ''));
+        if (typeof ev.unresolved === 'number') chips += chip('fa-folder-open', ev.unresolved + (T ? ' bukas' : ' open'), ev.unresolved > 0 ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800');
+        if (ev.busiest_day) chips += chip('fa-calendar-day', esc(ev.busiest_day));
+        if (ev.latest) chips += chip('fa-calendar-check', esc(ev.latest));
+        if (d.lead) chips += chip('fa-user-shield', esc(d.lead));
+        if (d.timeline) chips += chip('fa-hourglass-half', esc(d.timeline));
+
+        const good = pct < 0 || String(imp.direction || '').toLowerCase() === 'decrease';
+        const gauge = isFinite(pct) ? '<div class="flex items-center gap-2 mt-2">' +
+                '<span class="text-[10.5px] font-bold text-gray-700 whitespace-nowrap"><i class="fas ' + (good ? 'fa-arrow-trend-down text-green-600' : 'fa-arrows-left-right text-gray-500') + ' mr-1"></i>' + (T ? 'Kapag ipinatupad' : 'If implemented') + '</span>' +
+                '<div class="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div class="h-full rounded-full" style="width:' + Math.min(100, Math.abs(pct)) + '%;background:linear-gradient(90deg,#22c55e,#15803d);"></div></div>' +
+                '<span class="text-xs font-extrabold whitespace-nowrap ' + (good ? 'text-green-700' : 'text-gray-700') + '">' + (pct ? (pct > 0 ? '+' : '−') + Math.abs(pct) + '%' : (T ? 'steady' : 'stable')) + '</span>' +
+            '</div>' : '';
+
+        let details = '';
+        if (s.rationale) details += '<p class="text-xs text-gray-600 leading-relaxed">' + esc(s.rationale) + '</p>';
+        if (imp.explanation) details += '<p class="text-[11px] text-gray-500 mt-1">' + esc(imp.explanation) + '</p>';
+        details += pdEvidenceBlock(ev);
+        if (d.coverage) details += '<div class="text-[11px] text-gray-700 mt-1.5"><i class="fas fa-location-crosshairs mr-1 text-violet-500"></i>' + esc(d.coverage) + '</div>';
+        if (d.steps && d.steps.length) details += '<div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-2.5">' +
+            '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">' + (T ? 'Paano ipapatupad' : 'How to implement') + '</div>' +
+            d.steps.map((st, i) => '<div class="flex gap-1.5 text-[11px] text-gray-600 leading-relaxed"><span class="font-bold text-violet-600 flex-shrink-0">' + (i + 1) + '.</span><span>' + esc(st) + '</span></div>').join('') +
+        '</div>';
+        if (d.resources) details += '<div class="text-[11px] text-gray-600 mt-1.5"><i class="fas fa-toolbox mr-1 text-violet-500"></i><span class="font-semibold text-gray-700">' + (T ? 'Kailangan:' : 'Needs:') + '</span> ' + esc(d.resources) + '</div>';
+        if (d.tips && d.tips.length) details += '<div class="mt-2 rounded-lg bg-sky-50 border border-sky-200 p-2.5">' +
+            '<div class="text-[9.5px] font-bold text-sky-700 uppercase tracking-wide mb-1"><i class="fas fa-people-roof mr-1"></i>' + (T ? 'Mga tip para sa mga residente' : 'Tips for residents') + '</div>' +
+            d.tips.map(t => '<div class="flex gap-1.5 text-[11px] text-sky-900 leading-relaxed"><i class="fas fa-check text-sky-500 mt-0.5 flex-shrink-0"></i><span>' + esc(t) + '</span></div>').join('') +
+        '</div>';
+        if (d.kpi) details += '<div class="text-[11px] font-semibold text-green-700 mt-1.5"><i class="fas fa-bullseye mr-1"></i>' + esc(d.kpi) + '</div>';
 
         return '<div class="rounded-lg border border-gray-200 bg-white p-3">' +
             '<div class="flex items-start justify-between gap-2">' +
-                '<div class="text-sm font-bold text-gray-900"><i class="fas fa-shield-halved text-violet-600 mr-1"></i>' + esc(s.action) + '</div>' +
+                '<div class="text-sm font-bold text-gray-900 leading-snug"><i class="fas fa-shield-halved text-violet-600 mr-1"></i>' + esc(s.action) + '</div>' +
                 '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (prio[pr] || prio.low) + '">' + pr.toUpperCase() + '</span>' +
             '</div>' +
-            (s.time_window ? '<div class="text-[11px] font-semibold text-violet-700 mt-1"><i class="fas fa-clock mr-1"></i>' + esc(s.time_window) + '</div>' : '') +
-            (s.rationale ? '<p class="text-xs text-gray-600 mt-1">' + esc(s.rationale) + '</p>' : '') +
-            pdEvidenceBlock(d.evidence) +
-            (d.coverage ? '<div class="text-[11px] text-gray-700 mt-1.5"><i class="fas fa-location-crosshairs mr-1 text-violet-500"></i>' + esc(d.coverage) + '</div>' : '') +
-            (d.steps && d.steps.length ? '<div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-2.5">' +
-                '<div class="text-[9.5px] font-bold text-gray-500 uppercase tracking-wide mb-1">' + (isTl() ? 'Paano ipapatupad' : 'How to implement') + '</div>' +
-                d.steps.map((st, i) => '<div class="flex gap-1.5 text-[11px] text-gray-600 leading-relaxed"><span class="font-bold text-violet-600 flex-shrink-0">' + (i + 1) + '.</span><span>' + esc(st) + '</span></div>').join('') +
-            '</div>' : '') +
-            infoRow('fa-toolbox', isTl() ? 'Kailangan' : 'Needs', d.resources) +
-            infoRow('fa-user-shield', isTl() ? 'Mamumuno' : 'Lead', d.lead) +
-            infoRow('fa-calendar-check', 'Timeline', d.timeline) +
-            (d.tips && d.tips.length ? '<div class="mt-2 rounded-lg bg-sky-50 border border-sky-200 p-2.5">' +
-                '<div class="text-[9.5px] font-bold text-sky-700 uppercase tracking-wide mb-1"><i class="fas fa-people-roof mr-1"></i>' + (isTl() ? 'Mga tip sa pag-iwas para sa mga residente' : 'Prevention tips for residents') + '</div>' +
-                d.tips.map(t => '<div class="flex gap-1.5 text-[11px] text-sky-900 leading-relaxed"><i class="fas fa-check text-sky-500 mt-0.5 flex-shrink-0"></i><span>' + esc(t) + '</span></div>').join('') +
-            '</div>' : '') +
-            (isFinite(pct) ? '<div class="text-[11px] font-bold mt-2 ' + (pct < 0 ? 'text-green-700' : 'text-gray-700') + '">' +
-                '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
-                (isTl() ? 'Kapag ipinatupad: ' : 'If implemented: ') + (pct < 0 ? '~' + Math.abs(pct) + '% ' + (isTl() ? 'mas kaunting krimen' : 'fewer crimes') : 'stable') +
-                (imp.explanation ? ' <span class="font-normal text-gray-500">— ' + esc(imp.explanation) + '</span>' : '') +
-            '</div>' : '') +
-            (d.kpi ? '<div class="text-[11px] font-semibold text-green-700 mt-1"><i class="fas fa-bullseye mr-1"></i>' + esc(d.kpi) + '</div>' : '') +
+            (chips ? '<div class="flex flex-wrap gap-1 mt-2">' + chips + '</div>' : '') +
+            gauge +
+            (details ? '<button type="button" class="pd-details-toggle inline-flex items-center gap-1.5 mt-2 text-[10.5px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1 hover:bg-violet-100"><i class="fas fa-chevron-down"></i>' + (T ? 'Detalye, hakbang at tips' : 'Details, steps & tips') + '</button>' +
+                '<div class="pd-details hidden mt-2 pt-2 border-t border-dashed border-gray-200">' + details + '</div>' : '') +
         '</div>';
     }
 
-    function pdStreetSection(sec, idx) {
+    function pdStreetSection(sec, idx, p) {
         const lvl = String(sec.risk_level || 'low').toLowerCase();
         const open = idx === 0;   // first (busiest) street starts expanded
+        const T = isTl();
+        const st = sec.stats || {};
+        const chip = (icon, html, cls) =>
+            '<span class="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full ' + (cls || 'bg-white border border-gray-200 text-gray-700') + '"><i class="fas ' + icon + ' text-[9.5px] opacity-80"></i>' + html + '</span>';
+
+        // Street facts as chips (replaces the summary sentence)
+        let chips = '';
+        if (sec.peak_hours && sec.peak_hours.length) chips += chip('fa-clock', esc(sec.peak_hours.join(', ')), 'bg-violet-50 text-violet-800');
+        if (st.weekday && st.weekday.some(v => v > 0)) chips += chip('fa-calendar-day', pdDays()[st.weekday.indexOf(Math.max(...st.weekday))]);
+        if (typeof st.recent === 'number' && (st.recent || st.earlier)) {
+            const up = st.recent > st.earlier, flat = st.recent === st.earlier;
+            chips += chip(flat ? 'fa-arrows-left-right' : up ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down',
+                (T ? (flat ? 'steady' : up ? 'tumataas' : 'bumababa') : (flat ? 'steady' : up ? 'rising' : 'falling')) + ' · ' + st.recent + ' vs ' + st.earlier,
+                flat ? undefined : up ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800');
+        }
+        if (typeof st.unresolved === 'number') chips += chip('fa-folder-open', st.unresolved + (T ? ' bukas' : ' open'), st.unresolved > 0 ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800');
+        if ((st.night || 0) + (st.day || 0) > 0) chips += chip('fa-moon', Math.round(st.night / (st.night + st.day) * 100) + '% ' + (T ? 'gabi' : 'night'), 'bg-indigo-50 text-indigo-800');
+
+        // Crime mix as a stacked bar + legend, and an hourly mini chart
+        let viz = '';
+        if (sec.categories && sec.categories.length && sec.total > 0) {
+            const stack = sec.categories.map(cb => '<div style="width:' + (cb.count / sec.total * 100) + '%;background:' + pdCatColor(cb.category) + ';" title="' + esc(cb.category_label || cb.category) + ': ' + cb.count + '"></div>').join('');
+            const legend = sec.categories.map(cb => '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-600"><span class="inline-block w-2 h-2 rounded-full" style="background:' + pdCatColor(cb.category) + '"></span>' + esc(cb.category_label || cb.category) + ' <b class="text-gray-900">' + cb.count + '</b></span>').join('');
+            const hasHours = st.hourly && st.hourly.some(v => v > 0);
+            viz = '<div style="display:grid;gap:12px;align-items:center;margin-bottom:12px;' + (hasHours ? 'grid-template-columns:minmax(0,1fr) 170px;' : '') + '">' +
+                '<div><div class="flex h-3 rounded-full overflow-hidden bg-gray-100">' + stack + '</div><div class="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">' + legend + '</div></div>' +
+                (hasHours ? '<div><div style="position:relative;height:64px;"><canvas id="' + p + 'SecHour' + idx + '"></canvas></div><div class="text-[9px] text-gray-500 text-center">' + (T ? 'Oras ng araw' : 'Time of day') + (sec.peak_hours && sec.peak_hours.length ? ' · peak ' + esc(sec.peak_hours[0]) : '') + '</div></div>' : '') +
+            '</div>';
+        }
 
         let body;
         if (sec.categories && sec.categories.length) {
             body = sec.categories.map(cb => {
-                const cc = PD_CAT_COLORS[cb.category] || '#64748b';
-                const T = isTl();
+                const cc = pdCatColor(cb.category);
                 return '<div class="pd-cat-block rounded-lg border border-gray-200 overflow-hidden">' +
                     '<div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50">' +
                         '<span class="text-[10px] font-bold text-white px-2 py-0.5 rounded-full" style="background:' + cc + ';">' + esc(cb.category_label || cb.category) + '</span>' +
                         pdSeverityChip(cb.severity) +
-                        '<span class="text-[11px] font-bold text-gray-700">' + (T
-                            ? cb.count + ' sa ' + sec.total + ' krimen (' + cb.share + '%)'
-                            : cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)') + '</span>' +
-                        (cb.peak_hours && cb.peak_hours.length ? '<span class="text-[10.5px] font-semibold text-violet-700"><i class="fas fa-clock mr-1"></i>Peak: ' + cb.peak_hours.map(esc).join(', ') + '</span>' : '') +
-                        '<button type="button" class="pd-cat-crimes ml-auto text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1 hover:bg-violet-100"' +
+                        '<span class="text-[11px] font-bold text-gray-700">' + cb.count + '/' + sec.total + ' · ' + cb.share + '%</span>' +
+                        '<span class="flex-1 min-w-[50px] h-1.5 rounded-full bg-gray-200 overflow-hidden"><span class="block h-full rounded-full" style="width:' + Math.min(100, cb.share || 0) + '%;background:' + cc + ';"></span></span>' +
+                        (cb.peak_hours && cb.peak_hours.length ? '<span class="text-[10.5px] font-semibold text-violet-700"><i class="fas fa-clock mr-1"></i>' + cb.peak_hours.map(esc).join(', ') + '</span>' : '') +
+                        (cb.unresolved > 0 ? '<span class="text-[10px] font-bold text-red-700"><i class="fas fa-folder-open mr-1"></i>' + cb.unresolved + (T ? ' bukas' : ' open') + '</span>' : '') +
+                        '<button type="button" class="pd-cat-crimes text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1 hover:bg-violet-100"' +
                             ' data-street="' + esc(sec.street) + '" data-cat="' + esc(cb.category) + '">' +
-                            '<i class="fas fa-list mr-1"></i>' + (T ? 'Tingnan ang mga krimen' : 'View crimes') + '</button>' +
+                            '<i class="fas fa-list mr-1"></i>' + (T ? 'Mga krimen' : 'Crimes') + '</button>' +
                     '</div>' +
                     '<div class="pd-cat-list hidden px-3 py-2 bg-white border-b border-gray-100"></div>' +
                     '<div class="p-2.5">' + pdSuggCard(cb.suggestion || {}) + '</div>' +
@@ -976,15 +1168,15 @@
 
         return '<div class="rounded-xl border border-gray-200 bg-gray-50/50 overflow-hidden">' +
             '<button type="button" class="pd-street-toggle w-full flex flex-wrap items-center gap-2 px-4 py-3 text-left hover:bg-gray-100/70">' +
-                '<span class="text-sm font-extrabold text-gray-900"><i class="fas fa-road text-gray-400 mr-1.5"></i>' + esc(sec.street) + '</span>' +
+                '<span class="inline-block w-3.5 h-1.5 rounded" style="background:' + (PD_RISK_COLOR[lvl] || '#9ca3af') + '"></span>' +
+                '<span class="text-sm font-extrabold text-gray-900">' + esc(sec.street) + '</span>' +
                 '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ' + (PD_RISK_CHIP[lvl] || PD_RISK_CHIP.low) + '">' + lvl.toUpperCase() + ' RISK</span>' +
-                (typeof sec.total === 'number' ? '<span class="text-[11px] font-bold text-gray-500">' + (isTl()
-                    ? sec.total + ' kabuuang krimen'
-                    : sec.total + ' total crime' + (sec.total === 1 ? '' : 's')) + '</span>' : '') +
+                (typeof sec.total === 'number' ? '<span class="text-[11px] font-bold text-gray-500">' + sec.total + (T ? ' krimen' : ' crime' + (sec.total === 1 ? '' : 's')) + '</span>' : '') +
                 '<i class="fas fa-chevron-' + (open ? 'up' : 'down') + ' pd-chev ml-auto text-gray-400 text-xs"></i>' +
             '</button>' +
             '<div class="pd-street-body px-4 pb-4' + (open ? '' : ' hidden') + '">' +
-                (sec.summary ? '<p class="text-xs text-gray-600 mb-3">' + esc(sec.summary) + '</p>' : '') +
+                (chips ? '<div class="flex flex-wrap gap-1 mb-3">' + chips + '</div>' : '') +
+                viz +
                 '<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">' + body + '</div>' +
             '</div>' +
         '</div>';
@@ -1064,6 +1256,14 @@
 
     // One delegated listener drives both the street accordions and the
     // per-category "View crimes" toggles (survives innerHTML re-renders)
+    document.addEventListener('click', e => {
+        const dt = e.target.closest('.pd-details-toggle');
+        if (!dt) return;
+        const box = dt.nextElementSibling;
+        const open = box && box.classList.toggle('hidden') === false;
+        dt.querySelector('i').className = 'fas ' + (open ? 'fa-chevron-up' : 'fa-chevron-down');
+    });
+
     $('aiRecommendations').addEventListener('click', async e => {
         const tog = e.target.closest('.pd-street-toggle');
         if (tog) {
@@ -1072,6 +1272,8 @@
             const willOpen = box.classList.contains('hidden');
             box.classList.toggle('hidden');
             if (chev) chev.className = 'fas fa-chevron-' + (willOpen ? 'up' : 'down') + ' pd-chev ml-auto text-gray-400 text-xs';
+            // a mini chart drawn while collapsed has no size — resize on open
+            if (willOpen) box.querySelectorAll('canvas').forEach(c => { const ch = charts[c.id]; if (ch) ch.resize(); });
             return;
         }
 
@@ -1143,7 +1345,9 @@
             if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
 
             btn.className = 'px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold cursor-default';
-            btn.innerHTML = '<i class="fas fa-circle-check mr-1"></i>Saved (' + data.saved_rows + ' rows)';
+            btn.innerHTML = '<i class="fas fa-circle-check mr-1"></i>Saved (' + data.saved_rows + ' rows)'
+                + (data.received_by ? ' &middot; Received by ' + data.received_by : '');
+            btn.title = data.received_by ? 'Receipt logged in the audit trail' : '';
             loadSavedReports();
         } catch (e) {
             console.error('Save failed:', e);
@@ -1159,29 +1363,59 @@
             const data = await res.json();
             if (!data.success || !data.reports || !data.reports.length) return;
 
+            // Rows share a batch_key per Save click: 1 analysis + N recommendations
+            const batches = {};
+            const order = [];
+            data.reports.forEach(r => {
+                const k = r.batch_key || ('row-' + r.id);
+                if (!batches[k]) { batches[k] = { key: k, analysis: null, recs: [], created_at: r.created_at, saved_by: r.saved_by, data_source: r.data_source, scenario: r.scenario, records: r.records_used, days: r.period_days }; order.push(k); }
+                if (r.report_type === 'analysis') { batches[k].analysis = r; batches[k].created_at = r.created_at; }
+                else batches[k].recs.push(r);
+            });
+
             $('savedReportsWrap').classList.remove('hidden');
-            $('savedReportsList').innerHTML = data.reports.map(r => {
-                const isRec = r.report_type === 'recommendation';
-                const isSim = r.data_source === 'simulation';
-                const isMapping = r.scenario && r.scenario.type === 'street_advice';
-                const when = new Date(r.created_at).toLocaleString();
-                return '<div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">' +
-                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ' +
-                        (isMapping ? 'bg-indigo-100 text-indigo-800' : 'bg-violet-100 text-violet-800') + '">' +
-                        (isMapping ? 'MAPPING' : 'PATTERN') + '</span>' +
-                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ' +
-                        (isSim ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800') + '">' +
-                        (isSim ? 'SIM' : 'REAL') + '</span>' +
-                    '<span class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ' +
-                        (isRec ? 'bg-blue-100 text-blue-800' : 'bg-violet-100 text-violet-800') + '">' +
-                        (isRec ? 'RECOMMENDATION' : 'ANALYSIS') + '</span>' +
-                    '<div class="flex-1 min-w-0">' +
-                        '<div class="text-sm font-semibold text-gray-900 truncate">' + esc(r.title) + '</div>' +
-                        (r.summary ? '<div class="text-xs text-gray-600 mt-0.5 line-clamp-2">' + esc(r.summary) + '</div>' : '') +
-                        '<div class="text-[10px] text-gray-400 mt-1">' + esc(when) +
-                            (r.saved_by ? ' · ' + esc(r.saved_by) : '') +
-                            ' · ' + r.records_used + ' records / ' + r.period_days + 'd</div>' +
+            $('savedReportsCount').textContent = order.length;
+            $('savedReportsList').innerHTML = order.map(k => {
+                const b = batches[k];
+                const a = b.analysis || {};
+                const isSim = b.data_source === 'simulation';
+                const isMapping = b.scenario && b.scenario.type === 'street_advice';
+                const when = b.created_at ? new Date(b.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+                const prio = { high: 0, medium: 0, low: 0 };
+                let bestPct = 0;
+                b.recs.forEach(r => { prio[r.priority || 'low'] = (prio[r.priority || 'low'] || 0) + 1; if (r.impact_pct !== null && Math.abs(r.impact_pct) > bestPct) bestPct = Math.abs(r.impact_pct); });
+                const n = Math.max(1, b.recs.length);
+
+                // Headline visual: forecast direction, or the street risk level
+                let head = '';
+                if (a.direction) {
+                    const dir = String(a.direction).toLowerCase();
+                    const col = dir === 'increase' ? '#b91c1c' : dir === 'decrease' ? '#15803d' : '#374151';
+                    const ic = dir === 'increase' ? 'fa-arrow-trend-up' : dir === 'decrease' ? 'fa-arrow-trend-down' : 'fa-arrows-left-right';
+                    head = '<div class="text-lg font-extrabold leading-none" style="color:' + col + '"><i class="fas ' + ic + ' text-sm mr-1"></i>' + (a.forecast_pct !== null && a.forecast_pct !== undefined ? (a.forecast_pct > 0 ? '+' : '') + a.forecast_pct + '%' : esc(dir)) + '</div>' +
+                        '<div class="text-[10px] text-gray-500 mt-0.5">forecast</div>';
+                } else if (a.risk_level) {
+                    const lvl = String(a.risk_level).toLowerCase();
+                    head = '<div class="text-lg font-extrabold leading-none" style="color:' + (PD_RISK_COLOR[lvl] || '#374151') + '">' + lvl.toUpperCase() + '</div><div class="text-[10px] text-gray-500 mt-0.5">risk</div>';
+                }
+
+                return '<div class="rounded-lg border ' + (isSim ? 'border-amber-200 bg-amber-50/40' : isMapping ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 bg-white') + ' p-3">' +
+                    '<div class="flex items-center gap-1.5 flex-wrap">' +
+                        '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + (isMapping ? 'bg-indigo-100 text-indigo-800' : 'bg-violet-100 text-violet-800') + '"><i class="fas ' + (isMapping ? 'fa-map-location-dot' : 'fa-magnifying-glass-chart') + ' mr-1"></i>' + (isMapping ? 'MAPPING' : 'PATTERN') + '</span>' +
+                        '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + (isSim ? 'bg-amber-200 text-amber-900' : 'bg-emerald-100 text-emerald-800') + '">' + (isSim ? 'SIM' : 'REAL') + '</span>' +
+                        '<span class="ml-auto text-[10px] text-gray-500"><i class="far fa-clock mr-1"></i>' + esc(when) + '</span>' +
                     '</div>' +
+                    '<div class="flex items-center gap-3 mt-2.5">' +
+                        (head ? '<div class="flex-shrink-0 w-20">' + head + '</div>' : '') +
+                        '<div class="flex-1 min-w-0">' +
+                            '<div class="flex items-baseline gap-1"><span class="text-base font-extrabold text-gray-900">' + b.recs.length + '</span><span class="text-[11px] text-gray-500">action' + (b.recs.length === 1 ? '' : 's') + '</span>' +
+                                (a.streets ? '<span class="text-[11px] text-gray-400 ml-1">· ' + a.streets + ' street' + (a.streets === 1 ? '' : 's') + '</span>' : '') + '</div>' +
+                            '<div class="flex h-1.5 rounded-full overflow-hidden bg-gray-100 mt-1" title="' + prio.high + ' high · ' + prio.medium + ' medium · ' + prio.low + ' low">' +
+                                '<div style="width:' + (prio.high / n * 100) + '%;background:#dc2626"></div><div style="width:' + (prio.medium / n * 100) + '%;background:#f59e0b"></div><div style="width:' + (prio.low / n * 100) + '%;background:#9ca3af"></div></div>' +
+                            '<div class="text-[10px] text-gray-500 mt-1"><b class="text-red-700">' + prio.high + '</b> high' + (bestPct ? ' · up to <b class="text-green-700">−' + bestPct + '%</b>' : '') + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="text-[10px] text-gray-400 mt-2 truncate">' + (b.records || 0) + ' records · ' + (b.days || 0) + 'd' + (b.saved_by ? ' · ' + esc(b.saved_by) : '') + '</div>' +
                 '</div>';
             }).join('');
         } catch (e) {
@@ -1276,21 +1510,31 @@
 
     function renderInsights(list) {
         if (!list || !list.length) {
-            $('insightsList').innerHTML = '<p class="text-sm text-gray-500">No insights available.</p>';
+            $('insightsList').innerHTML = '<p class="text-sm text-gray-500 col-span-full">No insights available.</p>';
             return;
         }
 
+        // Compact cards: icon + one line, the source behind a tooltip
+        const ICONS = [
+            [/hotspot|street|area|road|location/i, 'fa-location-dot', 'text-red-600 bg-red-50'],
+            [/night|evening|pm\b|hour|time/i,       'fa-clock',        'text-indigo-600 bg-indigo-50'],
+            [/increas|ris|surge|up\b/i,           'fa-arrow-trend-up', 'text-red-600 bg-red-50'],
+            [/decreas|fall|drop|down\b/i,         'fa-arrow-trend-down', 'text-green-600 bg-green-50'],
+            [/cluster|repeat/i,                   'fa-layer-group',  'text-violet-600 bg-violet-50'],
+            [/anomal|spike|outlier/i,             'fa-wave-square',  'text-orange-600 bg-orange-50'],
+            [/weekend|weekday|day/i,              'fa-calendar-week', 'text-sky-600 bg-sky-50'],
+            [/theft|robbery|assault|crime type|category/i, 'fa-tag', 'text-amber-600 bg-amber-50'],
+        ];
         $('insightsList').innerHTML = list.map(i => {
             const lowConf = i.confidence === 'low';
-            return '<div class="flex items-start gap-3 p-3 rounded-lg border ' +
-                (i.simulated ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-gray-50') + '">' +
-                '<i class="fas ' + (i.simulated ? 'fa-flask text-amber-600' : 'fa-circle-check text-alertara-600') + ' mt-0.5"></i>' +
-                '<div class="flex-1 min-w-0">' +
-                    '<div class="text-sm font-semibold text-gray-900">' + esc(i.text) +
-                        (i.simulated ? SIM_TAG : '') +
-                        (lowConf ? '<span class="inline-block px-1.5 py-0.5 bg-orange-200 text-orange-900 rounded text-[10px] font-bold ml-2">LOW CONFIDENCE</span>' : '') +
-                    '</div>' +
-                    '<div class="text-xs text-gray-500 mt-1">Based on: ' + esc(i.based_on) + '</div>' +
+            const hit = ICONS.find(x => x[0].test(i.text || '')) || [null, 'fa-circle-check', 'text-alertara-600 bg-alertara-50'];
+            const icon = i.simulated ? 'fa-flask' : hit[1];
+            const cls = i.simulated ? 'text-amber-600 bg-amber-100' : hit[2];
+            return '<div class="flex items-start gap-3 p-3 rounded-lg border ' + (i.simulated ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white') + '" title="Based on: ' + esc(i.based_on || '') + '">' +
+                '<span class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ' + cls + '"><i class="fas ' + icon + '"></i></span>' +
+                '<div class="flex-1 min-w-0 text-xs font-semibold text-gray-900 leading-snug">' + esc(i.text) +
+                    (i.simulated ? SIM_TAG : '') +
+                    (lowConf ? '<span class="inline-block px-1.5 py-0.5 bg-orange-200 text-orange-900 rounded text-[9px] font-bold ml-1.5 align-middle">LOW CONF.</span>' : '') +
                 '</div></div>';
         }).join('');
     }
@@ -1509,22 +1753,29 @@
 
     function renderTypes(types, total) {
         if (!types.length) {
+            destroyChart('typeChart');
             $('typeDistribution').innerHTML = '<p class="text-sm text-gray-500">No records.</p>';
             return;
         }
 
-        $('typeDistribution').innerHTML = types.map(t =>
-            '<div>' +
-                '<div class="flex justify-between items-center text-xs mb-1">' +
-                    '<span class="font-semibold text-gray-800">' + esc(t.category) +
-                        (t.simulated_count > 0 ? ' <span class="text-amber-700 font-normal">(' + t.simulated_count + ' sim)</span>' : '') +
-                    '</span>' +
-                    '<span class="text-gray-500">' + t.count + ' · ' + t.percent + '%</span>' +
-                '</div>' +
-                '<div class="h-2 bg-gray-100 rounded-full overflow-hidden flex">' +
-                    '<div style="width:' + ((t.real_count / Math.max(1, total)) * 100) + '%" class="bg-alertara-600 h-full"></div>' +
+        const colors = types.map(t => pdCatColor(t.category));
+        pdChart('typeChart', {
+            type: 'doughnut',
+            data: { labels: types.map(t => t.category), datasets: [{ data: types.map(t => t.count), backgroundColor: colors, borderColor: '#fff', borderWidth: 2 }] },
+            options: pdOpts({ cutout: '58%', plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, font: { size: 10 }, padding: 8 } },
+                tooltip: { callbacks: { label: it => ' ' + it.label + ': ' + it.parsed + ' (' + Math.round(it.parsed / Math.max(1, total) * 100) + '%)' } } } })
+        });
+
+        $('typeDistribution').innerHTML = types.map((t, i) =>
+            '<div class="flex items-center gap-2 text-xs">' +
+                '<span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:' + colors[i] + '"></span>' +
+                '<span class="font-semibold text-gray-800 w-28 truncate">' + esc(t.category) + '</span>' +
+                '<div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden flex">' +
+                    '<div style="width:' + ((t.real_count / Math.max(1, total)) * 100) + '%;background:' + colors[i] + '" class="h-full"></div>' +
                     '<div style="width:' + ((t.simulated_count / Math.max(1, total)) * 100) + '%" class="bg-amber-400 h-full"></div>' +
                 '</div>' +
+                '<span class="text-gray-600 font-bold w-16 text-right">' + t.count + ' <span class="text-gray-400 font-normal">' + t.percent + '%</span></span>' +
+                (t.simulated_count > 0 ? '<span class="text-[10px] text-amber-700 font-bold">' + t.simulated_count + ' sim</span>' : '') +
             '</div>').join('');
     }
 
@@ -1543,10 +1794,16 @@
                 '<div class="text-[11px] text-gray-500">' + tp.peak_day_count + ' crimes</div>' +
             '</div>' +
             '<div class="bg-gray-50 border border-gray-200 rounded-lg p-3 col-span-2">' +
-                '<div class="text-[10px] font-bold text-gray-400 uppercase">Weekday vs Weekend</div>' +
-                '<div class="text-sm font-bold text-gray-900 capitalize">' + esc(wk.busier) + 's are busier</div>' +
-                '<div class="text-[11px] text-gray-500">' + wk.weekday_daily_avg + '/weekday vs ' +
-                    wk.weekend_daily_avg + '/weekend day (' + (wk.difference_percent > 0 ? '+' : '') + wk.difference_percent + '%)</div>' +
+                '<div class="flex items-center justify-between"><span class="text-[10px] font-bold text-gray-400 uppercase">Weekday vs Weekend · daily average</span>' +
+                    '<span class="text-[11px] font-bold ' + (wk.difference_percent > 0 ? 'text-red-700' : 'text-green-700') + '">' + (wk.difference_percent > 0 ? '+' : '') + wk.difference_percent + '% <span class="capitalize">' + esc(wk.busier) + '</span></span></div>' +
+                (function () {
+                    const mx = Math.max(wk.weekday_daily_avg || 0, wk.weekend_daily_avg || 0, 0.01);
+                    const bar = (label, v, color) => '<div class="flex items-center gap-2 text-[11px] mt-1.5"><span class="w-16 text-gray-600">' + label + '</span>' +
+                        '<div class="flex-1 h-2.5 rounded-full bg-gray-200 overflow-hidden"><div class="h-full rounded-full" style="width:' + (v / mx * 100) + '%;background:' + color + '"></div></div>' +
+                        '<span class="w-10 text-right font-bold text-gray-900">' + v + '</span></div>';
+                    return bar('Weekday', wk.weekday_daily_avg, wk.busier === 'weekday' ? '#dc2626' : SERIES_REAL) +
+                           bar('Weekend', wk.weekend_daily_avg, wk.busier === 'weekend' ? '#dc2626' : SERIES_REAL);
+                })() +
             '</div>' +
             (tp.missing_time_count > 0 ?
                 '<div class="col-span-2 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-2">' +
@@ -1562,51 +1819,77 @@
 
     function renderHotspots(hotspots) {
         if (!hotspots.length) {
+            destroyChart('hotspotChart');
             $('hotspotList').innerHTML = '<p class="text-sm text-gray-500">No location clusters found — crimes are too scattered, or there are too few records.</p>';
             return;
         }
 
+        const top = hotspots.slice(0, 8);
+        pdChart('hotspotChart', {
+            type: 'bar',
+            data: { labels: top.map(h => h.area_name || ('#' + h.rank)), datasets: [
+                { label: 'Real', data: top.map(h => (h.count || 0) - (h.simulated_count || 0)), backgroundColor: top.map(h => pdCatColor(h.dominant_category)), borderRadius: 4, maxBarThickness: 18 },
+                { label: 'Simulated', data: top.map(h => h.simulated_count || 0), backgroundColor: SERIES_SIM, borderRadius: 4, maxBarThickness: 18 }
+            ].filter(ds => ds.label === 'Real' || ds.data.some(v => v > 0)) },
+            options: pdOpts({ indexAxis: 'y', scales: { x: pdYAxis({ stacked: true }), y: pdAxis({ stacked: true, ticks: { font: { size: 10 }, color: '#374151', autoSkip: false } }) },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { title: its => { const h = top[its[0].dataIndex]; return (h.area_name || 'Area') + ' · ' + h.dominant_category; },
+                    label: it => ' ' + it.parsed.x + ' crimes · ' + top[it.dataIndex].share_percent + '% of all' } } } })
+        });
+
+        const maxShare = Math.max(...hotspots.map(h => h.share_percent || 0), 1);
         $('hotspotList').innerHTML = hotspots.map(h =>
-            '<div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50">' +
-                '<div class="flex-shrink-0 w-7 h-7 rounded-full bg-alertara-700 text-white text-xs font-bold flex items-center justify-center">' + h.rank + '</div>' +
+            '<div class="flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50" title="~' + h.radius_meters + ' m radius · ' + h.latitude + ', ' + h.longitude + '">' +
+                '<div class="flex-shrink-0 w-7 h-7 rounded-lg bg-alertara-700 text-white text-xs font-black flex items-center justify-center">' + h.rank + '</div>' +
                 '<div class="flex-1 min-w-0">' +
-                    '<div class="text-sm font-semibold text-gray-900">' + esc(h.dominant_category) +
-                        (h.simulated_count > 0 ? ' <span class="text-amber-700 text-xs font-normal">(' + h.simulated_count + ' sim)</span>' : '') +
+                    '<div class="flex items-center gap-2 min-w-0">' +
+                        '<span class="text-sm font-bold text-gray-900 truncate">' + esc(h.area_name || 'Mapped area') + '</span>' +
+                        '<span class="text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full flex-shrink-0" style="background:' + pdCatColor(h.dominant_category) + '">' + esc(h.dominant_category) + '</span>' +
+                        (h.simulated_count > 0 ? '<span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-full">' + h.simulated_count + ' sim</span>' : '') +
                     '</div>' +
-                    '<div class="text-xs font-semibold text-alertara-700 mt-0.5"><i class="fas fa-road mr-1"></i>' + esc(h.area_name || 'Approximate mapped area') + '</div>' +
-                    '<div class="text-xs text-gray-500 mt-0.5">' + h.count + ' crimes · ' + h.share_percent + '% of all · ~' + h.radius_meters + 'm radius</div>' +
-                    '<div class="text-[11px] text-gray-400 font-mono mt-0.5">' + h.latitude + ', ' + h.longitude + '</div>' +
+                    '<div class="flex items-center gap-2 mt-1.5">' +
+                        '<div class="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div class="h-full rounded-full" style="width:' + (h.share_percent / maxShare * 100) + '%;background:' + pdCatColor(h.dominant_category) + '"></div></div>' +
+                        '<span class="text-[11px] font-bold text-gray-800 whitespace-nowrap">' + h.count + ' <span class="text-gray-400 font-normal">· ' + h.share_percent + '%</span></span>' +
+                    '</div>' +
                 '</div>' +
-            '</div>').join('') +
-            '<p class="text-[11px] text-gray-400 mt-3"><i class="fas fa-circle-info mr-1"></i>Nearby map cells are combined into one area. Locations use recorded incident coordinates.</p>';
+            '</div>').join('');
     }
 
     function renderClusters(clusters) {
         $('clusterRule').textContent = clusters.length
-            ? 'Crimes within ' + clusters[0].radius_meters + 'm of each other and inside a ' + clusters[0].window_hours + '-hour window.'
-            : 'Crimes within 250m of each other and inside a 72-hour window.';
+            ? 'Crimes within ' + clusters[0].radius_meters + ' m and ' + clusters[0].window_hours + ' h of each other.'
+            : 'Crimes within 250 m and 72 h of each other.';
 
         if (!clusters.length) {
             $('clusterList').innerHTML = '<p class="text-sm text-gray-500">No repeat clusters detected in this period.</p>';
             return;
         }
 
-        $('clusterList').innerHTML = clusters.map(c =>
-            '<div class="p-3 rounded-lg border border-gray-200">' +
-                '<div class="flex justify-between items-start mb-2">' +
-                    '<div class="text-sm font-bold text-gray-900">' + c.incident_count + ' crimes in ' +
-                        (c.span_days === 0 ? 'the same day' : c.span_days + ' day(s)') + '</div>' +
-                    (c.simulated_count > 0 ? '<span class="px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold">' + c.simulated_count + ' SIM</span>' : '') +
+        const maxN = Math.max(...clusters.map(c => c.incident_count || 0), 1);
+        $('clusterList').innerHTML = clusters.map((c, idx) =>
+            '<div class="rounded-lg border border-gray-200 p-3">' +
+                '<div class="flex items-center gap-3">' +
+                    '<div class="flex-shrink-0 w-12 h-12 rounded-xl bg-violet-50 text-violet-700 flex flex-col items-center justify-center leading-none">' +
+                        '<span class="text-lg font-black">' + c.incident_count + '</span><span class="text-[9px] font-bold uppercase">crimes</span></div>' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<div class="flex flex-wrap items-center gap-1.5">' +
+                            '<span class="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><i class="fas fa-hourglass-half text-[9px]"></i>' + (c.span_days === 0 ? 'same day' : c.span_days + ' day' + (c.span_days === 1 ? '' : 's')) + '</span>' +
+                            '<span class="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><i class="fas fa-calendar text-[9px]"></i>' + esc(c.first_date) + (c.last_date !== c.first_date ? ' → ' + esc(c.last_date) : '') + '</span>' +
+                            (c.simulated_count > 0 ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">' + c.simulated_count + ' SIM</span>' : '') +
+                        '</div>' +
+                        '<div class="flex flex-wrap gap-1 mt-1.5">' +
+                            c.categories.map(cat => '<span class="text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full" style="background:' + pdCatColor(cat) + '">' + esc(cat) + '</span>').join('') +
+                        '</div>' +
+                        '<div class="h-1.5 rounded-full bg-gray-100 overflow-hidden mt-2"><div class="h-full rounded-full bg-violet-500" style="width:' + (c.incident_count / maxN * 100) + '%"></div></div>' +
+                    '</div>' +
                 '</div>' +
-                '<div class="text-xs text-gray-500 mb-2">' + esc(c.first_date) + ' → ' + esc(c.last_date) + ' · ' + esc(c.categories.join(', ')) + '</div>' +
-                '<div class="space-y-1">' +
-                    c.incidents.slice(0, 5).map(i =>
+                '<button type="button" class="pd-details-toggle inline-flex items-center gap-1.5 mt-2 text-[10.5px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1 hover:bg-violet-100"><i class="fas fa-chevron-down"></i>' + c.incidents.length + ' incident' + (c.incidents.length === 1 ? '' : 's') + '</button>' +
+                '<div class="pd-details hidden mt-2 pt-2 border-t border-dashed border-gray-200 space-y-1">' +
+                    c.incidents.map(i =>
                         '<div class="text-[11px] text-gray-600 flex items-center gap-2">' +
-                            '<span class="w-1.5 h-1.5 rounded-full ' + (i.is_simulated ? 'bg-amber-500' : 'bg-alertara-600') + '"></span>' +
-                            '<span class="font-mono">' + esc(i.incident_code) + '</span>' +
+                            '<span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ' + (i.is_simulated ? 'bg-amber-500' : 'bg-alertara-600') + '"></span>' +
+                            '<span class="font-mono text-gray-400">' + esc(i.incident_code) + '</span>' +
                             '<span class="truncate">' + esc(i.title) + '</span>' +
                         '</div>').join('') +
-                    (c.incidents.length > 5 ? '<div class="text-[11px] text-gray-400">+' + (c.incidents.length - 5) + ' more</div>' : '') +
                 '</div>' +
             '</div>').join('');
     }
@@ -1614,26 +1897,36 @@
     function renderAnomalies(a) {
         $('anomalyRule').textContent = a.note
             ? a.note
-            : 'Days beyond 2 standard deviations from the period mean of ' + a.mean + ' crimes/day (threshold ' + a.threshold + ').';
+            : 'Days beyond 2 standard deviations from the mean of ' + a.mean + ' crimes/day (threshold ' + a.threshold + ').';
 
         if (!a.detected.length) {
             $('anomalyList').innerHTML = '<p class="text-sm text-gray-500">No statistical outliers detected in this period.</p>';
             return;
         }
 
-        $('anomalyList').innerHTML = a.detected.map(x =>
-            '<div class="p-3 rounded-lg border ' + (x.severity === 'high' ? 'border-red-300 bg-red-50' : 'border-orange-200 bg-orange-50') + '">' +
-                '<div class="flex justify-between items-center mb-1">' +
-                    '<span class="text-sm font-bold ' + (x.severity === 'high' ? 'text-red-900' : 'text-orange-900') + '">' +
-                        '<i class="fas ' + (x.type === 'spike' ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down') + ' mr-1"></i>' + esc(x.date) +
-                    '</span>' +
-                    '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' +
-                        (x.severity === 'high' ? 'bg-red-200 text-red-900' : 'bg-orange-200 text-orange-900') + '">' +
-                        x.severity.toUpperCase() + ' · z=' + x.z_score +
-                    '</span>' +
+        const maxZ = Math.max(...a.detected.map(x => Math.abs(Number(x.z_score) || 0)), 2);
+        $('anomalyList').innerHTML = a.detected.map(x => {
+            const high = x.severity === 'high';
+            const spike = x.type === 'spike';
+            const z = Math.abs(Number(x.z_score) || 0);
+            const count = (x.count !== undefined ? x.count : (x.value !== undefined ? x.value : null));
+            return '<div class="p-3 rounded-lg border ' + (high ? 'border-red-300 bg-red-50' : 'border-orange-200 bg-orange-50') + '" title="' + esc(x.explanation || '') + '">' +
+                '<div class="flex items-center gap-3">' +
+                    '<span class="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ' + (high ? 'bg-red-200 text-red-900' : 'bg-orange-200 text-orange-900') + '"><i class="fas ' + (spike ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down') + '"></i></span>' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<div class="flex items-center gap-2">' +
+                            '<span class="text-sm font-bold ' + (high ? 'text-red-900' : 'text-orange-900') + '">' + esc(x.date) + '</span>' +
+                            (count !== null ? '<span class="text-[11px] font-bold text-gray-700">' + count + ' crimes</span>' : '') +
+                            '<span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ' + (high ? 'bg-red-200 text-red-900' : 'bg-orange-200 text-orange-900') + '">' + x.severity.toUpperCase() + '</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2 mt-1.5">' +
+                            '<span class="text-[10px] font-bold text-gray-500 w-14">z = ' + x.z_score + '</span>' +
+                            '<div class="flex-1 h-2 rounded-full bg-white/70 overflow-hidden"><div class="h-full rounded-full" style="width:' + (z / maxZ * 100) + '%;background:' + (high ? '#dc2626' : '#ea580c') + '"></div></div>' +
+                        '</div>' +
+                    '</div>' +
                 '</div>' +
-                '<div class="text-xs text-gray-700">' + esc(x.explanation) + '</div>' +
-            '</div>').join('');
+            '</div>';
+        }).join('');
     }
 
     // ---------- tabs: real data vs simulation ----------
@@ -1649,6 +1942,8 @@
 
         // Charts drawn while a tab was hidden have zero width — redraw on show
         if (real && latest) render(latest);
+        if (real && latestAi) renderAiInto('ai', latestAi, 'violet');
+        if (!real && latestSimAi) renderAiInto('sim', latestSimAi, 'amber');
     }
 
     // ---------- wiring ----------

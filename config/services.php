@@ -37,6 +37,13 @@ return [
         'redirect' => env('APP_URL') . '/auth/google/callback',
     ],
 
+    // Google Maps JavaScript API (browser key, restrict it by HTTP referrer in
+    // the Google Cloud console). Read from .env only; never hard-coded. The
+    // VITE_ name is accepted too so an existing .env keeps working.
+    'google_maps' => [
+        'key' => env('GOOGLE_MAPS_API_KEY', env('VITE_GOOGLE_MAPS_API_KEY')),
+    ],
+
     'central_auth' => [
         'login_url' => env('CENTRAL_LOGIN_URL', 'https://login.alertaraqc.com'),
     ],

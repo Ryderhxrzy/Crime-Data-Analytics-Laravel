@@ -178,6 +178,8 @@
 @push('scripts')
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Hover map runs on Google Maps (Hybrid); Leaflet stays as the fallback and for the PDF -->
+<script src="{{ asset('js/google-maps-loader.js') }}?v={{ filemtime(public_path('js/google-maps-loader.js')) }}"></script>
 <script>
 (function () {
     'use strict';
@@ -314,7 +316,11 @@
     $('cdClearSelBtn').addEventListener('click', () => { selected.clear(); renderTable(); });
 
     // ------------------------------------------------------------- hover map
+    // Google Maps (Hybrid imagery, zoomed in on the crime) when the key is
+    // configured; otherwise the original Leaflet mini-map.
     let hoverMap = null, hoverLayer = null, hideTimer = null;
+    let gHoverMap = null, gHoverShapes = [], gHoverLoading = null, gHoverPending = null;
+    const useGoogleHover = typeof GoogleMapsLoader !== 'undefined' && GoogleMapsLoader.hasKey();
 
     function ensureHoverMap() {
         if (hoverMap) return;
@@ -322,7 +328,92 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(hoverMap);
     }
 
+    // One Google map for every hover, built on the first hover only
+    function ensureGoogleHoverMap() {
+        if (gHoverMap) return Promise.resolve(gHoverMap);
+        if (gHoverLoading) return gHoverLoading;
+        gHoverLoading = GoogleMapsLoader.load(['maps']).then(google => {
+            gHoverMap = new google.maps.Map($('hoverMap'), {
+                center: { lat: 14.7292, lng: 121.0385 }, zoom: 18,
+                mapTypeId: google.maps.MapTypeId.HYBRID,
+                disableDefaultUI: true, gestureHandling: 'none', clickableIcons: false, tilt: 0,
+                keyboardShortcuts: false,
+            });
+            return gHoverMap;
+        }).catch(err => { console.warn('Google hover map unavailable, using Leaflet:', err); gHoverLoading = null; return null; });
+        return gHoverLoading;
+    }
+
+    function drawGoogleHover(crime) {
+        const google = window.google;
+        gHoverShapes.forEach(sh => sh.setMap(null));
+        gHoverShapes = [];
+        const bounds = new google.maps.LatLngBounds();
+
+        // The street itself, highlighted (active)
+        const segs = streetFeatures[(crime.street || '').toLowerCase()] || [];
+        segs.forEach(coords => {
+            const path = coords.map(p => ({ lat: p[1], lng: p[0] }));
+            path.forEach(pt => bounds.extend(pt));
+            gHoverShapes.push(new google.maps.Polyline({ map: gHoverMap, path: path, strokeColor: '#111', strokeOpacity: .45, strokeWeight: 9, zIndex: 1 }));
+            gHoverShapes.push(new google.maps.Polyline({ map: gHoverMap, path: path, strokeColor: '#f59e0b', strokeOpacity: .95, strokeWeight: 4, zIndex: 2 }));
+        });
+
+        // The crime spot
+        if (crime.lat && crime.lng) {
+            bounds.extend({ lat: crime.lat, lng: crime.lng });
+            gHoverShapes.push(new google.maps.Marker({
+                map: gHoverMap, position: { lat: crime.lat, lng: crime.lng }, zIndex: 10, clickable: false,
+                icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: CAT_COLORS[crime.category] || '#dc2626', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
+            }));
+        }
+
+        google.maps.event.trigger(gHoverMap, 'resize');
+        // Zoomed in on the crime, with its street still in view
+        if (crime.lat && crime.lng) {
+            gHoverMap.setCenter({ lat: crime.lat, lng: crime.lng });
+            gHoverMap.setZoom(18);
+        } else if (!bounds.isEmpty()) {
+            gHoverMap.fitBounds(bounds, 20);
+        }
+    }
+
     function showHoverMap(crime, rowRect) {
+        if (useGoogleHover) {
+            showHoverPanel(crime, rowRect);
+            gHoverPending = crime;
+            ensureGoogleHoverMap().then(m => {
+                if (!m) { useGoogleHoverFallback(crime, rowRect); return; }
+                if (gHoverPending === crime) drawGoogleHover(crime);
+            });
+            return;
+        }
+        showHoverMapLeaflet(crime, rowRect);
+    }
+
+    function useGoogleHoverFallback(crime, rowRect) {
+        // Google failed to load: hand the panel back to Leaflet for good
+        $('hoverMap').innerHTML = '';
+        showHoverMapLeaflet(crime, rowRect);
+    }
+
+    function showHoverPanel(crime, rowRect) {
+        const panel = $('hoverMapPanel');
+        $('hmStreet').textContent = crime.street || crime.code;
+        const catEl = $('hmCat');
+        catEl.textContent = crime.category;
+        catEl.style.background = CAT_COLORS[crime.category] || '#64748b';
+        const panelW = 380, panelH = 280;
+        let left = Math.min(window.innerWidth - panelW - 12, rowRect.right - panelW - 60);
+        if (left < 12) left = 12;
+        let top = rowRect.top - 40;
+        top = Math.max(12, Math.min(top, window.innerHeight - panelH - 12));
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+        panel.style.display = 'block';
+    }
+
+    function showHoverMapLeaflet(crime, rowRect) {
         ensureHoverMap();
         const panel = $('hoverMapPanel');
 

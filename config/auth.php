@@ -45,6 +45,13 @@ return [
             'driver' => 'jwt',
             'provider' => 'mobile_users',
         ],
+
+        // Staff accounts of this app (crime_department_staff). Admins keep the
+        // 'web' guard on the shared centralized table.
+        'staff' => [
+            'driver' => 'session',
+            'provider' => 'staff',
+        ],
     ],
 
     /*
@@ -73,6 +80,11 @@ return [
         'mobile_users' => [
             'driver' => 'eloquent',
             'model' => App\Models\MobileUser::class,
+        ],
+
+        'staff' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\StaffUser::class,
         ],
 
         // 'users' => [

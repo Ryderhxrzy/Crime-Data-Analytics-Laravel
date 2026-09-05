@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\CrimeIncident;
+use App\Models\SanAgustinIncident;
 use App\Models\CrimeCategory;
 use App\Models\Barangay;
 use App\Models\PersonsInvolved;
 use App\Models\Evidence;
 use App\Services\EncryptionService;
 use App\Services\AuditLogService;
+use App\Services\ExternalCrimeReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -71,209 +73,338 @@ class CrimeIncidentController extends Controller
         return view('crimes.index', compact('crimes'));
     }
 
-    public function create()
+    /**
+     * Manual crime entry. The form is built around Barangay San Agustin: the
+     * street list comes from the same geojson the maps draw, with the streets
+     * that already carry records ("active" streets) listed first, and the map
+     * marker stays on the chosen street unless free placement is switched on.
+     */
+    public function create(ExternalCrimeReportService $streetService)
     {
-        $categories = CrimeCategory::all();
-        $barangays = Barangay::all();
+        $categories = $this->categoryOptions();
+        $barangays = $this->barangayOptions();
 
-        return view('crime-incident-create', compact('categories', 'barangays'));
+        $sanAgustin = $barangays->first(fn ($b) => mb_strtolower(trim($b['name'])) === 'san agustin');
+
+        $activeCounts = $this->activeStreetCounts();
+        $allStreets = $streetService->streets();
+
+        $active = [];
+        $others = [];
+        foreach ($allStreets as $name) {
+            $count = $activeCounts[mb_strtolower($name)] ?? 0;
+            if ($count > 0) {
+                $active[] = ['name' => $name, 'count' => $count];
+            } else {
+                $others[] = ['name' => $name, 'count' => 0];
+            }
+        }
+        usort($active, fn ($a, $b) => $b['count'] <=> $a['count'] ?: strnatcasecmp($a['name'], $b['name']));
+
+        return view('crime-incident-create', [
+            'categories'      => $categories,
+            'barangays'       => $barangays,
+            'defaultBarangay' => $sanAgustin['id'] ?? null,
+            'activeStreets'   => $active,
+            'otherStreets'    => $others,
+            'statuses'        => ['reported', 'under_investigation', 'solved', 'closed', 'archived'],
+            'weather'         => ['Clear', 'Cloudy', 'Rainy', 'Stormy', 'Foggy', 'Unknown'],
+            'recentManual'    => $this->recentManualEntries(),
+        ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, ExternalCrimeReportService $streetService)
     {
-        try {
-            \Log::info('🔍 store() method called', ['request_type' => $request->expectsJson() ? 'AJAX/JSON' : 'FORM']);
-
-            try {
-            $validated = $request->validate([
-                'incident_title' => 'required|string|max:255',
-                'incident_description' => 'required|string',
-                'crime_category_id' => 'required|exists:crime_department_crime_categories,id',
-                'barangay_id' => 'required|exists:crime_department_barangays,id',
-                'incident_date' => 'required|date',
-                'incident_time' => 'required|date_format:H:i',
-                'latitude' => 'required|numeric|between:-90,90',
-                'longitude' => 'required|numeric|between:-180,180',
-                'address_details' => 'nullable|string|max:500',
-                'victim_count' => 'nullable|integer|min:0',
-                'suspect_count' => 'nullable|integer|min:0',
-                'modus_operandi' => 'nullable|string',
-                'weather_condition' => 'nullable|string',
-                'assigned_officer' => 'nullable|string',
-                'clearance_date' => 'nullable|date',
-                'status' => 'required|in:reported,under_investigation,solved,closed,archived',
-                'clearance_status' => 'required|in:cleared,uncleared',
-                'persons_involved' => 'nullable|array',
-                'evidence_items' => 'nullable|array',
-            ]);
-        } catch (\Exception $e) {
-            \Log::error('❌ Validation failed in store()', ['error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => 'Validation error: ' . $e->getMessage()], 422);
-        }
-
-        // Auto-generate incident code
-        $validated['incident_code'] = 'INC-' . date('YmdHis') . '-' . rand(100, 999);
-
-        \Log::info('📝 Creating crime incident', [
-            'incident_title' => $validated['incident_title'],
-            'category_id' => $validated['crime_category_id'],
-            'barangay_id' => $validated['barangay_id'],
-            'coords' => $validated['latitude'] . ',' . $validated['longitude']
+        $validated = $request->validate([
+            'incident_title'       => 'required|string|max:255',
+            'incident_description' => 'required|string|max:5000',
+            'crime_category_id'    => 'required|integer',
+            'barangay_id'          => 'required|integer',
+            'street'               => 'nullable|string|max:150',
+            'incident_date'        => 'required|date|before_or_equal:today',
+            'incident_time'        => 'required|date_format:H:i',
+            'latitude'             => 'required|numeric|between:-90,90',
+            'longitude'            => 'required|numeric|between:-180,180',
+            'placement'            => 'nullable|in:street,free',
+            'victim_count'         => 'nullable|integer|min:0|max:999',
+            'suspect_count'        => 'nullable|integer|min:0|max:999',
+            'modus_operandi'       => 'nullable|string|max:2000',
+            'weather_condition'    => 'nullable|string|max:50',
+            'assigned_officer'     => 'nullable|string|max:150',
+            'status'               => 'required|in:reported,under_investigation,solved,closed,archived',
+            'clearance_status'     => 'required|in:cleared,uncleared',
+            'clearance_date'       => 'nullable|date',
         ]);
 
-        try {
-            // Create the incident
-            $incident = CrimeIncident::create($validated);
-        } catch (\Exception $e) {
-            \Log::error('❌ Error creating incident', ['error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => 'Error creating incident: ' . $e->getMessage()], 500);
+        $category = $this->categoryOptions()->firstWhere('id', (int) $validated['crime_category_id']);
+        $barangay = $this->barangayOptions()->firstWhere('id', (int) $validated['barangay_id']);
+
+        if (!$category) {
+            return back()->withErrors(['crime_category_id' => 'Please choose a valid crime category.'])->withInput();
+        }
+        if (!$barangay) {
+            return back()->withErrors(['barangay_id' => 'Please choose a valid barangay.'])->withInput();
         }
 
-        \Log::info('✅ Crime incident created successfully', [
-            'incident_id' => $incident->id,
-            'incident_code' => $incident->incident_code,
-            'incident_title' => $incident->incident_title,
-            'latitude' => $incident->latitude,
-            'longitude' => $incident->longitude,
-            'category_id' => $incident->crime_category_id,
-            'barangay_id' => $incident->barangay_id,
-            'broadcast_ready' => true
-        ]);
+        $street = trim((string) ($validated['street'] ?? ''));
+        $isSanAgustin = mb_strtolower(trim($barangay['name'])) === 'san agustin';
 
-        // Log incident creation to audit (wrapped in try-catch to ensure JSON response)
+        $lat = round((float) $validated['latitude'], 8);
+        $lng = round((float) $validated['longitude'], 8);
+
+        // Inside San Agustin the street is read from the coordinates, not typed:
+        // the nearest street in the map data wins, so the record always groups
+        // with the others on that street. Too far from any street is refused.
+        if ($isSanAgustin) {
+            $nearest = $streetService->nearestStreet($lat, $lng);
+            if (!$nearest || $nearest['meters'] > 120) {
+                return back()->withErrors(['street' => 'The pin is not on a San Agustin street. Move it closer to a street and save again.'])->withInput();
+            }
+            $street = $nearest['name'];
+        } elseif ($street === '') {
+            return back()->withErrors(['street' => 'Please type the street where the crime happened.'])->withInput();
+        }
+
+        // Default placement keeps the pin on the street: snap whatever the
+        // browser sent to the nearest point of that street's polyline.
+        if ($isSanAgustin && ($validated['placement'] ?? 'street') === 'street') {
+            $snapped = $this->snapToStreet($streetService, $street, $lat, $lng);
+            if ($snapped) {
+                [$lat, $lng] = $snapped;
+            }
+        }
+
+        $data = [
+            'incident_code'        => $this->manualIncidentCode(),
+            'record_type'          => 'crime',
+            'category_name'        => $category['name'],
+            'crime_category_id'    => $category['id'],
+            'barangay_name'        => $barangay['name'],
+            'barangay_id'          => $barangay['id'],
+            'incident_title'       => trim($validated['incident_title']),
+            'incident_description' => trim($validated['incident_description']),
+            'incident_date'        => $validated['incident_date'],
+            'incident_time'        => $validated['incident_time'] . ':00',
+            'latitude'             => $lat,
+            'longitude'            => $lng,
+            'address_details'      => $street . ', ' . $barangay['name'] . ', Quezon City',
+            'victim_count'         => (int) ($validated['victim_count'] ?? 0),
+            'suspect_count'        => (int) ($validated['suspect_count'] ?? 0),
+            'status'               => $validated['status'],
+            'clearance_status'     => $validated['clearance_status'],
+            'clearance_date'       => $validated['clearance_status'] === 'cleared' ? ($validated['clearance_date'] ?? now()->toDateString()) : null,
+            'modus_operandi'       => $validated['modus_operandi'] ?? null,
+            'weather_condition'    => $validated['weather_condition'] ?? null,
+            'reported_by'          => currentAccount()['id'] ?? null,
+            'assigned_officer'     => $validated['assigned_officer'] ?? null,
+        ];
+
+        try {
+            // Same table as CrimeIncident, but without its created() hook: that
+            // hook broadcasts over Pusher, and a broadcast failure must not turn
+            // a saved record into a 500 for the person typing it in.
+            $incident = SanAgustinIncident::create($data);
+        } catch (\Throwable $e) {
+            Log::error('Manual crime entry failed', ['error' => $e->getMessage()]);
+
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Could not save the crime record: ' . $e->getMessage()], 500);
+            }
+
+            return back()->with('error', 'Could not save the crime record: ' . $e->getMessage())->withInput();
+        }
+
+        // Re-check the alert rules against the new record (what the model hook
+        // would have done), but never let it break the save.
+        try {
+            $asCrime = CrimeIncident::find($incident->id);
+            if ($asCrime) {
+                app(\App\Services\CrimeAlertEngine::class)->evaluateForIncident($asCrime);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Alert evaluation after manual entry failed: ' . $e->getMessage());
+        }
+
         try {
             AuditLogService::logIncidentInsert($incident->id, [
                 'incident_code' => $incident->incident_code,
                 'incident_title' => $incident->incident_title,
-                'category_id' => $incident->crime_category_id,
+                'category' => $category['name'],
+                'street' => $street,
+                'entry' => 'manual',
             ]);
-        } catch (\Exception $e) {
-            \Log::error('❌ Error logging incident to audit', ['error' => $e->getMessage()]);
-            // Continue anyway - don't fail the request
+        } catch (\Throwable $e) {
+            Log::warning('Could not audit manual crime entry: ' . $e->getMessage());
         }
 
-        // Process persons involved
-        try {
-            $personsData = $request->input('persons_involved', []);
-            if (!empty($personsData)) {
-                foreach ($personsData as $person) {
-                    $personRecord = PersonsInvolved::create([
-                        'incident_id' => $incident->id,
-                        'person_type' => $person['person_type'],
-                        'first_name' => $person['first_name'] ?? null,
-                        'middle_name' => $person['middle_name'] ?? null,
-                        'last_name' => $person['last_name'] ?? null,
-                        'contact_number' => $person['contact_number'] ?? null,
-                        'other_info' => $person['other_info'] ?? null,
-                    ]);
-
-                    // Log person creation (wrapped in try-catch to prevent failures)
-                    try {
-                        AuditLogService::logPersonInsert($personRecord->person_id, $incident->id, [
-                            'person_type' => $person['person_type'],
-                            'incident_id' => $incident->id,
-                        ]);
-                    } catch (\Exception $logError) {
-                        \Log::error('❌ Error logging person', ['error' => $logError->getMessage()]);
-                    }
-
-                    \Log::info('👤 Person involved added', [
-                        'person_id' => $personRecord->person_id,
-                        'person_type' => $person['person_type'],
-                        'incident_id' => $incident->id,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            \Log::error('❌ Error processing persons involved', [
-                'incident_id' => $incident->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json(['success' => false, 'message' => 'Error adding persons: ' . $e->getMessage()], 500);
-        }
-
-        // Process evidence
-        try {
-            $evidenceData = $request->input('evidence_items', []);
-            if (!empty($evidenceData)) {
-                foreach ($evidenceData as $evidence) {
-                    $evidenceRecord = Evidence::create([
-                        'incident_id' => $incident->id,
-                        'evidence_type' => $evidence['evidence_type'],
-                        'description' => $evidence['description'] ?? null,
-                        'evidence_link' => $evidence['evidence_link'] ?? null,
-                    ]);
-
-                    // Log evidence creation (wrapped in try-catch to prevent failures)
-                    try {
-                        AuditLogService::logEvidenceInsert($evidenceRecord->evidence_id, $incident->id, [
-                            'evidence_type' => $evidence['evidence_type'],
-                            'incident_id' => $incident->id,
-                        ]);
-                    } catch (\Exception $logError) {
-                        \Log::error('❌ Error logging evidence', ['error' => $logError->getMessage()]);
-                    }
-
-                    \Log::info('📦 Evidence added', [
-                        'evidence_id' => $evidenceRecord->evidence_id,
-                        'evidence_type' => $evidence['evidence_type'],
-                        'incident_id' => $incident->id,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            \Log::error('❌ Error processing evidence', [
-                'incident_id' => $incident->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json(['success' => false, 'message' => 'Error adding evidence: ' . $e->getMessage()], 500);
-        }
-
-        // Reload incident with relationships
-        try {
-            $incident->load(['category', 'barangay', 'personsInvolved', 'evidence']);
-        } catch (\Exception $e) {
-            \Log::error('❌ Error reloading incident', [
-                'incident_id' => $incident->id,
-                'error' => $e->getMessage()
-            ]);
-            // Continue anyway - incident is already created and saved
-        }
-
-        // NOTE: Do NOT broadcast here - the model's booted() hook already handles broadcasting
-        // Explicit broadcast here would cause duplicate events
-
-        // Check if request is AJAX (from modal)
         if ($request->expectsJson()) {
-            \Log::info('✅ Returning JSON response', [
-                'incident_id' => $incident->id,
-                'incident_code' => $incident->incident_code
-            ]);
             return response()->json([
-                'success' => true,
-                'message' => 'Crime incident created successfully!',
-                'incident_id' => $incident->id,
-                'incident_code' => $incident->incident_code,
+                'success'        => true,
+                'message'        => 'Crime record saved.',
+                'incident_id'    => $incident->id,
+                'incident_code'  => $incident->incident_code,
                 'incident_title' => $incident->incident_title,
-                'latitude' => $incident->latitude,
-                'longitude' => $incident->longitude
+                'latitude'       => $incident->latitude,
+                'longitude'      => $incident->longitude,
             ]);
         }
 
-        // Regular form submission - redirect back
-        \Log::info('✅ Returning redirect response');
-        return redirect()->back()->with('success', 'Crime incident created successfully! Check the mapping page for real-time update.');
-        } catch (\Exception $e) {
-            \Log::error('❌ FATAL ERROR in store()', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
+        return redirect()->route('crime-incident.create')
+            ->with('success', "Crime record {$incident->incident_code} saved on {$street}. It now appears on Crime Mapping and in every analysis.")
+            ->with('saved_incident', [
+                'code' => $incident->incident_code,
+                'title' => $incident->incident_title,
+                'street' => $street,
+                'category' => $category['name'],
             ]);
-            return response()->json(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()], 500);
+    }
+
+    /** [['id' => 1, 'name' => 'Theft', 'color' => '#FFA500'], ...] — crime categories only */
+    private function categoryOptions()
+    {
+        try {
+            $rows = CrimeCategory::query()
+                ->where(function ($q) {
+                    $q->whereNull('source_system')->orWhere('source_system', 'law_enforcement');
+                })
+                ->orderBy('category_name')
+                ->get(['id', 'category_name', 'color_code', 'severity_level']);
+
+            if ($rows->isNotEmpty()) {
+                return $rows->map(fn ($c) => [
+                    'id'       => (int) $c->id,
+                    'name'     => $c->category_name,
+                    'color'    => $c->color_code ?: '#6b7280',
+                    'severity' => $c->severity_level,
+                ])->values();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Category table unavailable, falling back to incident names: ' . $e->getMessage());
         }
+
+        // Fallback: whatever names the incident table already uses
+        try {
+            return CrimeIncident::query()
+                ->select('category_name', 'crime_category_id')
+                ->whereNotNull('crime_category_id')
+                ->groupBy('category_name', 'crime_category_id')
+                ->orderBy('category_name')
+                ->get()
+                ->map(fn ($c) => ['id' => (int) $c->crime_category_id, 'name' => $c->category_name, 'color' => '#6b7280', 'severity' => null])
+                ->values();
+        } catch (\Throwable $e) {
+            return collect();
+        }
+    }
+
+    /** [['id' => 5, 'name' => 'San Agustin'], ...] */
+    private function barangayOptions()
+    {
+        try {
+            return Barangay::orderBy('barangay_name')
+                ->get(['id', 'barangay_name'])
+                ->map(fn ($b) => ['id' => (int) $b->id, 'name' => $b->barangay_name])
+                ->values();
+        } catch (\Throwable $e) {
+            return collect([['id' => 0, 'name' => 'San Agustin']]);
+        }
+    }
+
+    /** ['acacia street' => 12, ...] — crimes already recorded per street */
+    private function activeStreetCounts(): array
+    {
+        $counts = [];
+
+        try {
+            CrimeIncident::query()
+                ->where('record_type', 'crime')
+                ->whereNotNull('address_details')
+                ->pluck('address_details')
+                ->each(function ($address) use (&$counts) {
+                    $street = trim(explode(',', (string) $address)[0] ?? '');
+                    if ($street === '' || str_starts_with($street, 'Purok')) {
+                        return;
+                    }
+                    $key = mb_strtolower($street);
+                    $counts[$key] = ($counts[$key] ?? 0) + 1;
+                });
+        } catch (\Throwable $e) {
+            Log::warning('Could not count active streets: ' . $e->getMessage());
+        }
+
+        return $counts;
+    }
+
+    /** The last few manually entered records, for the side panel */
+    private function recentManualEntries()
+    {
+        try {
+            return CrimeIncident::query()
+                ->where('incident_code', 'like', 'MAN-%')
+                ->orderByDesc('id')
+                ->limit(6)
+                ->get(['incident_code', 'incident_title', 'category_name', 'address_details', 'incident_date', 'created_at']);
+        } catch (\Throwable $e) {
+            return collect();
+        }
+    }
+
+    private function manualIncidentCode(): string
+    {
+        for ($i = 0; $i < 10; $i++) {
+            $code = 'MAN-' . now()->format('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 5));
+            try {
+                if (!CrimeIncident::where('incident_code', $code)->exists()) {
+                    return $code;
+                }
+            } catch (\Throwable $e) {
+                return $code;
+            }
+        }
+
+        return 'MAN-' . now()->format('YmdHis');
+    }
+
+    /**
+     * Nearest point on the street's polyline to (lat, lng). Longitude is scaled
+     * by cos(latitude) so distances are compared in roughly equal units.
+     */
+    private function snapToStreet(ExternalCrimeReportService $service, string $street, float $lat, float $lng): ?array
+    {
+        $points = $service->streetPoints($street);
+        if (count($points) === 0) {
+            return null;
+        }
+        if (count($points) === 1) {
+            return [$points[0][0], $points[0][1]];
+        }
+
+        $kx = cos(deg2rad($lat));
+        $best = null;
+        $bestDist = INF;
+
+        for ($i = 0; $i < count($points) - 1; $i++) {
+            [$aLat, $aLng] = $points[$i];
+            [$bLat, $bLng] = $points[$i + 1];
+
+            $ax = $aLng * $kx; $ay = $aLat;
+            $bx = $bLng * $kx; $by = $bLat;
+            $px = $lng * $kx;  $py = $lat;
+
+            $dx = $bx - $ax; $dy = $by - $ay;
+            $len2 = $dx * $dx + $dy * $dy;
+            $t = $len2 > 0 ? max(0, min(1, (($px - $ax) * $dx + ($py - $ay) * $dy) / $len2)) : 0;
+
+            $cx = $ax + $t * $dx; $cy = $ay + $t * $dy;
+            $d = ($px - $cx) ** 2 + ($py - $cy) ** 2;
+
+            if ($d < $bestDist) {
+                $bestDist = $d;
+                $best = [round($cy, 8), round($cx / $kx, 8)];
+            }
+        }
+
+        return $best;
     }
 
     /**

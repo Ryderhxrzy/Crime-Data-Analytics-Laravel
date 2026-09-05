@@ -18,7 +18,7 @@ class SanAgustinAiReport extends Model
     protected $fillable = [
         'batch_key', 'barangay_name', 'data_source', 'report_type', 'title', 'summary',
         'payload', 'scenario', 'period_days', 'period_start', 'period_end',
-        'records_used', 'model', 'saved_by',
+        'records_used', 'model', 'saved_by', 'received_by', 'received_at',
     ];
 
     protected $casts = [
@@ -28,6 +28,7 @@ class SanAgustinAiReport extends Model
         'period_end'   => 'date',
         'period_days'  => 'integer',
         'records_used' => 'integer',
+        'received_at'  => 'datetime',
     ];
 
     public function scopeReal($query)

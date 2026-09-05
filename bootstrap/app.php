@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
         $middleware->alias([
             'jwt.api' => \App\Http\Middleware\ValidateJWTViaAPI::class,
+            'admin.only' => \App\Http\Middleware\AdminOnly::class,
+            'password.fresh' => \App\Http\Middleware\RequirePasswordChange::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

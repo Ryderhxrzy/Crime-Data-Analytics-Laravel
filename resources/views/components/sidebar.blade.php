@@ -194,18 +194,17 @@
                     </div>
                 </div>
 
-                <!-- Crime Management Section 
+                <!-- Crime Management Section -->
                 <div class="nav-section">
                     <span class="section-label">Crime Management</span>
-
                     <div class="tree-node mt-0.5">
-                        <a href="{{ authUrl('crimes.index') }}"
-                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crimes.*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
-                            <i class="fas fa-file-lines w-4 h-4 mr-3 flex-shrink-0"></i>
-                            <span>Crime</span>
+                        <a href="{{ authUrl('crime-incident.create') }}"
+                           class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('crime-incident.create') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
+                            <i class="fas fa-plus-circle w-4 h-4 mr-3 flex-shrink-0"></i>
+                            <span>Add Crime Record</span>
                         </a>
                     </div>
-                </div>-->
+                </div>
 
                 <!-- Custom Report Section -->
                 <div class="nav-section">
@@ -238,6 +237,20 @@
                         </a>
                     </div>
                 </div>
+
+                @if (isAdminAccount())
+                    <!-- Administration (admins only) -->
+                    <div class="nav-section">
+                        <span class="section-label">Administration</span>
+                        <div class="tree-node mt-0.5">
+                            <a href="{{ authUrl('staff.index') }}"
+                               class="tree-node flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('staff.*') ? 'active-nav-item' : 'text-alertara-800 hover:bg-alertara-200' }} transition-colors">
+                                <i class="fas fa-users-gear w-4 h-4 mr-3 flex-shrink-0"></i>
+                                <span>Staff Management</span>
+                            </a>
+                        </div>
+                    </div>
+                @endif
 
                 <!-- Account Section -->
                 <div class="nav-section">

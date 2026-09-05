@@ -1559,8 +1559,10 @@ class DashboardController extends Controller
                 'saved_by'     => $savedBy,
             ];
 
+            $shared += $this->aiReportReceipt();
+
             $pct = $forecast['expected_change_percent'] ?? null;
-            \App\Models\SanAgustinAiReport::create($shared + [
+            $analysisRow = \App\Models\SanAgustinAiReport::create($shared + [
                 'report_type' => 'analysis',
                 'title'       => 'Crime forecast: ' . strtoupper((string) $forecast['direction'])
                     . (is_numeric($pct) ? ' (' . ($pct > 0 ? '+' : '') . $pct . '%)' : ''),
@@ -1568,6 +1570,7 @@ class DashboardController extends Controller
                 'payload'     => [
                     'forecast'     => $forecast,
                     'key_findings' => $analysis['key_findings'] ?? [],
+                    'chart_data'   => $this->aiChartData($analysis),
                 ],
             ]);
 
@@ -1586,7 +1589,9 @@ class DashboardController extends Controller
                 $saved++;
             }
 
-            return response()->json(['success' => true, 'batch_key' => $batchKey, 'saved_rows' => $saved]);
+            $receipt = $this->recordAiReportReceipt($analysisRow, $batchKey, $saved, $dataSource, 'pattern_detection');
+
+            return response()->json(['success' => true, 'batch_key' => $batchKey, 'saved_rows' => $saved] + $receipt);
         } catch (\Exception $e) {
             \Log::error('Error in saveAiAnalysis: '.$e->getMessage());
 
@@ -1625,8 +1630,10 @@ class DashboardController extends Controller
             'saved_by'     => $savedBy,
         ];
 
+        $shared += $this->aiReportReceipt();
+
         $risk = strtoupper((string) ($analysis['risk_level'] ?? 'low'));
-        \App\Models\SanAgustinAiReport::create($shared + [
+        $analysisRow = \App\Models\SanAgustinAiReport::create($shared + [
             'report_type' => 'analysis',
             'title'       => mb_substr('Street AI advice: ' . $label . ' — ' . $risk . ' RISK', 0, 255),
             'summary'     => $analysis['summary'] ?? null,
@@ -1634,6 +1641,7 @@ class DashboardController extends Controller
                 'risk_level'   => $analysis['risk_level'] ?? null,
                 'streets'      => $streets,
                 'key_findings' => [],
+                'chart_data'   => $this->aiChartData($analysis),
             ],
         ]);
 
@@ -1659,19 +1667,131 @@ class DashboardController extends Controller
             $saved++;
         }
 
-        return response()->json(['success' => true, 'batch_key' => $batchKey, 'saved_rows' => $saved]);
+        $receipt = $this->recordAiReportReceipt($analysisRow, $batchKey, $saved, 'real', 'crime_mapping');
+
+        return response()->json(['success' => true, 'batch_key' => $batchKey, 'saved_rows' => $saved] + $receipt);
     }
 
     /**
      * Recent saved AI reports (analysis + recommendation rows).
      */
+    /**
+     * Compact, chart-ready summary of an AI analysis: one entry per street
+     * with its crime mix and time profile. Stored with the saved report so
+     * the saved-reports page can draw the same charts as the live report
+     * without keeping the full suggestion text per street.
+     */
+    private function aiChartData(array $analysis): ?array
+    {
+        $sections = $analysis['streets'] ?? [];
+        if (!is_array($sections) || $sections === []) {
+            return null;
+        }
+
+        $streets = [];
+        foreach ($sections as $sec) {
+            if (!is_array($sec) || empty($sec['street'])) {
+                continue;
+            }
+            $st = is_array($sec['stats'] ?? null) ? $sec['stats'] : [];
+            $streets[] = [
+                'street'     => (string) $sec['street'],
+                'risk_level' => strtolower((string) ($sec['risk_level'] ?? 'low')),
+                'total'      => (int) ($sec['total'] ?? 0),
+                'resolved'   => (int) ($st['resolved'] ?? 0),
+                'unresolved' => (int) ($st['unresolved'] ?? 0),
+                'night'      => (int) ($st['night'] ?? 0),
+                'day'        => (int) ($st['day'] ?? 0),
+                'recent'     => (int) ($st['recent'] ?? 0),
+                'earlier'    => (int) ($st['earlier'] ?? 0),
+                'hourly'     => array_map('intval', array_slice((array) ($st['hourly'] ?? []), 0, 24)),
+                'weekday'    => array_map('intval', array_slice((array) ($st['weekday'] ?? []), 0, 7)),
+                'monthly'    => [
+                    'labels' => array_values((array) ($st['monthly']['labels'] ?? [])),
+                    'values' => array_map('intval', (array) ($st['monthly']['values'] ?? [])),
+                ],
+                'categories' => array_values(array_map(fn ($cb) => [
+                    'category' => (string) ($cb['category'] ?? ''),
+                    'count'    => (int) ($cb['count'] ?? 0),
+                ], array_filter((array) ($sec['categories'] ?? []), 'is_array'))),
+            ];
+        }
+
+        return $streets === [] ? null : ['streets' => $streets];
+    }
+
+    /**
+     * Receipt columns stamped on every row of a saved batch. Missing columns
+     * (database not migrated yet) are simply left out.
+     */
+    private function aiReportReceipt(): array
+    {
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasColumn('crime_department_san_agustin_ai_reports', 'received_by')) {
+                return [];
+            }
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        return [
+            'received_by' => \App\Services\AuditLogService::AI_REPORT_RECIPIENT,
+            'received_at' => now(),
+        ];
+    }
+
+    /**
+     * Audit-log the hand-over of a saved batch to Public Safety Campaign
+     * Management. Never fails the save: a missing audit table only costs the
+     * log line. Returns the receipt fields the UI shows in its toast.
+     */
+    private function recordAiReportReceipt($analysisRow, string $batchKey, int $rows, string $dataSource, string $origin): array
+    {
+        $receivedAt = now();
+
+        try {
+            \App\Services\AuditLogService::logAiReportReceived((int) ($analysisRow->id ?? 0), [
+                'batch_key'   => $batchKey,
+                'title'       => $analysisRow->title ?? null,
+                'rows'        => $rows,
+                'data_source' => $dataSource,
+                'origin'      => $origin,
+                'saved_by'    => $analysisRow->saved_by ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('AI report receipt could not be logged: '.$e->getMessage());
+        }
+
+        return [
+            'received_by' => \App\Services\AuditLogService::AI_REPORT_RECIPIENT,
+            'received_at' => $receivedAt->toIso8601String(),
+        ];
+    }
+
     public function listAiReports(Request $request)
     {
         try {
             $reports = \App\Models\SanAgustinAiReport::query()
                 ->orderByDesc('created_at')
-                ->limit(min(50, max(1, (int) $request->input('limit', 20))))
-                ->get(['id', 'batch_key', 'data_source', 'report_type', 'title', 'summary', 'scenario', 'period_days', 'records_used', 'saved_by', 'created_at']);
+                ->limit(min(200, max(1, (int) $request->input('limit', 60))))
+                ->get()
+                ->map(function ($r) {
+                    $p = is_array($r->payload) ? $r->payload : [];
+                    $row = $r->only(['id', 'batch_key', 'data_source', 'report_type', 'title', 'summary', 'scenario', 'period_days', 'records_used', 'saved_by', 'created_at']);
+                    $row['received_by'] = $r->received_by ?? null;
+                    $row['received_at'] = $r->received_at ?? null;
+                    // Only the facts the cards draw, never the full payload
+                    $row['priority']     = isset($p['priority']) ? strtolower((string) $p['priority']) : null;
+                    $row['impact_pct']   = isset($p['expected_impact']['estimated_change_percent']) && is_numeric($p['expected_impact']['estimated_change_percent'])
+                        ? (float) $p['expected_impact']['estimated_change_percent'] : null;
+                    $row['direction']    = $p['forecast']['direction'] ?? null;
+                    $row['forecast_pct'] = isset($p['forecast']['expected_change_percent']) && is_numeric($p['forecast']['expected_change_percent'])
+                        ? (float) $p['forecast']['expected_change_percent'] : null;
+                    $row['risk_level']   = $p['risk_level'] ?? null;
+                    $row['streets']      = isset($p['chart_data']['streets']) ? count((array) $p['chart_data']['streets'])
+                        : (isset($p['streets']) ? count((array) $p['streets']) : null);
+                    return $row;
+                });
 
             return response()->json(['success' => true, 'reports' => $reports]);
         } catch (\Exception $e) {
@@ -1714,11 +1834,15 @@ class DashboardController extends Controller
                     'period_end'    => $b['period_end']?->toDateString(),
                     'records_used'  => $b['records_used'],
                     'model'         => $b['model'],
+                    'received_by'   => $b['received_by'] ?? null,
+                    'received_at'   => $b['received_at']?->toIso8601String(),
                     'analysis'      => $analysis ? [
                         'title'        => $analysis->title,
                         'summary'      => $analysis->summary,
                         'forecast'     => $analysis->payload['forecast'] ?? null,
+                        'risk_level'   => $analysis->payload['risk_level'] ?? null,
                         'key_findings' => $analysis->payload['key_findings'] ?? [],
+                        'chart_data'   => $analysis->payload['chart_data'] ?? null,
                     ] : null,
                     'recommendations' => array_map(function ($rec) {
                         return $rec->payload ?: ['action' => $rec->title, 'rationale' => $rec->summary];
@@ -1771,6 +1895,8 @@ class DashboardController extends Controller
                         'period_end'      => $row->period_end,
                         'records_used'    => $row->records_used,
                         'model'           => $row->model,
+                        'received_by'     => $row->received_by ?? null,
+                        'received_at'     => $row->received_at ?? null,
                         'analysis'        => null,
                         'recommendations' => [],
                     ];
@@ -2032,7 +2158,7 @@ class DashboardController extends Controller
                 ->values()
                 ->all();
 
-            $cacheKey = CacheService::generateCacheKey('hotspot_data_v3', [
+            $cacheKey = CacheService::generateCacheKey('hotspot_data_v4', [
                 'timePeriod' => $timePeriod,
                 'crimeType' => $crimeType,
                 'barangay' => $barangay,
