@@ -42,7 +42,7 @@
         cssInjected = true;
         const st = document.createElement('style');
         st.textContent = `
-            .cm3d-overlay { position: absolute; inset: 0; z-index: 900; display: none; background: #e5e7eb; }
+            .cm3d-overlay { position: absolute; inset: 0; z-index: 1100; display: none; background: #e5e7eb; }
             .cm3d-overlay.on { display: block; }
             .cm3d-map { position: absolute; inset: 0; }
             .cm3d-badge { position: absolute; bottom: 10px; left: 10px; z-index: 5; background: rgba(255,255,255,.94); border: 1px solid #e5e7eb; border-radius: 9999px; padding: 3px 10px; font-size: 10.5px; font-weight: 700; color: #374151; }
@@ -70,6 +70,9 @@
             showLegend: true,
             pitch: 58,
             bearing: -18,
+            // 'markers' | 'heatmap' | 'street-heatmap' | 'clusters' (clusters draw as markers in 3D)
+            getMode: () => 'markers',
+            modeSelect: null,
         }, opts || {});
         if (!o.wrapper) throw new Error('CrimeMap3D: wrapper element required');
         injectCss();
@@ -215,7 +218,8 @@
                 map.addLayer({ id: 'cm3d-streets-hover', type: 'line', source: 'cm3d-streets', filter: ['==', ['get', 'name'], '__none__'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': 6, 'line-opacity': 1 } });
                 map.addLayer({ id: 'cm3d-streets-labels', type: 'symbol', source: 'cm3d-streets', minzoom: 15.5, layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'], 'text-size': 11, 'text-font': ['Noto Sans Regular'] }, paint: { 'text-color': '#111827', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
                 // Incidents must stay above the streets
-                if (map.getLayer('cm3d-incidents')) { map.moveLayer('cm3d-incidents-halo'); map.moveLayer('cm3d-incidents'); }
+                ['cm3d-heat', 'cm3d-incidents-halo', 'cm3d-incidents'].forEach(id => { if (map.getLayer(id)) map.moveLayer(id); });
+                applyMode();
 
                 map.on('mousemove', 'cm3d-streets-line', e => {
                     const f = e.features && e.features[0];
@@ -254,6 +258,14 @@
 
         function addIncidentLayers() {
             map.addSource('cm3d-incidents', { type: 'geojson', data: incidentsGeo([]) });
+            // Heat map mode: density from the same points, same colour ramp as the 2D heat map
+            map.addLayer({ id: 'cm3d-heat', type: 'heatmap', source: 'cm3d-incidents', layout: { visibility: 'none' }, paint: {
+                'heatmap-weight': 0.8,
+                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 13, 0.8, 17, 2.2],
+                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 13, 14, 16, 30, 18, 46],
+                'heatmap-opacity': 0.82,
+                'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'], 0, 'rgba(59,130,246,0)', 0.15, '#3b82f6', 0.35, '#2ecc71', 0.55, '#f39c12', 0.75, '#e74c3c', 1, '#c0392b'],
+            } });
             map.addLayer({ id: 'cm3d-incidents-halo', type: 'circle', source: 'cm3d-incidents', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 5, 16, 9, 18, 13], 'circle-color': ['get', 'color'], 'circle-opacity': 0.25, 'circle-blur': 0.6 } });
             map.addLayer({ id: 'cm3d-incidents', type: 'circle', source: 'cm3d-incidents', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 5.5, 18, 8], 'circle-color': ['get', 'color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5, 'circle-opacity': 0.95 } });
             map.on('mouseenter', 'cm3d-incidents', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -273,6 +285,24 @@
             });
         }
 
+        function applyMode() {
+            if (!map || !styleReady) return 'markers';
+            const mode = String(o.getMode() || 'markers');
+            const vis = (id, on) => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); };
+            const points = mode === 'markers' || mode === 'clusters';
+            vis('cm3d-incidents', points); vis('cm3d-incidents-halo', points);
+            vis('cm3d-heat', mode === 'heatmap');
+            if (map.getLayer('cm3d-streets-line')) {
+                map.setPaintProperty('cm3d-streets-line', 'line-width', mode === 'street-heatmap'
+                    ? ['case', ['>', ['get', 'count'], 0], ['interpolate', ['linear'], ['get', 'count'], 1, 4, 15, 10], 2]
+                    : ['case', ['>', ['get', 'count'], 0], 3, 2]);
+                map.setPaintProperty('cm3d-streets-casing', 'line-width', mode === 'street-heatmap'
+                    ? ['case', ['>', ['get', 'count'], 0], ['interpolate', ['linear'], ['get', 'count'], 1, 8, 15, 16], 4]
+                    : ['case', ['>', ['get', 'count'], 0], 6, 4]);
+            }
+            return mode;
+        }
+
         function setIncidents(incidents) {
             incidents = Array.isArray(incidents) ? incidents : [];
             if (!map || !styleReady) { pendingIncidents = incidents; return; }
@@ -280,7 +310,9 @@
             if (src) src.setData(incidentsGeo(incidents));
             const streets = map.getSource('cm3d-streets');
             if (streets && streetGeo) streets.setData(colouredStreets(incidents));
-            badge.innerHTML = '<i class="fas fa-cube mr-1"></i>3D map · ' + incidents.length + ' incident' + (incidents.length === 1 ? '' : 's');
+            const mode = applyMode();
+            const modeLabel = { markers: 'markers', heatmap: 'heat map', 'street-heatmap': 'street segments', clusters: 'markers' }[mode] || mode;
+            badge.innerHTML = '<i class="fas fa-cube mr-1"></i>3D · ' + modeLabel + ' · ' + incidents.length + ' incident' + (incidents.length === 1 ? '' : 's');
         }
 
         const api = {
@@ -306,6 +338,7 @@
             o.toggleButton.addEventListener('click', api.toggle);
             api.hide();
         }
+        if (o.modeSelect) o.modeSelect.addEventListener('change', () => { if (shown) setTimeout(api.refresh, 0); });
         window.addEventListener('resize', () => { if (shown && map) map.resize(); });
         document.addEventListener('fullscreenchange', () => setTimeout(() => { if (shown && map) map.resize(); }, 150));
 
