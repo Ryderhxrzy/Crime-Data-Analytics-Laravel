@@ -6,11 +6,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- The same base map Crime Mapping uses (2D fallback): tiles, zoom limits, San Agustin boundary -->
     <script src="{{ asset('js/crime-map-base.js') }}"></script>
+    <!-- Google Maps (default engine, Hybrid imagery): loaded once via the official bootstrap loader -->
+    <script src="{{ asset('js/google-maps-loader.js') }}"></script>
     <!-- 3D engine: MapLibre GL with free OpenFreeMap vector tiles (no API key) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
     <style>
-        #addCrimeMap { height: 520px; width: 100%; border-radius: 12px; z-index: 1; position: relative; }
+        #addCrimeMap { height: 520px; width: 100%; border-radius: 12px; z-index: 1; position: relative; overflow: hidden; }
+        #addCrimeMap .engine-pane { position: absolute; inset: 0; display: none; }
+        #addCrimeMap .engine-pane.on { display: block; }
+        .gm-street-label { color: #fff; font-weight: 800; font-size: 13px; text-shadow: 0 0 4px #000, 0 0 8px #000; }
+        .gm-tip { background: #111827; color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 11.5px; line-height: 1.45; }
         .map-tools { position: absolute; top: 10px; left: 10px; z-index: 5; display: flex; gap: 6px; }
         .map-tool-btn { background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 700; color: #374151; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
         .map-tool-btn.on { background: #274d4c; color: #fff; border-color: #274d4c; }
@@ -233,8 +239,15 @@
                     </div>
 
                     <div style="position: relative;">
-                        <div id="addCrimeMap"></div>
-                        <div class="map-tools">
+                        <div id="addCrimeMap">
+                            <div id="addCrimeMapGoogle" class="engine-pane"></div>
+                            <div id="addCrimeMap3d" class="engine-pane"></div>
+                            <div id="addCrimeMap2d" class="engine-pane"></div>
+                        </div>
+                        <div class="map-tools" style="left: auto; right: 10px; top: 56px;">
+                            <button type="button" class="map-tool-btn engine-btn" data-engine="google" title="Google Maps (satellite + roads)"><i class="fab fa-google mr-1"></i>Google</button>
+                            <button type="button" class="map-tool-btn engine-btn" data-engine="3d" title="3D map"><i class="fas fa-cube mr-1"></i>3D</button>
+                            <button type="button" class="map-tool-btn engine-btn" data-engine="2d" title="Classic 2D map"><i class="fas fa-map mr-1"></i>2D</button>
                             <button type="button" id="tiltToggle" class="map-tool-btn on hidden"><i class="fas fa-cube mr-1"></i>3D view</button>
                         </div>
                         <span id="mapEngineBadge" class="map-engine-badge"><i class="fas fa-spinner fa-spin mr-1"></i>Loading map</span>
@@ -532,7 +545,7 @@
     // ------------------------------------------------------------------
     function create3dEngine(onFail) {
         const map = new maplibregl.Map({
-            container: 'addCrimeMap',
+            container: 'addCrimeMap3d',
             style: VECTOR_STYLE,
             center: [SA_CENTER[1], SA_CENTER[0]],
             zoom: 16.2,
@@ -686,14 +699,149 @@
     }
 
     // ------------------------------------------------------------------
+    // Google Maps engine (default): Hybrid imagery + roads + street names.
+    // Same behaviour as the other engines: streets coloured by crime level
+    // with hover, the picked street alone, a draggable pin that snaps.
+    // ------------------------------------------------------------------
+    function createGoogleEngine(onFail) {
+        const el = document.getElementById('addCrimeMapGoogle');
+        let map = null, ready = false, marker = null, streetsLayer = null, boundaryLayer = null, tip = null;
+        let selected = null, streetsVisible = true, streetsAdded = false, pendingPin = null, pendingFit = null;
+        if (engineBadge) engineBadge.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading Google Maps';
+
+        if (typeof GoogleMapsLoader === 'undefined' || !GoogleMapsLoader.hasKey()) {
+            setTimeout(() => onFail('Google Maps API key is not configured (GOOGLE_MAPS_API_KEY in .env)'), 0);
+        } else {
+            GoogleMapsLoader.load(['maps']).then(google => {
+                map = new google.maps.Map(el, {
+                    center: { lat: SA_CENTER[0], lng: SA_CENTER[1] }, zoom: 17,
+                    mapTypeId: google.maps.MapTypeId.HYBRID,
+                    mapTypeControl: true,
+                    mapTypeControlOptions: { mapTypeIds: [google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.SATELLITE, google.maps.MapTypeId.HYBRID], style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR, position: google.maps.ControlPosition.TOP_LEFT },
+                    streetViewControl: false, fullscreenControl: false, rotateControl: false, tilt: 0,
+                    clickableIcons: false, gestureHandling: 'greedy',
+                });
+                tip = new google.maps.InfoWindow({ disableAutoPan: true, headerDisabled: true, pixelOffset: new google.maps.Size(0, -8) });
+
+                // Barangay boundaries: San Agustin outlined, neighbours faint
+                boundaryLayer = new google.maps.Data({ map: map });
+                fetch(BARANGAYS_URL + '?t=' + Date.now()).then(r => r.json()).then(geo => {
+                    boundaryLayer.addGeoJson(geo);
+                    boundaryLayer.setStyle(f => {
+                        const sa = String(f.getProperty('code') || '') === SA_CODE;
+                        return { clickable: false, strokeColor: sa ? '#5eead4' : '#8fb3b0', strokeWeight: sa ? 3 : 0.8, strokeOpacity: sa ? 1 : 0.6, fillColor: sa ? '#5eead4' : '#f2f9f8', fillOpacity: sa ? 0.10 : 0.04, zIndex: sa ? 2 : 1 };
+                    });
+                    const sa = (geo.features || []).find(f => String((f.properties || {}).code || '') === SA_CODE);
+                    if (!sa) return;
+                    saBounds = boundsOfGeometry(sa.geometry);
+                    const b = new google.maps.LatLngBounds({ lat: saBounds.minLat, lng: saBounds.minLng }, { lat: saBounds.maxLat, lng: saBounds.maxLng });
+                    new google.maps.Marker({ map: map, position: b.getCenter(), clickable: false, icon: { path: 'M 0 0', scale: 0 }, label: { text: 'San Agustin', className: 'gm-street-label' } });
+                    const padLat = (saBounds.maxLat - saBounds.minLat) * 1.2, padLng = (saBounds.maxLng - saBounds.minLng) * 1.2;
+                    map.setOptions({ restriction: { latLngBounds: { north: saBounds.maxLat + padLat, south: saBounds.minLat - padLat, east: saBounds.maxLng + padLng, west: saBounds.minLng - padLng }, strictBounds: false } });
+                    if (!marker && !pendingFit) map.fitBounds(b, 12);
+                }).catch(err => console.warn('Barangay boundaries not loaded:', err));
+
+                streetsLayer = new google.maps.Data({ map: map });
+                map.addListener('click', e => {
+                    if (!currentStreet() && isSanAgustin()) return;
+                    userPlaced(e.latLng.lat(), e.latLng.lng());
+                });
+
+                ready = true;
+                if (engineBadge) { engineBadge.innerHTML = '<i class="fab fa-google mr-1"></i>Google Maps · Hybrid'; engineBadge.title = 'Google Maps JavaScript API'; }
+                addStreets();
+                if (pendingPin) { api.setPin(pendingPin[0], pendingPin[1], true); pendingPin = null; }
+                if (pendingFit) { api.fitStreet(pendingFit); pendingFit = null; }
+            }).catch(err => onFail(err && err.message ? err.message : String(err)));
+        }
+
+        function styleStreets() {
+            if (!streetsLayer) return;
+            streetsLayer.setStyle(f => {
+                const name = String(f.getProperty('name') || '').trim();
+                const st = streetStats[name];
+                const count = st ? st.count : 0;
+                const sev = severityFor(count);
+                const active = activeStreets.has(name.toLowerCase());
+                const isSel = !!selected && name === selected;
+                return {
+                    visible: streetsVisible && (!selected || isSel),
+                    clickable: active,
+                    strokeColor: isSel ? '#facc15' : sev.color,
+                    strokeWeight: isSel ? 6 : (active ? 4 : 2.5),
+                    strokeOpacity: 0.95,
+                    zIndex: isSel ? 50 : 10 + count,
+                };
+            });
+        }
+
+        function addStreets() {
+            if (!ready || !streetGeo || streetsAdded) return;
+            streetsAdded = true;
+            streetsLayer.addGeoJson(streetGeo);
+            styleStreets();
+            const propsOf = f => {
+                const name = String(f.getProperty('name') || '').trim();
+                const st = streetStats[name]; const count = st ? st.count : 0; const sev = severityFor(count);
+                return { name, count, color: sev.color, level: sev.label, active: activeStreets.has(name.toLowerCase()) ? 1 : 0, top: st && st.top_category ? st.top_category : '', peaks: st && st.peak_hours ? st.peak_hours.join(', ') : '' };
+            };
+            // Whole street on hover: every feature with the same name, not one segment
+            const sameStreet = name => { const out = []; streetsLayer.forEach(ft => { if (String(ft.getProperty('name') || '').trim() === name) out.push(ft); }); return out; };
+            streetsLayer.addListener('mouseover', e => {
+                sameStreet(String(e.feature.getProperty('name') || '').trim()).forEach(ft => streetsLayer.overrideStyle(ft, { strokeWeight: 8, strokeOpacity: 1, zIndex: 90 }));
+                tip.setContent('<div class="gm-tip">' + streetTipHtml(propsOf(e.feature)) + '</div>');
+                tip.setPosition(e.latLng);
+                tip.open({ map: map });
+            });
+            streetsLayer.addListener('mousemove', e => tip.setPosition(e.latLng));
+            streetsLayer.addListener('mouseout', e => {
+                sameStreet(String(e.feature.getProperty('name') || '').trim()).forEach(ft => streetsLayer.revertStyle(ft));
+                tip.close();
+            });
+            streetsLayer.addListener('click', e => {
+                const name = String(e.feature.getProperty('name') || '').trim();
+                if (!name || !isSanAgustin()) return;
+                const opt = [...streetSelect.options].find(o => o.value === name);
+                if (opt) { streetSelect.value = name; onStreetChange(false); }
+            });
+        }
+
+        const PIN = 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z';
+        const api = {
+            kind: 'google',
+            ready: addStreets,
+            setPin(lat, lng, pan) {
+                if (!ready) { pendingPin = [lat, lng]; return; }
+                const google = window.google;
+                if (!marker) {
+                    marker = new google.maps.Marker({
+                        map: map, position: { lat, lng }, draggable: true, zIndex: 1000, title: 'Drag to the exact spot',
+                        icon: { path: PIN, fillColor: '#dc2626', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2, scale: 1.1, anchor: new google.maps.Point(0, 0) },
+                    });
+                    marker.addListener('dragend', () => { const p = marker.getPosition(); userPlaced(p.lat(), p.lng()); });
+                } else marker.setPosition({ lat, lng });
+                if (pan) map.panTo({ lat, lng });
+            },
+            highlightStreet(name) { selected = name || null; styleStreets(); },
+            fitStreet(name) {
+                if (!ready) { pendingFit = name; return; }
+                const b = streetBounds(name);
+                if (b) map.fitBounds(new window.google.maps.LatLngBounds({ lat: b.minLat, lng: b.minLng }, { lat: b.maxLat, lng: b.maxLng }), 80);
+            },
+            setStreetsVisible(on) { streetsVisible = on; styleStreets(); },
+            resize() { if (map) window.google.maps.event.trigger(map, 'resize'); },
+        };
+        return api;
+    }
+
+    // ------------------------------------------------------------------
     // 2D engine: the Leaflet map shared with Crime Mapping (fallback)
     // ------------------------------------------------------------------
     function create2dEngine() {
-        document.getElementById('addCrimeMap').innerHTML = '';
         document.getElementById('tiltToggle')?.classList.add('hidden');
         if (engineBadge) engineBadge.innerHTML = '<i class="fas fa-map mr-1"></i>2D map';
 
-        const map = createCrimeMap('addCrimeMap', { center: SA_CENTER, zoom: 16 });
+        const map = createCrimeMap('addCrimeMap2d', { center: SA_CENTER, zoom: 16 });
         CrimeMapBase.drawSanAgustinBoundary(map, { lockView: true }).then(function (b) {
             if (b && b.bounds) saBounds = { minLat: b.bounds.getSouth(), maxLat: b.bounds.getNorth(), minLng: b.bounds.getWest(), maxLng: b.bounds.getEast() };
             if (marker) map.panTo(marker.getLatLng());
@@ -781,19 +929,66 @@
         setTimeout(() => engine.resize(), 200);
     }
 
-    function boot() {
-        const use3d = typeof maplibregl !== 'undefined' && !document.getElementById('addCrimeMap').dataset.force2d;
-        if (use3d) {
-            try {
-                engine = create3dEngine(() => { engine = create2dEngine(); startForm(); });
-            } catch (err) {
-                console.warn('3D engine failed, using 2D:', err);
-                engine = create2dEngine();
-            }
-        } else {
-            engine = create2dEngine();
+    // ------------------------------------------------------------------
+    // Engine switching. Every engine lives in its own pane inside #addCrimeMap
+    // and is built once; switching shows one pane and re-applies the form
+    // state (street, pin) to it. Google Maps is the default.
+    // ------------------------------------------------------------------
+    const engines = {};
+    const ENGINE_KEY = 'addCrimeMapEngine';
+    let engineName = null;
+
+    function showPane(name) {
+        ['google', '3d', '2d'].forEach(n => document.getElementById('addCrimeMap' + (n === 'google' ? 'Google' : n)).classList.toggle('on', n === name));
+        document.querySelectorAll('.engine-btn').forEach(b => b.classList.toggle('on', b.dataset.engine === name));
+        document.getElementById('tiltToggle').classList.toggle('hidden', name !== '3d');
+    }
+
+    function buildEngine(name) {
+        if (name === 'google') return createGoogleEngine(reason => {
+            console.warn('Google Maps unavailable, using the 3D map:', reason);
+            const why = document.getElementById('map3dReason');
+            if (why) { why.textContent = 'Google Maps unavailable: ' + reason; why.classList.remove('hidden'); }
+            if (engineName === 'google') switchEngine(typeof maplibregl !== 'undefined' ? '3d' : '2d');
+        });
+        if (name === '3d') {
+            if (typeof maplibregl === 'undefined') return null;
+            return create3dEngine(reason => {
+                console.warn('3D map unavailable, using the 2D map:', reason);
+                if (engineName === '3d') switchEngine('2d', reason);
+            });
         }
-        // Street geometry for snapping, midpoints and (3D) the street layer
+        return create2dEngine(name === '2d' ? undefined : name);
+    }
+
+    function switchEngine(name, reason) {
+        if (!engines[name]) {
+            try { engines[name] = buildEngine(name); } catch (err) { console.warn('Engine ' + name + ' failed:', err); engines[name] = null; }
+            if (!engines[name]) { if (name !== '2d') return switchEngine('2d', reason); return; }
+        }
+        engineName = name;
+        engine = engines[name];
+        try { localStorage.setItem(ENGINE_KEY, name); } catch (e) {}
+        showPane(name);
+        setTimeout(() => {
+            engine.resize();
+            if (streetGeo) engine.ready();
+            engine.setStreetsVisible(isSanAgustin());
+            const name2 = currentStreet();
+            if (isSanAgustin()) engine.highlightStreet(name2 || null);
+            if (latInput.value && lngInput.value) engine.setPin(+latInput.value, +lngInput.value, true);
+            else if (name2 && isSanAgustin()) engine.fitStreet(name2);
+        }, 50);
+    }
+
+    document.querySelectorAll('.engine-btn').forEach(b => b.addEventListener('click', () => switchEngine(b.dataset.engine)));
+
+    function boot() {
+        let start = 'google';
+        try { const saved = localStorage.getItem(ENGINE_KEY); if (saved === '3d' || saved === '2d' || saved === 'google') start = saved; } catch (e) {}
+        switchEngine(start);
+
+        // Street geometry for snapping, midpoints and the street layers
         Promise.all([
             fetch(STREETS_URL + '?t=' + Date.now(), { headers: { 'Accept': 'application/json' } }).then(r => r.json()),
             fetch(STREET_STATS_URL + '?t=' + Date.now(), { headers: { 'Accept': 'application/json' } }).then(r => r.json()).catch(() => ({ streets: {} }))
