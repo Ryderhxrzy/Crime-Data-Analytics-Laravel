@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\CustomCrimeReport;
 use App\Models\SanAgustinAiReport;
+use App\Models\StaffUser;
 use App\Models\User;
 use App\Models\UserPreference;
 use Illuminate\Http\Request;
@@ -30,21 +31,49 @@ class ProfileController extends Controller
         return session('auth_user.id') ?? auth()->id();
     }
 
-    /** Identity as this system knows it, from the JWT session or local auth */
+    /** Identity as this system knows it: centralized JWT, local admin or staff */
     private function identity(): array
     {
-        $session = session('auth_user');
-        $local = auth()->user();
+        $account = currentAccount();
+        $isStaff = ($account['account_type'] ?? null) === 'staff';
+
+        if (session('jwt_token')) {
+            $source = 'Centralized login (JWT)';
+        } elseif ($isStaff) {
+            $source = 'Staff account';
+        } elseif ($account) {
+            $source = 'Admin account';
+        } else {
+            $source = 'Guest';
+        }
 
         return [
-            'id' => $session['id'] ?? $local?->id,
-            'email' => $session['email'] ?? $local?->email ?? 'Not signed in',
-            'role' => $session['role'] ?? $local?->role ?? 'user',
-            'department' => $session['department'] ?? $local?->department ?? null,
-            'department_name' => $session['department_name']
-                ?? ($local?->department ? ucwords(str_replace('_', ' ', $local->department)) : null),
-            'source' => $session ? 'Centralized login (JWT)' : ($local ? 'Local account' : 'Guest'),
+            'id' => $account['id'] ?? null,
+            'email' => $account['email'] ?? 'Not signed in',
+            'full_name' => $account['full_name'] ?? null,
+            'role' => $account['role'] ?? 'user',
+            'account_type' => $account['account_type'] ?? 'admin',
+            'is_staff' => $isStaff,
+            'must_change_password' => (bool) ($account['must_change_password'] ?? false),
+            'department' => $account['department'] ?? null,
+            'department_name' => $account['department_name'] ?? null,
+            'position' => $account['position'] ?? null,
+            'source' => $source,
         ];
+    }
+
+    /** The staff row behind the current session, or null for admins */
+    private function currentStaff(): ?StaffUser
+    {
+        if (!isStaffAccount()) {
+            return null;
+        }
+
+        try {
+            return auth('staff')->user() ?? StaffUser::find(currentAccount()['id'] ?? 0);
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     public function show()
@@ -55,7 +84,9 @@ class ProfileController extends Controller
 
         // The account row, when this database can see it
         $account = null;
-        if ($email) {
+        if ($identity['is_staff']) {
+            $account = $this->currentStaff();
+        } elseif ($email) {
             try {
                 $account = User::where('email', $email)->first();
             } catch (\Throwable $e) {
@@ -70,6 +101,50 @@ class ProfileController extends Controller
             'activity' => $this->activityFor($email, $this->currentUserId()),
             'recentActions' => $this->recentActions($this->currentUserId()),
         ]);
+    }
+
+    /**
+     * Staff change their own password here. Admin passwords belong to the
+     * centralized portal and are not touched.
+     */
+    public function updatePassword(Request $request)
+    {
+        $staff = $this->currentStaff();
+
+        if (!$staff) {
+            return redirect()->route('profile')
+                ->with('error', 'Only staff accounts change their password here. Admin passwords are managed by the centralized login.');
+        }
+
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:8|confirmed|different:current_password',
+        ], [
+            'password.different' => 'The new password must be different from the current one.',
+        ]);
+
+        if (!password_verify($validated['current_password'], $staff->password_hash)) {
+            return redirect()->route('profile')
+                ->withErrors(['current_password' => 'The current password is incorrect.']);
+        }
+
+        $staff->update([
+            'password_hash' => password_hash($validated['password'], PASSWORD_BCRYPT),
+            'must_change_password' => false,
+            'password_changed_at' => now(),
+        ]);
+
+        $session = session('auth_user', []);
+        $session['must_change_password'] = false;
+        session(['auth_user' => $session]);
+
+        try {
+            \App\Services\AuditLogService::log('CHANGE_PASSWORD', 'crime_department_staff', (int) $staff->id, ['email' => $staff->email]);
+        } catch (\Throwable $e) {
+            // The password change stands even when the audit table is missing
+        }
+
+        return redirect()->route('profile')->with('success', 'Your password has been updated.');
     }
 
     /**
@@ -175,7 +250,7 @@ class ProfileController extends Controller
         }
 
         $validated = $request->validate([
-            'default_view_mode' => 'required|in:markers,heatmap,clusters',
+            'default_view_mode' => 'required|in:street-heatmap,markers,heatmap,clusters',
             'default_time_period' => 'required|in:30,90,180,all',
             'default_barangay' => 'nullable|string|max:100',
             'rows_per_page' => 'required|integer|in:10,25,50,100',
