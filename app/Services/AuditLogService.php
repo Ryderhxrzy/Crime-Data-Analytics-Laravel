@@ -24,7 +24,17 @@ class AuditLogService
         ?array $details = null
     ): AuditLog {
         // Try to get admin ID from JWT session first (centralized login), then fallback to Laravel Auth
-        $adminId = getUserId() ?? Auth::id() ?? 0;
+        $adminId = getUserId() ?? Auth::id() ?? auth('staff')->id() ?? 0;
+
+        // Staff and admin ids come from different tables, so the actor is also
+        // recorded by email and type — admin_id alone cannot tell them apart.
+        $account = function_exists('currentAccount') ? currentAccount() : null;
+        if ($account) {
+            $details = ($details ?? []) + [
+                'actor_email' => $account['email'] ?? null,
+                'actor_type'  => $account['account_type'] ?? 'admin',
+            ];
+        }
 
         return AuditLog::create([
             'admin_id' => $adminId,
@@ -36,6 +46,22 @@ class AuditLogService
             'details' => $details,
             'created_at' => now(), // Explicitly set timestamp in Asia/Manila timezone
         ]);
+    }
+
+    /** Who receives every saved AI report */
+    public const AI_REPORT_RECIPIENT = 'Public Safety Campaign Management';
+
+    /**
+     * Log that a saved AI report batch was received by Public Safety
+     * Campaign Management. One entry per save (batch), pointing at the
+     * analysis row; the details carry the batch key and row count.
+     */
+    public static function logAiReportReceived(int $reportId, array $details = []): AuditLog
+    {
+        return self::log('AI_REPORT_RECEIVED', 'crime_department_san_agustin_ai_reports', $reportId, [
+            'received_by' => self::AI_REPORT_RECIPIENT,
+            'received_at' => now()->toDateTimeString(),
+        ] + $details);
     }
 
     /**

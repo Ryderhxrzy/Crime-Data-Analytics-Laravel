@@ -74,6 +74,7 @@ class HotspotAnalyticsService
             'type_distribution' => $this->typeDistribution($incidents),
             'day_night' => $this->dayNightSplit($incidents),
             'hourly' => $this->hourlyDistribution($incidents),
+            'weekday' => $this->weekdayDistribution($incidents),
         ];
     }
 
@@ -588,6 +589,29 @@ class HotspotAnalyticsService
             'labels' => array_map(fn ($h) => $this->hour12($h), range(0, 23)),
             'values' => array_values($hours),
             'peak_period' => $this->peakWindow($incidents)['label'],
+        ];
+    }
+
+    /** Incidents per day of the week, Monday first. */
+    protected function weekdayDistribution(Collection $incidents): array
+    {
+        $labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        $values = array_fill(0, 7, 0);
+
+        foreach ($incidents as $incident) {
+            if (empty($incident->incident_date)) {
+                continue;
+            }
+            $dow = (int) Carbon::parse($incident->incident_date)->format('N');   // 1 = Monday
+            $values[$dow - 1]++;
+        }
+
+        $peak = array_search(max($values), $values, true);
+
+        return [
+            'labels' => $labels,
+            'values' => $values,
+            'peak_day' => max($values) > 0 ? $labels[$peak] : null,
         ];
     }
 

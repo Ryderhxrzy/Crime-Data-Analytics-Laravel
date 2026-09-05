@@ -285,7 +285,7 @@ class GeminiPatternAnalysisService
         // Data fingerprint in the key → the cache refreshes the moment the
         // incident table changes (migrations, new records), never serving
         // stale street counts.
-        $cacheKey = 'street_rules_v8_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
+        $cacheKey = 'street_rules_v9_' . md5(implode('|', $sorted) . '|' . $days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($streets, $days) {
             // ALL records, no date cutoff — the street modal lists every crime
@@ -368,7 +368,7 @@ class GeminiPatternAnalysisService
     {
         $days = max(30, min(730, $days));
 
-        $cacheKey = 'pattern_rules_v4_' . md5($days . '|' . $this->tableFingerprint());
+        $cacheKey = 'pattern_rules_v5_' . md5($days . '|' . $this->tableFingerprint());
 
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($days) {
             // ALL records — street sections must match the street modal lists
@@ -556,6 +556,7 @@ class GeminiPatternAnalysisService
             return [
                 'street' => $street, 'risk_level' => 'low', 'total' => 0,
                 'top_categories' => [], 'peak_hours' => [], 'categories' => [],
+                'stats' => $this->sectionStats($inc, $midpoint),
                 'summary' => $tl
                     ? 'Walang naitalang krimen sa ' . $street . ' — cleared ang kalyeng ito.'
                     : 'No crimes are recorded on ' . $street . ' — the street is cleared.',
@@ -724,6 +725,57 @@ class GeminiPatternAnalysisService
             'summary'        => $summary,
             'categories'     => $categories,
             'suggestions'    => $suggestions,
+            'stats'          => $this->sectionStats($inc, $midpoint),
+        ];
+    }
+
+    /**
+     * Chart-ready aggregates for one street: the report panel draws these
+     * (time of day, day of week, 12-month trend, resolved vs unresolved,
+     * earlier vs recent half) instead of describing them in prose only.
+     * Language-neutral — the client labels the axes.
+     */
+    private function sectionStats(Collection $inc, string $midpoint): array
+    {
+        $hourly = array_fill(0, 24, 0);
+        foreach ($inc as $i) {
+            if ($i['hour'] !== null && $i['hour'] >= 0 && $i['hour'] <= 23) {
+                $hourly[$i['hour']]++;
+            }
+        }
+
+        $dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        $dowCounts = $inc->countBy('dow');
+        $weekday = array_map(fn ($d) => (int) ($dowCounts[$d] ?? 0), $dayOrder);
+
+        $monthLabels = [];
+        $monthValues = [];
+        $byMonth = $inc->countBy('month');
+        $cursor = now()->startOfMonth()->subMonths(11);
+        for ($k = 0; $k < 12; $k++) {
+            $key = $cursor->format('Y-m');
+            $monthLabels[] = $cursor->format('M y');
+            $monthValues[] = (int) ($byMonth[$key] ?? 0);
+            $cursor->addMonth();
+        }
+
+        $done = ['solved', 'resolved', 'closed', 'cleared'];
+        $resolved = $inc->filter(fn ($i) => in_array(mb_strtolower((string) $i['status']), $done, true))->count();
+        $withTime = $inc->filter(fn ($i) => $i['hour'] !== null);
+        $night = $withTime->filter(fn ($i) => $i['hour'] >= 18 || $i['hour'] < 6)->count();
+        $recent = $inc->filter(fn ($i) => $i['date'] >= $midpoint)->count();
+
+        return [
+            'hourly'       => $hourly,
+            'weekday'      => $weekday,
+            'monthly'      => ['labels' => $monthLabels, 'values' => $monthValues],
+            'resolved'     => $resolved,
+            'unresolved'   => $inc->count() - $resolved,
+            'night'        => $night,
+            'day'          => $withTime->count() - $night,
+            'unknown_time' => $inc->count() - $withTime->count(),
+            'recent'       => $recent,
+            'earlier'      => $inc->count() - $recent,
         ];
     }
 

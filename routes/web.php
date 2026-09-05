@@ -23,6 +23,7 @@ use App\Http\Controllers\AlertsController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ExternalCrimeImportController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\StaffController;
 
 // Public landing page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
@@ -59,7 +60,9 @@ Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('l
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
 
 // Authenticated routes with JWT API middleware
-Route::middleware('jwt.api')->group(function () {
+// password.fresh: a staff member still on an emailed temporary password is
+// held on the profile page until they set their own.
+Route::middleware(['jwt.api', 'password.fresh'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/charts', [DashboardController::class, 'getChartData'])->name('dashboard.charts');
     Route::get('/time-based-trends', [DashboardController::class, 'timeBasedTrends'])->name('time-based-trends');
@@ -85,6 +88,20 @@ Route::middleware('jwt.api')->group(function () {
     Route::get('/settings', [ProfileController::class, 'settings'])->name('settings');
     Route::post('/settings', [ProfileController::class, 'updateSettings'])->name('settings.update');
     Route::get('/settings/reset', [ProfileController::class, 'resetSettings'])->name('settings.reset');
+    Route::post('/profile/password', [ProfileController::class, 'updatePassword'])
+        ->middleware('throttle:10,1')
+        ->name('profile.password');
+
+    // Staff Management (admins only). Staff sign in through the same login
+    // form; their accounts are created here and credentials emailed.
+    Route::prefix('staff')->name('staff.')->middleware('admin.only')->group(function () {
+        Route::get('/', [StaffController::class, 'index'])->name('index');
+        Route::post('/', [StaffController::class, 'store'])->name('store');
+        Route::post('/{id}/update', [StaffController::class, 'update'])->whereNumber('id')->name('update');
+        Route::post('/{id}/reset-password', [StaffController::class, 'resetPassword'])->whereNumber('id')->name('reset-password');
+        Route::post('/{id}/toggle', [StaffController::class, 'toggle'])->whereNumber('id')->name('toggle');
+        Route::delete('/{id}', [StaffController::class, 'destroy'])->whereNumber('id')->name('destroy');
+    });
 
     Route::get('/crime-hotspot', [DashboardController::class, 'crimeHotspot'])->name('crime-hotspot');
     Route::get('/risk-forecasting', [DashboardController::class, 'riskForecasting'])->name('risk-forecasting');

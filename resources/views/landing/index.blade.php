@@ -92,6 +92,16 @@
     <!-- Leaflet Heatmap Plugin -->
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
+    <!-- Street-Segment Heatmap (default): road segments coloured by crime count -->
+    <script src="{{ asset('js/street-segment-heatmap.js') }}"></script>
+    <!-- 3D view: MapLibre GL with free OpenFreeMap vector tiles (no API key) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+    <script src="{{ asset('js/crime-map-3d.js') }}"></script>
+    <style>
+        .map-3d-btn.on { background: #2f7d7b !important; color: #fff !important; border-color: #2f7d7b !important; }
+    </style>
+
     <style>
         html {
             scroll-padding-top: 6rem;

@@ -392,6 +392,12 @@ class ExternalCrimeReportService
         return isset($this->streetIndex()[mb_strtolower(trim($name))]);
     }
 
+    /** The street's polyline as [[lat, lng], ...], empty when unknown */
+    public function streetPoints(string $name): array
+    {
+        return $this->streetIndex()[mb_strtolower(trim($name))]['points'] ?? [];
+    }
+
     /**
      * A point that lies on the named street's polyline. $seed (the record code)
      * decides where along the street the point lands, so the same record always

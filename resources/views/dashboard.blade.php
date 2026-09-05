@@ -11,6 +11,16 @@ if (request()->query('token')) {
 
 @section('content')
 <div class="p-6">
+    @if (session('error'))
+        <div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <i class="fas fa-triangle-exclamation mr-2"></i>{{ session('error') }}
+        </div>
+    @endif
+    @if (session('success'))
+        <div class="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+            <i class="fas fa-circle-check mr-2"></i>{{ session('success') }}
+        </div>
+    @endif
     <!-- Page Header -->
     <div class="mb-6 bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

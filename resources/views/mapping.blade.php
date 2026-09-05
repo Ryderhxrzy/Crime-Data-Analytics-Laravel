@@ -27,6 +27,21 @@ if (request()->query('token')) {
 
     <!-- Leaflet Heatmap Plugin - jsDelivr CDN -->
     <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
+    <!-- Shared base map (tiles, zoom limits) - also used by Add Crime Record -->
+    <script src="{{ asset('js/crime-map-base.js') }}"></script>
+    <!-- Street-Segment Heatmap view: road segments coloured by crime count -->
+    <script src="{{ asset('js/street-segment-heatmap.js') }}"></script>
+    <!-- 3D view: MapLibre GL with free OpenFreeMap vector tiles (no API key) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+    <script src="{{ asset('js/crime-map-3d.js') }}"></script>
+    <style>
+        .map-3d-btn.on { background: #274d4c !important; color: #fff !important; border-color: #274d4c !important; }
+    </style>
+    <style>
+        .ssh-tooltip { border-radius: 8px; border: 1px solid #e5e7eb; box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 7px 10px; }
+        .ssh-tooltip::before { display: none; }
+    </style>
 
     <!-- Laravel App - Real-time features disabled -->
     @vite(['resources/js/app.js'])
@@ -267,6 +282,12 @@ if (request()->query('token')) {
                         <p class="text-gray-600 mt-1 text-sm lg:text-base">Interactive crime data visualization and analysis</p>
                     </div>
                     <div class="flex items-center gap-2">
+                        <a href="{{ route('crime-incident.create') }}"
+                           class="px-4 py-2 bg-white border border-alertara-300 text-alertara-800 rounded-lg hover:bg-alertara-50 transition-colors flex items-center gap-2 text-sm font-semibold"
+                           title="Enter a crime by hand and place it on a street">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Add Crime</span>
+                        </a>
                         <button id="importReportsBtn" type="button"
                                 class="px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 transition-colors flex items-center gap-2 text-sm font-semibold"
                                 title="Pull crime records from the Alertara Reports system">
@@ -284,10 +305,15 @@ if (request()->query('token')) {
                     <h2 class="text-lg font-bold text-gray-900">
                         <i class="fas fa-map mr-2 text-alertara-600"></i>Crime Map
                     </h2>
-                    <button id="mapFullscreenBtn" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm" title="Toggle Fullscreen Map">
-                        <i class="fas fa-expand"></i>
-                        <span class="hidden sm:inline">Fullscreen</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button id="map3dBtn" type="button" class="map-3d-btn px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm" title="Switch to the 3D map">
+                            <i class="fas fa-cube"></i><span class="hidden sm:inline ml-1">3D</span>
+                        </button>
+                        <button id="mapFullscreenBtn" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm" title="Toggle Fullscreen Map">
+                            <i class="fas fa-expand"></i>
+                            <span class="hidden sm:inline">Fullscreen</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Filters Section (moves into the map while enlarged) -->
@@ -306,7 +332,8 @@ if (request()->query('token')) {
                         <div>
                             <label class="block text-sm font-medium text-alertara-800 mb-2">View Mode</label>
                             <select id="visualizationMode" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                                <option value="markers" @selected($prefs['default_view_mode'] === 'markers')>Individual Markers</option>
+                                <option value="markers" @selected(!in_array($prefs['default_view_mode'], ['street-heatmap', 'heatmap', 'clusters'], true))>Individual Markers</option>
+                                <option value="street-heatmap" @selected($prefs['default_view_mode'] === 'street-heatmap')>Street-Segment Heatmap</option>
                                 <option value="heatmap" @selected($prefs['default_view_mode'] === 'heatmap')>Heat Map</option>
                                 <option value="clusters" @selected($prefs['default_view_mode'] === 'clusters')>Cluster View</option>
                             </select>
@@ -589,8 +616,17 @@ if (request()->query('token')) {
                         </div>
                     </div>
 
-                    <!-- Info Box -->
-                    <div style="margin-top: 12px; padding: 10px; background: #f0f9f8; border-left: 3px solid #274d4c; border-radius: 4px;">
+                    <!-- Street-Segment Heatmap: summary + note (default view) -->
+                    <div id="streetHeatSummary" style="margin-top: 12px;"></div>
+                    <div id="streetHeatNote" style="margin-top: 12px; padding: 10px; background: #f0f9f8; border-left: 3px solid #274d4c; border-radius: 4px;">
+                        <p style="font-size: 11px; color: #555; margin: 0; line-height: 1.4;">
+                            <i class="fas fa-road mr-1" style="color: #274d4c;"></i>
+                            <strong>Street-Segment Heatmap:</strong> each road segment is coloured by the crimes recorded along it, from blue (few) to dark red (most). Grey segments have none. Hover a street for its count, click it for the breakdown.
+                        </p>
+                    </div>
+
+                    <!-- Info Box (blurred heat map) -->
+                    <div id="heatBlobNote" style="margin-top: 12px; padding: 10px; background: #f0f9f8; border-left: 3px solid #274d4c; border-radius: 4px; display: none;">
                         <p style="font-size: 11px; color: #555; margin: 0; line-height: 1.4;">
                             <i class="fas fa-lightbulb mr-1" style="color: #274d4c;"></i>
                             <strong>Weighted by:</strong> Crime severity + clearance status. Uncleared cases increase intensity. Use sliders in heatmap mode to adjust visualization.
@@ -769,6 +805,7 @@ if (request()->query('token')) {
     <script>
         // State variables
         let heatmapLayer = null;
+        let streetHeatmap = null;       // StreetSegmentHeatmap instance (default view)
         let markerClusterGroup = null;
         let markerLayer = null;
         let currentVisualizationMode = 'markers';
@@ -861,32 +898,9 @@ if (request()->query('token')) {
             return statusMap[clearanceStatus] || { color: '#6b7280', text: clearanceStatus || 'Unknown', bgColor: '#f3f4f6' };
         }
 
-        // Reusable base-map component: the SAME map setup is used by the main
-        // crime mapping view AND the street modal, so both behave identically
-        // (tiles, zoom limits, inertia) and there is one place to fix bugs.
-        function createCrimeMap(containerId, opts) {
-            const m = L.map(containerId, Object.assign({
-                center: [14.6349, 121.0446],
-                zoom: 12,
-                minZoom: 10,
-                maxZoom: 25,
-                zoomControl: true,
-                scrollWheelZoom: true,
-                bounceAtZoomLimits: true,
-                inertia: true,
-                inertiaDeceleration: 3000,
-                inertiaMaxSpeed: 1500,
-                easeLinearity: 0.25
-            }, opts || {}));
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors',
-                maxZoom: 25,
-                minZoom: 10
-            }).addTo(m);
-
-            return m;
-        }
+        // createCrimeMap() lives in public/js/crime-map-base.js so the SAME map
+        // setup (tiles, zoom limits, inertia) is shared with the street modal
+        // and the Add Crime Record form. There is one place to fix bugs.
 
         // Initialize map
         function initializeMap() {
@@ -894,6 +908,18 @@ if (request()->query('token')) {
 
             // Create the map with default QC view (shared component)
             map = createCrimeMap('map');
+
+            // 3D view (MapLibre) mounted over the same container; it shows
+            // whatever currentData holds, so filters keep working in 3D.
+            if (typeof CrimeMap3D !== 'undefined') {
+                try {
+                    window.crimeMap3D = CrimeMap3D.create({
+                        wrapper: document.getElementById('mapContainer'),
+                        getIncidents: () => currentData,
+                        toggleButton: document.getElementById('map3dBtn'),
+                    });
+                } catch (e) { console.warn('3D view unavailable:', e); }
+            }
 
             // Boundaries get their own pane BELOW the default overlayPane (z-index 400).
             // Polygons and circle markers otherwise share one pane, so highlighting a
@@ -1546,6 +1572,7 @@ if (request()->query('token')) {
                 // Store data globally for right panel
                 currentData = filteredData;
                 selectedIncidentId = null;
+                if (window.crimeMap3D) window.crimeMap3D.refresh();
 
                 // Update right panel with statistics and incident list
                 updateStatistics(filteredData);
@@ -1557,7 +1584,9 @@ if (request()->query('token')) {
                 currentVisualizationMode = visualizationMode;
                 clearCurrentVisualization();
 
-                if (visualizationMode === 'heatmap') {
+                if (visualizationMode === 'street-heatmap') {
+                    displayStreetHeatmap(filteredData);
+                } else if (visualizationMode === 'heatmap') {
                     displayHeatmap(filteredData);
                 } else if (visualizationMode === 'markers') {
                     displayMarkers(filteredData);
@@ -1735,6 +1764,9 @@ if (request()->query('token')) {
 
         // Clear current visualization
         function clearCurrentVisualization() {
+            if (streetHeatmap) {
+                streetHeatmap.remove();
+            }
             if (heatmapLayer) {
                 map.removeLayer(heatmapLayer);
                 heatmapLayer = null;
@@ -2295,6 +2327,60 @@ if (request()->query('token')) {
         }
 
         // Display heatmap with weighted intensity and dynamic radius/blur
+        // Street-Segment Heatmap: every road segment coloured by the crimes
+        // recorded along it. This is the default view of the map.
+        function displayStreetHeatmap(data) {
+            if (typeof StreetSegmentHeatmap === 'undefined') {
+                console.warn('StreetSegmentHeatmap not loaded, falling back to markers');
+                displayMarkers(data);
+                return;
+            }
+            if (!streetHeatmap) {
+                streetHeatmap = StreetSegmentHeatmap.create(map, {
+                    onSegmentClick: function (seg, e) {
+                        const cats = seg.categories.slice(0, 4).map(c =>
+                            '<div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;color:#374151"><span>' + escStreet(c.category) + '</span><b>' + c.count + '</b></div>'
+                        ).join('');
+                        L.popup({ maxWidth: 260 })
+                            .setLatLng(e.latlng)
+                            .setContent(
+                                '<div style="font-weight:800;font-size:13px;color:#111827">' + escStreet(seg.name) + '</div>' +
+                                '<div style="font-size:11.5px;color:#6b7280;margin:2px 0 6px">' + seg.count + ' crime' + (seg.count === 1 ? '' : 's') + ' on this street segment</div>' +
+                                (cats || '<div style="font-size:11px;color:#9ca3af">No crimes recorded here</div>')
+                            )
+                            .openOn(map);
+                    }
+                });
+            }
+            streetHeatmap.setVisible(true);
+            streetHeatmap.update(data).then(function (stats) {
+                updateStreetHeatmapSummary(stats);
+            }).catch(function (err) {
+                console.error('Street-segment heatmap failed:', err);
+                displayMarkers(data);
+            });
+        }
+
+        function updateStreetHeatmapSummary(stats) {
+            const box = document.getElementById('streetHeatSummary');
+            if (!box || !stats) return;
+            const top = (stats.top || []).slice(0, 5).map(function (t, i) {
+                const ratio = stats.max > 0 ? Math.min(1, t.count / (stats.top[0] ? stats.top[0].count : 1)) : 0;
+                return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#374151;margin-top:5px">' +
+                    '<span style="width:14px;color:#9ca3af;font-weight:700">' + (i + 1) + '</span>' +
+                    '<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escStreet(t.name) + '</span>' +
+                    '<span style="width:70px;height:6px;border-radius:3px;background:#f3f4f6;overflow:hidden"><span style="display:block;height:100%;width:' + Math.round(ratio * 100) + '%;background:' + streetHeatmap.colorFor(ratio) + '"></span></span>' +
+                    '<b style="width:22px;text-align:right">' + t.count + '</b></div>';
+            }).join('');
+            box.innerHTML =
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">' +
+                    '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:6px"><div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase">Segments hit</div><div style="font-size:16px;font-weight:800;color:#111827">' + stats.segments + '</div></div>' +
+                    '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:6px"><div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase">Hottest</div><div style="font-size:16px;font-weight:800;color:#c0392b">' + stats.max + '</div></div>' +
+                    '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:6px"><div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase">Off-street</div><div style="font-size:16px;font-weight:800;color:#111827">' + stats.unmatched + '</div></div>' +
+                '</div>' +
+                (top ? '<div style="font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-top:6px">Hottest streets</div>' + top : '');
+        }
+
         function displayHeatmap(data) {
             if (typeof L.heatLayer !== 'function') {
                 setTimeout(() => {
@@ -3098,6 +3184,29 @@ if (request()->query('token')) {
             }
         }
 
+        // The intensity scale is shared by both heat views; this swaps its
+        // explanatory copy and the per-street summary between them.
+        function setStreetHeatLegend(isStreet) {
+            const note = document.getElementById('streetHeatNote');
+            const heatNote = document.getElementById('heatBlobNote');
+            const summary = document.getElementById('streetHeatSummary');
+            if (note) note.style.display = isStreet ? 'block' : 'none';
+            if (heatNote) heatNote.style.display = isStreet ? 'none' : 'block';
+            if (summary) summary.style.display = isStreet ? 'block' : 'none';
+        }
+
+        // The map opens in Individual Markers unless the user saved another default
+        (function initialiseViewModeUi() {
+            const mode = document.getElementById('visualizationMode').value;
+            const scale = document.getElementById('crimeIntensityScale');
+            if (mode === 'street-heatmap' || mode === 'heatmap') {
+                scale.classList.remove('hidden');
+                scale.style.display = 'block';
+            }
+            setStreetHeatLegend(mode === 'street-heatmap');
+            if (mode === 'heatmap' && typeof toggleRightPanel === 'function') toggleRightPanel('heatmap');
+        })();
+
         // Update visualization mode and toggle right panel
         document.getElementById('visualizationMode').addEventListener('change', function() {
             const newMode = this.value;
@@ -3107,11 +3216,20 @@ if (request()->query('token')) {
             clearArrowPointer();
 
             // Toggle right panel based on mode
-            if (newMode === 'heatmap') {
+            if (newMode === 'street-heatmap') {
+                toggleRightPanel('incidents');
+                clearAreaAnalysis();
+                // The intensity scale doubles as the street-segment legend
+                crimeIntensityScale.classList.remove('hidden');
+                crimeIntensityScale.style.display = 'block';
+                setStreetHeatLegend(true);
+            } else if (newMode === 'heatmap') {
                 toggleRightPanel('heatmap');
                 clearAreaAnalysis();
                 // Show Crime Intensity Scale in heatmap mode
+                crimeIntensityScale.classList.remove('hidden');
                 crimeIntensityScale.style.display = 'block';
+                setStreetHeatLegend(false);
             } else if (newMode === 'clusters') {
                 toggleRightPanel('clusters');
                 clearAreaAnalysis();
@@ -3300,7 +3418,9 @@ if (request()->query('token')) {
             currentData.push(incident);
 
             // Add marker/point to current visualization
-            if (currentVisualizationMode === 'heatmap') {
+            if (currentVisualizationMode === 'street-heatmap') {
+                displayStreetHeatmap(currentData);
+            } else if (currentVisualizationMode === 'heatmap') {
                 // Re-render heatmap with updated data
                 clearCurrentVisualization();
                 displayHeatmap(currentData);
@@ -3314,6 +3434,7 @@ if (request()->query('token')) {
             }
 
             // Update statistics and incident list
+            if (window.crimeMap3D) window.crimeMap3D.refresh();
             updateStatistics(currentData);
             loadTotalStats(); // Refresh total stats
             currentListData = currentData;
@@ -3328,7 +3449,8 @@ if (request()->query('token')) {
                 currentData[index] = incident;
                 // Re-render
                 clearCurrentVisualization();
-                if (currentVisualizationMode === 'heatmap') displayHeatmap(currentData);
+                if (currentVisualizationMode === 'street-heatmap') displayStreetHeatmap(currentData);
+                else if (currentVisualizationMode === 'heatmap') displayHeatmap(currentData);
                 else if (currentVisualizationMode === 'markers') displayMarkers(currentData);
                 else displayClusters(currentData);
                 updateStatistics(currentData);
@@ -3341,7 +3463,8 @@ if (request()->query('token')) {
         function handleDeletedIncident(id) {
             currentData = currentData.filter(i => i.id !== id);
             clearCurrentVisualization();
-            if (currentVisualizationMode === 'heatmap') displayHeatmap(currentData);
+            if (currentVisualizationMode === 'street-heatmap') displayStreetHeatmap(currentData);
+            else if (currentVisualizationMode === 'heatmap') displayHeatmap(currentData);
             else if (currentVisualizationMode === 'markers') displayMarkers(currentData);
             else displayClusters(currentData);
             updateStatistics(currentData);

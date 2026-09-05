@@ -61,7 +61,7 @@ if (request()->query('token')) {
                         <div>
                             <label class="block text-sm font-medium text-gray-900 mb-1">View mode</label>
                             <select name="default_view_mode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 bg-white">
-                                @foreach (['markers' => 'Individual markers', 'heatmap' => 'Heat map', 'clusters' => 'Cluster view (per street)'] as $value => $label)
+                                @foreach (['markers' => 'Individual markers (default)', 'street-heatmap' => 'Street-Segment Heatmap', 'heatmap' => 'Heat map', 'clusters' => 'Cluster view (per street)'] as $value => $label)
                                     <option value="{{ $value }}" @selected(old('default_view_mode', $preferences['default_view_mode']) === $value)>{{ $label }}</option>
                                 @endforeach
                             </select>

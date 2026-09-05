@@ -44,6 +44,47 @@
         #streetModal .sm-ai-big #streetAiSummary { font-size: 14px !important; line-height: 1.55 !important; }
         #streetModal .sm-ai-big #streetAiSuggestions,
         #streetModal .sm-ai-big #streetAiSuggestions * { font-size: 13.5px !important; line-height: 1.55 !important; }
+        /* Report dashboard: KPI tiles + charts drawn from the same numbers the
+           prose describes, so the report reads as a dashboard, not a wall of text */
+        .sa-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(74px, 1fr)); gap: 6px; margin-bottom: 8px; }
+        .sa-kpi { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 8px; min-width: 0; background: linear-gradient(180deg, #fff, #f9fafb); }
+        .sa-kpi-l { font-size: 9.5px; font-weight: 800; color: #6b7280; text-transform: uppercase; letter-spacing: .02em; }
+        .sa-kpi-v { font-size: 19px; font-weight: 800; color: #111827; line-height: 1.15; margin-top: 2px; }
+        .sa-kpi-s { font-size: 10px; color: #6b7280; margin-top: 1px; }
+        .sa-dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 8px; margin-bottom: 10px; }
+        .sa-dash-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; background: #fff; min-width: 0; }
+        .sa-dash-card.sa-wide { grid-column: 1 / -1; }
+        .sa-dash-t { font-size: 10px; font-weight: 800; color: #374151; text-transform: uppercase; display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+        .sa-dash-t i { color: #7c3aed; }
+        .sa-dash-c { position: relative; height: 150px; }
+        .sa-dash-c.sa-tall { height: 190px; }
+        .sa-dash-note { font-size: 10px; color: #6b7280; margin-top: 4px; }
+        /* Per-street mini visuals inside each street section */
+        .sa-sec-viz { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 10px; align-items: center; margin-bottom: 8px; }
+        .sa-sec-viz.sa-single { grid-template-columns: 1fr; }
+        .sa-stack { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #f3f4f6; }
+        .sa-stack span { display: block; height: 100%; min-width: 2px; }
+        .sa-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; }
+        .sa-legend span { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: #4b5563; font-weight: 600; }
+        .sa-legend i { width: 8px; height: 8px; border-radius: 9999px; display: inline-block; }
+        .sa-share { height: 5px; border-radius: 3px; background: #f3f4f6; overflow: hidden; flex: 1; min-width: 60px; }
+        .sa-share span { display: block; height: 100%; border-radius: 3px; }
+        .sa-impact { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        .sa-impact-bar { flex: 1; height: 8px; border-radius: 4px; background: #f3f4f6; overflow: hidden; }
+        .sa-impact-bar span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #22c55e, #15803d); }
+        .sa-mini-c { position: relative; height: 64px; }
+        .sa-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+        .sa-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 9999px; background: #f3f4f6; color: #374151; }
+        .sa-chip i { font-size: 9.5px; opacity: .8; }
+        .sa-details-toggle { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 10.5px; font-weight: 800; color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+        .sa-details-toggle:hover { background: #ede9fe; }
+        .sa-details { display: none; margin-top: 8px; border-top: 1px dashed #e5e7eb; padding-top: 8px; }
+        .sa-details.open { display: block; }
+        .sa-sugg-head { display: flex; align-items: flex-start; gap: 8px; }
+        .sa-sugg-title { font-size: 12.5px; font-weight: 800; color: #111; flex: 1; line-height: 1.35; }
+        .sa-sugg-title i { color: #7c3aed; margin-right: 4px; }
+        .sa-prio { flex-shrink: 0; font-size: 9.5px; font-weight: 800; padding: 2px 7px; border-radius: 9999px; }
+        @media (max-width: 480px) { .sa-sec-viz { grid-template-columns: 1fr; } }
         /* Fullscreen mode (expand button) */
         #streetModal.sm-nopad { padding: 0; }
         #streetModal .sm-card.sm-full { max-width: 100%; width: 100%; height: 100%; border-radius: 0; }
@@ -169,7 +210,7 @@
                         </button>
 
                         <div id="streetAiPlaceholder" style="border: 1px dashed #d1d5db; background: #f9fafb; border-radius: 10px; padding: 12px; font-size: 11.5px; color: #6b7280; text-align: center;">
-                            The system reviews the crimes on every selected street and suggests what to do per street, based on the crime categories most frequently committed there. Press <span style="font-weight: 700; color: #7c3aed;">Generate suggestions</span> — instant, no AI quota used.
+                            The system reviews the crimes on every selected street and builds a visual report — crime mix, time-of-day, day-of-week, 12-month trend and case status charts — with what to do per street, based on the crime categories most frequently committed there. Press <span style="font-weight: 700; color: #7c3aed;">Generate suggestions</span> — instant, no AI quota used.
                         </div>
                         <div id="streetAiLoading" style="display: none; border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 10px; padding: 14px; font-size: 12px; color: #6d28d9;">
                             <i class="fas fa-spinner fa-spin mr-1"></i>Analyzing the crimes on the selected street(s)…
@@ -180,6 +221,8 @@
                         </div>
                         <div id="streetAiResults" style="display: none;">
                             <p id="streetAiSummary" style="font-size: 12.5px; color: #374151; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; margin: 0 0 8px;"></p>
+                            <!-- Charts + KPI tiles built from the report numbers -->
+                            <div id="streetAiDash"></div>
                             <div id="streetAiSuggestions" style="display: grid; gap: 8px;"></div>
                         </div>
                     </div>
@@ -1238,6 +1281,9 @@
         function resetStreetAiSection() {
             latestStreetAi = null;
             streetAiSeq++;
+            destroyStreetAiCharts();
+            const dash = document.getElementById('streetAiDash');
+            if (dash) dash.innerHTML = '';
 
             document.getElementById('streetAiPlaceholder').style.display = 'block';
             document.getElementById('streetAiLoading').style.display = 'none';
@@ -1294,10 +1340,12 @@
                 if (seq !== streetAiSeq) return;   // user switched streets meanwhile
 
                 latestStreetAi = data;
-                renderStreetAiPanel();
 
+                // Show the panel first: the charts size themselves from the
+                // laid-out canvas, which a display:none container can't give
                 loading.style.display = 'none';
                 results.style.display = 'block';
+                renderStreetAiPanel();
                 document.getElementById('streetAiSaveBtn').style.display = 'inline-block';
             } catch (e) {
                 console.error('Street AI failed:', e);
@@ -1312,10 +1360,240 @@
             }
         }
 
+        // ------------------------------------------------------------------
+        // Report charts. Every Chart.js instance the report creates is kept
+        // here so a re-render (language toggle, new analysis) can destroy
+        // them before the canvases are replaced.
+        // ------------------------------------------------------------------
+        let streetAiCharts = [];
+        function destroyStreetAiCharts() {
+            streetAiCharts.forEach(function (c) { try { c.destroy(); } catch (e) {} });
+            streetAiCharts = [];
+        }
+        function saChart(id, cfg) {
+            if (typeof Chart === 'undefined') return null;
+            const el = document.getElementById(id);
+            if (!el) return null;
+            const c = new Chart(el, cfg);
+            streetAiCharts.push(c);
+            return c;
+        }
+        const SA_HOUR_LABELS = Array.from({ length: 24 }, function (_, h) {
+            return (h % 12 || 12) + (h < 12 ? 'AM' : 'PM');
+        });
+        function saDayLabels() {
+            return isTl() ? ['Lun', 'Mar', 'Miy', 'Huw', 'Biy', 'Sab', 'Lin'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        }
+        const SA_RISK_COLOR = { high: '#dc2626', medium: '#f59e0b', low: '#16a34a' };
+        function saBaseOpts(extra) {
+            return Object.assign({
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 350 },
+                plugins: { legend: { display: false } }
+            }, extra || {});
+        }
+        function saAxis(opts) {
+            return Object.assign({ grid: { display: false }, ticks: { font: { size: 9 }, color: '#6b7280' } }, opts || {});
+        }
+        function saYAxis(opts) {
+            return Object.assign({ beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { precision: 0, font: { size: 9 }, color: '#6b7280' } }, opts || {});
+        }
+
+        // KPI tiles + the chart grid at the top of the report, aggregated
+        // across every analyzed street. Numbers come from the section stats
+        // the rules engine returns; labels follow the language toggle.
+        function renderStreetAiDashboard(a, secs) {
+            const dash = document.getElementById('streetAiDash');
+            if (!dash) return;
+            const T = isTl();
+            const list = (secs || []).filter(function (x) { return x && typeof x === 'object'; });
+            if (!list.length) { dash.innerHTML = ''; return; }
+
+            // ---- aggregate ----
+            let total = 0, resolved = 0, unresolved = 0, night = 0, day = 0, recent = 0, earlier = 0;
+            const hourly = new Array(24).fill(0);
+            const weekday = new Array(7).fill(0);
+            let monthLabels = null;
+            const monthly = new Array(12).fill(0);
+            const cats = {};
+            let hasHour = false;
+            list.forEach(function (sec) {
+                total += Number(sec.total) || 0;
+                const st = sec.stats || {};
+                resolved += Number(st.resolved) || 0;
+                unresolved += Number(st.unresolved) || 0;
+                night += Number(st.night) || 0;
+                day += Number(st.day) || 0;
+                recent += Number(st.recent) || 0;
+                earlier += Number(st.earlier) || 0;
+                (st.hourly || []).forEach(function (v, i) { if (i < 24) { hourly[i] += Number(v) || 0; if (v) hasHour = true; } });
+                (st.weekday || []).forEach(function (v, i) { if (i < 7) weekday[i] += Number(v) || 0; });
+                if (st.monthly && st.monthly.values) {
+                    if (!monthLabels) monthLabels = st.monthly.labels || [];
+                    st.monthly.values.forEach(function (v, i) { if (i < 12) monthly[i] += Number(v) || 0; });
+                }
+                (sec.categories || []).forEach(function (cb) {
+                    const key = cb.category || cb.category_label || '?';
+                    if (!cats[key]) cats[key] = { label: cb.category_label || cb.category, count: 0, unresolved: 0 };
+                    cats[key].count += Number(cb.count) || 0;
+                    cats[key].unresolved += Number(cb.unresolved) || 0;
+                });
+            });
+            const catList = Object.keys(cats).map(function (k) { return Object.assign({ key: k }, cats[k]); })
+                .sort(function (x, y) { return y.count - x.count; });
+            const allSugg = (a.suggestions && a.suggestions.length) ? a.suggestions
+                : list.reduce(function (acc, sec) {
+                    return acc.concat((sec.suggestions || []).map(function (sg) { return Object.assign({ street: sec.street }, sg); }));
+                }, []);
+            const highPrio = allSugg.filter(function (sg) { return String(sg.priority || '').toLowerCase() === 'high'; }).length;
+            const withTime = night + day;
+            const nightPct = withTime ? Math.round(night / withTime * 100) : null;
+            const unresolvedPct = total ? Math.round(unresolved / total * 100) : 0;
+            const trendPct = earlier > 0 ? Math.round((recent - earlier) / earlier * 100) : (recent > 0 ? 100 : 0);
+            const trendUp = recent > earlier;
+            const trendFlat = recent === earlier;
+            const trendColor = trendFlat ? '#6b7280' : (trendUp ? '#b91c1c' : '#15803d');
+            const trendIcon = trendFlat ? 'fa-arrows-left-right' : (trendUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down');
+            const peakHourIdx = hasHour ? hourly.indexOf(Math.max.apply(null, hourly)) : -1;
+            const peakDayIdx = Math.max.apply(null, weekday) > 0 ? weekday.indexOf(Math.max.apply(null, weekday)) : -1;
+            const multi = list.length > 1;
+
+            const kpi = function (label, value, sub, color) {
+                return '<div class="sa-kpi"><div class="sa-kpi-l">' + label + '</div>' +
+                    '<div class="sa-kpi-v"' + (color ? ' style="color:' + color + '"' : '') + '>' + value + '</div>' +
+                    (sub ? '<div class="sa-kpi-s">' + sub + '</div>' : '') + '</div>';
+            };
+            const card = function (id, title, icon, note, cls) {
+                return '<div class="sa-dash-card' + (cls ? ' ' + cls : '') + '"><div class="sa-dash-t"><i class="fas ' + icon + '"></i>' + title + '</div>' +
+                    '<div class="sa-dash-c' + (cls === 'sa-wide' ? ' sa-tall' : '') + '"><canvas id="' + id + '"></canvas></div>' +
+                    (note ? '<div class="sa-dash-note">' + note + '</div>' : '') + '</div>';
+            };
+
+            let html = '<div class="sa-kpis">' +
+                kpi(T ? 'Kabuuang krimen' : 'Total crimes', total, T ? list.length + ' kalye' : list.length + ' street' + (multi ? 's' : '')) +
+                kpi(T ? 'Di pa resolbado' : 'Unresolved', unresolved, unresolvedPct + '%' + (T ? ' ng kaso' : ' of cases'), unresolved ? '#b91c1c' : '#15803d') +
+                kpi(T ? 'Sa gabi' : 'Night-time', nightPct === null ? '—' : nightPct + '%', T ? '6PM – 6AM' : '6 PM – 6 AM', '#4338ca') +
+                kpi('Trend', '<i class="fas ' + trendIcon + '" style="font-size:14px;margin-right:4px;"></i>' + (trendFlat ? (T ? 'steady' : 'flat') : (trendPct > 0 ? '+' : '') + trendPct + '%'),
+                    T ? recent + ' kamakailan vs ' + earlier + ' nauna' : recent + ' recent vs ' + earlier + ' earlier', trendColor) +
+                kpi(T ? 'Mga aksyon' : 'Actions', allSugg.length, highPrio ? highPrio + ' high priority' : (T ? 'walang high priority' : 'no high priority'), highPrio ? '#7c3aed' : undefined) +
+            '</div>';
+
+            html += '<div class="sa-dash-grid">';
+            if (catList.length) html += card('saDashCats', T ? 'Uri ng krimen' : 'Crime mix', 'fa-chart-pie',
+                (T ? 'Pinaka-madalas: ' : 'Most common: ') + escStreet(catList[0].label) + ' (' + catList[0].count + ')');
+            if (multi) html += card('saDashStreets', T ? 'Krimen bawat kalye' : 'Crimes per street', 'fa-road',
+                T ? 'Kulay = antas ng panganib' : 'Bar colour = risk level');
+            else html += card('saDashStatus', T ? 'Estado ng kaso' : 'Case status', 'fa-folder-open',
+                T ? resolved + ' resolbado · ' + unresolved + ' di pa' : resolved + ' resolved · ' + unresolved + ' open');
+            if (hasHour) html += card('saDashHours', T ? 'Oras ng araw' : 'Time of day', 'fa-clock',
+                peakHourIdx >= 0 ? 'Peak: ' + SA_HOUR_LABELS[peakHourIdx] + (T ? ' · madilim = gabi' : ' · dark bars = night') : '');
+            html += card('saDashDays', T ? 'Araw ng linggo' : 'Day of week', 'fa-calendar-week',
+                peakDayIdx >= 0 ? (T ? 'Pinaka-abala: ' : 'Busiest: ') + saDayLabels()[peakDayIdx] : '');
+            if (monthLabels) html += card('saDashMonths', T ? '12-buwang trend' : '12-month trend', 'fa-chart-line',
+                T ? 'Krimen kada buwan sa napiling kalye' : 'Crimes per month on the selected street' + (multi ? 's' : ''), 'sa-wide');
+            if (multi) html += card('saDashStatus', T ? 'Estado ng kaso bawat kalye' : 'Case status per street', 'fa-folder-open',
+                T ? 'Berde = resolbado · pula = di pa' : 'Green = resolved · red = unresolved', 'sa-wide');
+            const impactRows = allSugg.map(function (sg) {
+                const pct = Number((sg.expected_impact || {}).estimated_change_percent);
+                return { label: sg.action || '', street: sg.street || '', pct: isFinite(pct) ? Math.abs(pct) : 0, priority: String(sg.priority || 'low').toLowerCase() };
+            }).filter(function (r) { return r.pct > 0; }).sort(function (x, y) { return y.pct - x.pct; }).slice(0, 8);
+            if (impactRows.length) html += card('saDashImpact', T ? 'Inaasahang pagbaba kada aksyon' : 'Expected reduction per action', 'fa-arrow-trend-down',
+                T ? 'Tinatayang % na pagbaba ng krimen kung ipapatupad · pula = high priority' : 'Estimated % fewer crimes if implemented · red = high priority', 'sa-wide');
+            html += '</div>';
+            dash.innerHTML = html;
+
+            // ---- draw ----
+            const PRIO_COLOR = { high: '#dc2626', medium: '#f59e0b', low: '#9ca3af' };
+            if (catList.length) saChart('saDashCats', {
+                type: 'doughnut',
+                data: { labels: catList.map(function (c) { return c.label; }),
+                        datasets: [{ data: catList.map(function (c) { return c.count; }),
+                                     backgroundColor: catList.map(function (c) { return colorForCategory(c.key); }),
+                                     borderColor: '#fff', borderWidth: 2 }] },
+                options: saBaseOpts({ cutout: '58%', plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 9, font: { size: 9.5 }, padding: 6 } },
+                    tooltip: { callbacks: { label: function (it) { return ' ' + it.label + ': ' + it.parsed + ' (' + Math.round(it.parsed / Math.max(1, total) * 100) + '%)'; } } } } })
+            });
+            if (multi) saChart('saDashStreets', {
+                type: 'bar',
+                data: { labels: list.map(function (sec) { return sec.street; }),
+                        datasets: [{ data: list.map(function (sec) { return sec.total || 0; }),
+                                     backgroundColor: list.map(function (sec) { return SA_RISK_COLOR[String(sec.risk_level || 'low').toLowerCase()] || '#9ca3af'; }),
+                                     borderRadius: 4, maxBarThickness: 18 }] },
+                options: saBaseOpts({ indexAxis: 'y', scales: { x: saYAxis(), y: saAxis({ ticks: { font: { size: 9 }, color: '#374151', autoSkip: false } }) } })
+            });
+            saChart('saDashStatus', multi ? {
+                type: 'bar',
+                data: { labels: list.map(function (sec) { return sec.street; }),
+                        datasets: [
+                            { label: T ? 'Resolbado' : 'Resolved', data: list.map(function (sec) { return (sec.stats || {}).resolved || 0; }), backgroundColor: '#22c55e', borderRadius: 3, maxBarThickness: 16 },
+                            { label: T ? 'Di pa resolbado' : 'Unresolved', data: list.map(function (sec) { return (sec.stats || {}).unresolved || 0; }), backgroundColor: '#ef4444', borderRadius: 3, maxBarThickness: 16 }
+                        ] },
+                options: saBaseOpts({ indexAxis: 'y', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 9.5 } } } },
+                    scales: { x: saYAxis({ stacked: true }), y: saAxis({ stacked: true, ticks: { font: { size: 9 }, color: '#374151', autoSkip: false } }) } })
+            } : {
+                type: 'doughnut',
+                data: { labels: [T ? 'Resolbado' : 'Resolved', T ? 'Di pa resolbado' : 'Unresolved'],
+                        datasets: [{ data: [resolved, unresolved], backgroundColor: ['#22c55e', '#ef4444'], borderColor: '#fff', borderWidth: 2 }] },
+                options: saBaseOpts({ cutout: '60%', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 9.5 } } } } })
+            });
+            if (hasHour) saChart('saDashHours', {
+                type: 'bar',
+                data: { labels: SA_HOUR_LABELS,
+                        datasets: [{ data: hourly, backgroundColor: hourly.map(function (_, h) { return (h >= 18 || h < 6) ? '#4338ca' : '#93c5fd'; }), borderRadius: 2 }] },
+                options: saBaseOpts({ scales: { x: saAxis({ ticks: { font: { size: 8 }, color: '#6b7280', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } }), y: saYAxis() },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (it) { return ' ' + it.parsed.y + (T ? ' krimen' : ' crime(s)'); } } } } })
+            });
+            saChart('saDashDays', {
+                type: 'bar',
+                data: { labels: saDayLabels(),
+                        datasets: [{ data: weekday, backgroundColor: weekday.map(function (v, i) { return i === peakDayIdx ? '#7c3aed' : '#c4b5fd'; }), borderRadius: 4, maxBarThickness: 26 }] },
+                options: saBaseOpts({ scales: { x: saAxis(), y: saYAxis() } })
+            });
+            if (monthLabels) saChart('saDashMonths', {
+                type: 'line',
+                data: { labels: monthLabels,
+                        datasets: [{ data: monthly, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.12)', fill: true, tension: 0.35,
+                                     pointRadius: 3, pointBackgroundColor: '#7c3aed', pointBorderColor: '#fff', pointBorderWidth: 1.5 }] },
+                options: saBaseOpts({ scales: { x: saAxis({ ticks: { font: { size: 9 }, color: '#6b7280', maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }), y: saYAxis() } })
+            });
+            if (impactRows.length) saChart('saDashImpact', {
+                type: 'bar',
+                data: { labels: impactRows.map(function (r) { return r.label.length > 42 ? r.label.slice(0, 41) + '…' : r.label; }),
+                        datasets: [{ data: impactRows.map(function (r) { return r.pct; }),
+                                     backgroundColor: impactRows.map(function (r) { return PRIO_COLOR[r.priority] || PRIO_COLOR.low; }), borderRadius: 4, maxBarThickness: 14 }] },
+                options: saBaseOpts({ indexAxis: 'y',
+                    scales: { x: saYAxis({ ticks: { precision: 0, font: { size: 9 }, callback: function (v) { return '-' + v + '%'; } } }),
+                              y: saAxis({ ticks: { font: { size: 9 }, color: '#374151', autoSkip: false } }) },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: {
+                        title: function (its) { const r = impactRows[its[0].dataIndex]; return (multi && r.street ? r.street + ' — ' : '') + r.label; },
+                        label: function (it) { return ' ~' + it.parsed.x + '% ' + (T ? 'mas kaunting krimen' : 'fewer crimes'); } } } } })
+            });
+        }
+
+        // Per-street mini charts (hourly bars) drawn after the street sections
+        // are in the DOM. Only for multi-street reports: with one street the
+        // dashboard above already shows the same thing at full size.
+        function renderStreetAiMiniCharts(secs) {
+            (secs || []).forEach(function (sec, idx) {
+                const st = sec.stats || {};
+                if (!st.hourly || !document.getElementById('saSecHour' + idx)) return;
+                saChart('saSecHour' + idx, {
+                    type: 'bar',
+                    data: { labels: SA_HOUR_LABELS,
+                            datasets: [{ data: st.hourly, backgroundColor: st.hourly.map(function (_, h) { return (h >= 18 || h < 6) ? '#4338ca' : '#93c5fd'; }), borderRadius: 1 }] },
+                    options: saBaseOpts({ animation: false,
+                        scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { title: function (its) { return its[0].label; }, label: function (it) { return ' ' + it.parsed.y; } } } } })
+                });
+            });
+        }
+
         // Renders latestStreetAi into the modal panel — separated from the
         // fetch so the language toggle can re-render without a new request
         function renderStreetAiPanel() {
                 if (!latestStreetAi) return;
+                destroyStreetAiCharts();
                 const risk = document.getElementById('streetAiRisk');
                 const a = latestStreetAi.analysis || {};
 
@@ -1357,27 +1635,9 @@
                         return '<div style="display:flex;gap:6px;font-size:11px;color:#78350f;line-height:1.5;margin-top:2px;">' +
                             '<i class="fas ' + icon + '" style="color:#d97706;margin-top:2px;flex-shrink:0;"></i><span>' + html + '</span></div>';
                     };
-                    const sev = escStreet(String(ev.severity || '').toUpperCase());
                     return '<div style="margin-top:6px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">' +
                         '<div style="font-size:9.5px;font-weight:800;color:#92400e;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-magnifying-glass mr-1"></i>' + (T ? 'Basehan — mga naitalang krimen' : 'Basis — recorded crimes') + '</div>' +
-                        row('fa-hashtag', T
-                            ? '<b>' + ev.cases + ' naitalang kaso</b> (' + ev.share + '% ng krimen sa kalyeng ito) — ang tindi ay <b>' + sev + '</b>.'
-                            : '<b>' + ev.cases + ' recorded case' + (ev.cases === 1 ? '' : 's') + '</b> (' + ev.share + '% of this street\'s crimes) — severity <b>' + sev + '</b>.') +
                         (ev.modus && ev.modus.length ? row('fa-user-ninja', (T ? 'Paano ginawa: ' : 'How they were committed: ') + ev.modus.map(escStreet).join('; ') + '.') : '') +
-                        (typeof ev.unresolved === 'number' ? row('fa-folder-open', (ev.unresolved > 0
-                            ? (T
-                                ? '<b>' + ev.unresolved + ' sa ' + ev.cases + ' ang hindi pa naresolba</b> — i-follow up sa mga nakatalagang opisyal.'
-                                : '<b>' + ev.unresolved + ' of ' + ev.cases + ' still unresolved</b> — follow up with the assigned officers.')
-                            : (T
-                                ? 'Lahat ng ' + ev.cases + ' kaso ay naresolba na.'
-                                : 'All ' + ev.cases + ' cases already resolved.'))) : '') +
-                        ((ev.busiest_day || ev.latest) ? row('fa-calendar-day',
-                            (ev.busiest_day ? (T
-                                ? 'Karamihan ng kaso ay tuwing <b>' + escStreet(ev.busiest_day) + '</b>. '
-                                : 'Most cases fall on <b>' + escStreet(ev.busiest_day) + 's</b>. ') : '') +
-                            (ev.latest ? (T
-                                ? 'Pinakahuling kaso: <b>' + escStreet(ev.latest) + '</b>.'
-                                : 'Most recent case: <b>' + escStreet(ev.latest) + '</b>.') : '')) : '') +
                         caseLog(ev.cases_list) +
                     '</div>';
                 };
@@ -1408,48 +1668,122 @@
                 const suggCard = function (s, showStreet) {
                     const imp = s.expected_impact || {};
                     const d = s.details || {};
+                    const ev = d.evidence || {};
                     const pct = Number(imp.estimated_change_percent);
                     const pr = String(s.priority || 'low').toLowerCase();
+                    const T = isTl();
+                    const chip = function (icon, html, style) {
+                        return '<span class="sa-chip"' + (style ? ' style="' + style + '"' : '') + '><i class="fas ' + icon + '"></i>' + html + '</span>';
+                    };
+
+                    // What you see at a glance: the action, its priority, and
+                    // the facts as chips (no sentences)
+                    let chips = '';
+                    if (showStreet && s.street) chips += chip('fa-road', escStreet(s.street), 'background:#fff7ed;color:#b45309;');
+                    if (s.time_window) chips += chip('fa-clock', escStreet(s.time_window), 'background:#f5f3ff;color:#6d28d9;');
+                    if (ev.cases) chips += chip('fa-hashtag', ev.cases + (T ? ' kaso' : ' case' + (ev.cases === 1 ? '' : 's')) + (ev.share ? ' · ' + ev.share + '%' : ''));
+                    if (typeof ev.unresolved === 'number') chips += chip('fa-folder-open', ev.unresolved + (T ? ' bukas' : ' open'),
+                        ev.unresolved > 0 ? 'background:#fee2e2;color:#b91c1c;' : 'background:#dcfce7;color:#15803d;');
+                    if (ev.busiest_day) chips += chip('fa-calendar-day', escStreet(ev.busiest_day));
+                    if (ev.latest) chips += chip('fa-calendar-check', escStreet(ev.latest));
+                    if (d.lead) chips += chip('fa-user-shield', escStreet(d.lead));
+                    if (d.timeline) chips += chip('fa-hourglass-half', escStreet(d.timeline));
+
+                    const gauge = isFinite(pct) ? '<div class="sa-impact">' +
+                            '<span style="font-size:10.5px;font-weight:700;color:#374151;white-space:nowrap;"><i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1" style="color:' + (pct < 0 ? '#15803d' : '#6b7280') + ';"></i>' + (T ? 'Kapag ipinatupad' : 'If implemented') + '</span>' +
+                            '<div class="sa-impact-bar"><span style="width:' + Math.min(100, Math.abs(pct)) + '%;"></span></div>' +
+                            '<span style="font-size:12px;font-weight:800;color:' + (pct < 0 ? '#15803d' : '#374151') + ';white-space:nowrap;">' + (pct < 0 ? '−' + Math.abs(pct) + '%' : (T ? 'steady' : 'stable')) + '</span>' +
+                        '</div>' : '';
+
+                    // Everything written out lives behind the Details toggle
+                    let details = '';
+                    if (s.rationale) details += '<div style="font-size:11.5px;color:#4b5563;line-height:1.45;">' + escStreet(s.rationale) + '</div>';
+                    if (imp.explanation) details += '<div style="font-size:11px;color:#6b7280;margin-top:3px;">' + escStreet(imp.explanation) + '</div>';
+                    details += evidenceBlock(ev);
+                    if (d.coverage) details += '<div style="font-size:11px;color:#374151;margin-top:5px;"><i class="fas fa-location-crosshairs mr-1" style="color:#7c3aed;"></i>' + escStreet(d.coverage) + '</div>';
+                    if (d.steps && d.steps.length) details += '<div style="margin-top:6px;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">' +
+                        '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">' + (T ? 'Paano ipapatupad' : 'How to implement') + '</div>' +
+                        d.steps.map(function (st, i2) {
+                            return '<div style="display:flex;gap:6px;font-size:11px;color:#4b5563;line-height:1.5;margin-top:2px;">' +
+                                '<span style="flex-shrink:0;font-weight:800;color:#7c3aed;">' + (i2 + 1) + '.</span><span>' + escStreet(st) + '</span></div>';
+                        }).join('') + '</div>';
+                    if (d.resources) details += '<div style="font-size:11px;color:#4b5563;margin-top:5px;"><i class="fas fa-toolbox mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">' + (T ? 'Kailangan:' : 'Needs:') + '</span> ' + escStreet(d.resources) + '</div>';
+                    if (d.tips && d.tips.length) details += '<div style="margin-top:6px;padding:8px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;">' +
+                        '<div style="font-size:9.5px;font-weight:800;color:#0369a1;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-people-roof mr-1"></i>' + (T ? 'Mga tip para sa mga residente' : 'Tips for residents') + '</div>' +
+                        d.tips.map(function (tp) {
+                            return '<div style="display:flex;gap:6px;font-size:11px;color:#0c4a6e;line-height:1.5;margin-top:2px;">' +
+                                '<i class="fas fa-check" style="color:#0284c7;margin-top:2px;flex-shrink:0;"></i><span>' + escStreet(tp) + '</span></div>';
+                        }).join('') + '</div>';
+                    if (d.kpi) details += '<div style="font-size:11px;color:#15803d;font-weight:600;margin-top:5px;"><i class="fas fa-bullseye mr-1"></i>' + escStreet(d.kpi) + '</div>';
+
                     return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;">' +
-                        '<div style="display:flex;align-items:flex-start;gap:8px;">' +
-                            '<div style="font-size:12.5px;font-weight:700;color:#111;flex:1;"><i class="fas fa-shield-halved mr-1" style="color:#7c3aed;"></i>' + escStreet(s.action) + '</div>' +
-                            '<span style="flex-shrink:0;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9999px;' + (prioStyle[pr] || prioStyle.low) + '">' + pr.toUpperCase() + '</span>' +
+                        '<div class="sa-sugg-head">' +
+                            '<div class="sa-sugg-title"><i class="fas fa-shield-halved"></i>' + escStreet(s.action) + '</div>' +
+                            '<span class="sa-prio" style="' + (prioStyle[pr] || prioStyle.low) + '">' + pr.toUpperCase() + '</span>' +
                         '</div>' +
-                        (showStreet && s.street ? '<div style="font-size:11px;color:#b45309;font-weight:600;margin-top:3px;"><i class="fas fa-road mr-1"></i>' + escStreet(s.street) + '</div>' : '') +
-                        (s.time_window ? '<div style="font-size:11px;color:#6d28d9;font-weight:600;margin-top:3px;"><i class="fas fa-clock mr-1"></i>' + escStreet(s.time_window) + '</div>' : '') +
-                        (s.rationale ? '<div style="font-size:11.5px;color:#4b5563;margin-top:4px;line-height:1.45;">' + escStreet(s.rationale) + '</div>' : '') +
-                        evidenceBlock(d.evidence) +
-                        (d.coverage ? '<div style="font-size:11px;color:#374151;margin-top:5px;"><i class="fas fa-location-crosshairs mr-1" style="color:#7c3aed;"></i>' + escStreet(d.coverage) + '</div>' : '') +
-                        (d.steps && d.steps.length ? '<div style="margin-top:6px;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">' +
-                            '<div style="font-size:9.5px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">' + (isTl() ? 'Paano ipapatupad' : 'How to implement') + '</div>' +
-                            d.steps.map(function (st, i2) {
-                                return '<div style="display:flex;gap:6px;font-size:11px;color:#4b5563;line-height:1.5;margin-top:2px;">' +
-                                    '<span style="flex-shrink:0;font-weight:800;color:#7c3aed;">' + (i2 + 1) + '.</span><span>' + escStreet(st) + '</span></div>';
-                            }).join('') + '</div>' : '') +
-                        (d.resources ? '<div style="font-size:11px;color:#4b5563;margin-top:5px;"><i class="fas fa-toolbox mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">' + (isTl() ? 'Kailangan:' : 'Needs:') + '</span> ' + escStreet(d.resources) + '</div>' : '') +
-                        (d.lead ? '<div style="font-size:11px;color:#4b5563;margin-top:3px;"><i class="fas fa-user-shield mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">' + (isTl() ? 'Mamumuno:' : 'Lead:') + '</span> ' + escStreet(d.lead) + '</div>' : '') +
-                        (d.timeline ? '<div style="font-size:11px;color:#4b5563;margin-top:3px;"><i class="fas fa-calendar-check mr-1" style="color:#7c3aed;"></i><span style="font-weight:700;color:#374151;">Timeline:</span> ' + escStreet(d.timeline) + '</div>' : '') +
-                        (d.tips && d.tips.length ? '<div style="margin-top:6px;padding:8px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;">' +
-                            '<div style="font-size:9.5px;font-weight:800;color:#0369a1;text-transform:uppercase;margin-bottom:3px;"><i class="fas fa-people-roof mr-1"></i>' + (isTl() ? 'Mga tip sa pag-iwas para sa mga residente' : 'Prevention tips for residents') + '</div>' +
-                            d.tips.map(function (tp) {
-                                return '<div style="display:flex;gap:6px;font-size:11px;color:#0c4a6e;line-height:1.5;margin-top:2px;">' +
-                                    '<i class="fas fa-check" style="color:#0284c7;margin-top:2px;flex-shrink:0;"></i><span>' + escStreet(tp) + '</span></div>';
-                            }).join('') + '</div>' : '') +
-                        (isFinite(pct) ? '<div style="font-size:11px;font-weight:700;color:' + (pct < 0 ? '#15803d' : '#374151') + ';margin-top:6px;">' +
-                            '<i class="fas ' + (pct < 0 ? 'fa-arrow-trend-down' : 'fa-arrows-left-right') + ' mr-1"></i>' +
-                            (isTl() ? 'Kapag ipinatupad: ' : 'If implemented: ') + (pct < 0 ? '~' + Math.abs(pct) + '% ' + (isTl() ? 'mas kaunting krimen' : 'fewer crimes') : 'stable') +
-                            (imp.explanation ? ' — <span style="font-weight:400;color:#6b7280;">' + escStreet(imp.explanation) + '</span>' : '') + '</div>' : '') +
-                        (d.kpi ? '<div style="font-size:11px;color:#15803d;font-weight:600;margin-top:3px;"><i class="fas fa-bullseye mr-1"></i>' + escStreet(d.kpi) + '</div>' : '') +
+                        (chips ? '<div class="sa-chips">' + chips + '</div>' : '') +
+                        gauge +
+                        (details ? '<button type="button" class="sa-details-toggle"><i class="fas fa-chevron-down"></i>' + (T ? 'Detalye, hakbang at tips' : 'Details, steps & tips') + '</button>' +
+                            '<div class="sa-details">' + details + '</div>' : '') +
                     '</div>';
                 };
 
                 // Rule-engine responses carry one SECTION PER STREET; render
                 // each street separately with its own risk chip and summary
+                // Street facts as chips: peak hours, busiest day, trend, open
+                // cases. Replaces the one-paragraph street summary.
+                const secChips = function (sec) {
+                    const st = sec.stats || {};
+                    const T = isTl();
+                    const chip = function (icon, html, style) {
+                        return '<span class="sa-chip"' + (style ? ' style="' + style + '"' : '') + '><i class="fas ' + icon + '"></i>' + html + '</span>';
+                    };
+                    let out = '';
+                    if (sec.peak_hours && sec.peak_hours.length) out += chip('fa-clock', escStreet(sec.peak_hours.join(', ')), 'background:#f5f3ff;color:#6d28d9;');
+                    if (st.weekday && st.weekday.some(function (v) { return v > 0; })) {
+                        const idx = st.weekday.indexOf(Math.max.apply(null, st.weekday));
+                        out += chip('fa-calendar-day', saDayLabels()[idx]);
+                    }
+                    if (typeof st.recent === 'number' && typeof st.earlier === 'number' && (st.recent || st.earlier)) {
+                        const up = st.recent > st.earlier, flat = st.recent === st.earlier;
+                        out += chip(flat ? 'fa-arrows-left-right' : (up ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'),
+                            (T ? (flat ? 'steady' : (up ? 'tumataas' : 'bumababa')) : (flat ? 'steady' : (up ? 'rising' : 'falling'))) + ' · ' + st.recent + ' vs ' + st.earlier,
+                            flat ? '' : (up ? 'background:#fee2e2;color:#b91c1c;' : 'background:#dcfce7;color:#15803d;'));
+                    }
+                    if (typeof st.unresolved === 'number') out += chip('fa-folder-open', st.unresolved + (T ? ' bukas' : ' open'),
+                        st.unresolved > 0 ? 'background:#fee2e2;color:#b91c1c;' : 'background:#dcfce7;color:#15803d;');
+                    if (st.night + st.day > 0) out += chip('fa-moon', Math.round(st.night / (st.night + st.day) * 100) + '% ' + (T ? 'gabi' : 'night'), 'background:#e0e7ff;color:#3730a3;');
+                    return out ? '<div class="sa-chips" style="margin:0 0 8px;">' + out + '</div>' : '';
+                };
+
                 let out;
                 const streetSecs = (isTl() && a.streets_tl && a.streets_tl.length) ? a.streets_tl : a.streets;
+                const multiStreet = !!(streetSecs && streetSecs.length > 1);
+                renderStreetAiDashboard(a, streetSecs);
                 if (streetSecs && streetSecs.length) {
-                    out = streetSecs.map(function (sec) {
+                    out = streetSecs.map(function (sec, secIdx) {
                         const sLvl = String(sec.risk_level || 'low').toLowerCase();
+
+                        // Visual header for the street: a stacked bar of its
+                        // crime mix (+ legend) and, for multi-street reports,
+                        // a small hourly profile so streets can be compared
+                        let viz = '';
+                        if (sec.categories && sec.categories.length && sec.total > 0) {
+                            const stack = sec.categories.map(function (cb) {
+                                return '<span style="width:' + (Number(cb.count) / sec.total * 100) + '%;background:' + colorForCategory(cb.category) + ';" title="' + escStreet(cb.category_label || cb.category) + ': ' + cb.count + '"></span>';
+                            }).join('');
+                            const legend = sec.categories.map(function (cb) {
+                                return '<span><i style="background:' + colorForCategory(cb.category) + ';"></i>' + escStreet(cb.category_label || cb.category) + ' <b>' + cb.count + '</b></span>';
+                            }).join('');
+                            const st = sec.stats || {};
+                            const hasHours = st.hourly && st.hourly.some(function (v) { return v > 0; });
+                            viz = '<div class="sa-sec-viz' + (multiStreet && hasHours ? '' : ' sa-single') + '">' +
+                                '<div><div class="sa-stack">' + stack + '</div><div class="sa-legend">' + legend + '</div></div>' +
+                                (multiStreet && hasHours ? '<div><div class="sa-mini-c"><canvas id="saSecHour' + secIdx + '"></canvas></div>' +
+                                    '<div style="font-size:9px;color:#6b7280;text-align:center;margin-top:1px;">' + (isTl() ? 'Oras ng araw' : 'Time of day') +
+                                    (sec.peak_hours && sec.peak_hours.length ? ' · peak ' + escStreet(sec.peak_hours[0]) : '') + '</div></div>' : '') +
+                            '</div>';
+                        }
 
                         // One block PER CRIME TYPE — the counts add up to the
                         // street total, and each type carries its own tailored
@@ -1466,6 +1800,8 @@
                                             ? cb.count + ' sa ' + sec.total + ' krimen (' + cb.share + '%)'
                                             : cb.count + ' of ' + sec.total + ' crime' + (sec.total === 1 ? '' : 's') + ' (' + cb.share + '%)') + '</span>' +
                                         (cb.peak_hours && cb.peak_hours.length ? '<span style="font-size:10.5px;color:#6d28d9;font-weight:600;"><i class="fas fa-clock mr-1"></i>' + cb.peak_hours.map(escStreet).join(', ') + '</span>' : '') +
+                                        '<span class="sa-share" title="' + cb.share + '%"><span style="width:' + Math.min(100, Number(cb.share) || 0) + '%;background:' + cc + ';"></span></span>' +
+                                        (typeof cb.unresolved === 'number' && cb.unresolved > 0 ? '<span style="font-size:10px;font-weight:800;color:#b91c1c;"><i class="fas fa-folder-open mr-1"></i>' + cb.unresolved + (isTl() ? ' bukas' : ' open') + '</span>' : '') +
                                         '<button type="button" class="cat-crimes-toggle" data-street="' + escStreet(sec.street) + '" data-cat="' + escStreet(cb.category) + '"' +
                                             ' style="margin-left:auto;font-size:10px;font-weight:700;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:3px 9px;cursor:pointer;">' +
                                             '<i class="fas fa-list mr-1"></i>' + (isTl() ? 'Tingnan ang mga krimen' : 'View crimes') + '</button>' +
@@ -1488,7 +1824,8 @@
                                     ? sec.total + ' kabuuang krimen'
                                     : sec.total + ' total crime' + (sec.total === 1 ? '' : 's')) + '</span>' : '') +
                             '</div>' +
-                            (sec.summary ? '<div style="font-size:11.5px;color:#4b5563;margin-bottom:8px;">' + escStreet(sec.summary) + '</div>' : '') +
+                            secChips(sec) +
+                            viz +
                             '<div style="display:grid;gap:8px;">' + body + '</div>' +
                         '</div>';
                     }).join('');
@@ -1498,6 +1835,7 @@
                 }
                 document.getElementById('streetAiSuggestions').innerHTML =
                     out || '<div style="font-size:12px;color:#9ca3af;">No suggestions returned.</div>';
+                if (streetSecs && streetSecs.length) renderStreetAiMiniCharts(streetSecs);
 
                 risk.style.display = 'inline-block';
         }
@@ -1505,6 +1843,13 @@
         // "View crimes" toggle inside a crime-type block: lists that type's
         // actual crimes (from the already-fetched street detail cache)
         document.getElementById('streetAiSuggestions').addEventListener('click', function (e) {
+            const dt = e.target.closest('.sa-details-toggle');
+            if (dt) {
+                const box = dt.nextElementSibling;
+                const open = box && box.classList.toggle('open');
+                dt.querySelector('i').className = 'fas ' + (open ? 'fa-chevron-up' : 'fa-chevron-down');
+                return;
+            }
             const btn = e.target.closest('.cat-crimes-toggle');
             if (!btn) return;
             const block = btn.closest('div').parentNode;
@@ -1565,7 +1910,9 @@
                 if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
 
                 btn.style.background = '#16a34a';
-                btn.innerHTML = '<i class="fas fa-circle-check mr-1"></i>Saved (' + data.saved_rows + ' rows)';
+                btn.innerHTML = '<i class="fas fa-circle-check mr-1"></i>Saved (' + data.saved_rows + ' rows)'
+                    + (data.received_by ? ' &middot; Received by ' + data.received_by : '');
+                btn.title = data.received_by ? 'Receipt logged in the audit trail' : '';
             } catch (e) {
                 console.error('Street AI save failed:', e);
                 btn.disabled = false;

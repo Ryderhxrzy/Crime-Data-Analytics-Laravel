@@ -159,9 +159,18 @@ if (request()->query('token')) {
                                         @elseif(str_contains($log->action_type, 'UPDATE')) bg-blue-100 text-blue-800
                                         @elseif(str_contains($log->action_type, 'DELETE')) bg-red-100 text-red-800
                                         @elseif(str_contains($log->action_type, 'VIEW')) bg-purple-100 text-purple-800
+                                        @elseif(str_contains($log->action_type, 'RECEIVED')) bg-teal-100 text-teal-800
+                                        @elseif(str_contains($log->action_type, 'LOGIN')) bg-sky-100 text-sky-800
+                                        @elseif(str_contains($log->action_type, 'STAFF') || str_contains($log->action_type, 'PASSWORD')) bg-indigo-100 text-indigo-800
                                         @else bg-gray-100 text-gray-800 @endif">
                                         {{ str_replace('_', ' ', $log->action_type) }}
                                     </span>
+                                    @php($d = is_array($log->details) ? $log->details : [])
+                                    @if(!empty($d['received_by']))
+                                        <span class="block text-xs text-teal-700 mt-1"><i class="fas fa-inbox mr-1"></i>Received by {{ $d['received_by'] }}{{ !empty($d['rows']) ? ' · ' . $d['rows'] . ' rows' : '' }}</span>
+                                    @elseif(!empty($d['actor_email']))
+                                        <span class="block text-xs text-gray-500 mt-1">{{ $d['actor_email'] }}</span>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-3 text-sm text-gray-900 font-medium">{{ $log->admin_id }}</td>
                                 <td class="px-4 py-3 text-sm">
@@ -299,6 +308,7 @@ if (request()->query('token')) {
                         <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold ${getActionBadgeClass(log.action_type)}">
                             ${log.action_type.replace(/_/g, ' ')}
                         </span>
+                        ${detailLine(log)}
                     </td>
                     <td class="px-4 py-3 text-sm text-gray-900 font-medium">${log.admin_id}</td>
                     <td class="px-4 py-3 text-sm">
@@ -330,7 +340,26 @@ if (request()->query('token')) {
             if (actionType.includes('UPDATE')) return 'bg-blue-100 text-blue-800';
             if (actionType.includes('DELETE')) return 'bg-red-100 text-red-800';
             if (actionType.includes('VIEW')) return 'bg-purple-100 text-purple-800';
+            if (actionType.includes('RECEIVED')) return 'bg-teal-100 text-teal-800';
+            if (actionType.includes('LOGIN')) return 'bg-sky-100 text-sky-800';
+            if (actionType.includes('STAFF') || actionType.includes('PASSWORD')) return 'bg-indigo-100 text-indigo-800';
             return 'bg-gray-100 text-gray-800';
+        }
+
+        const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        // One line under the badge: the receipt for AI reports, otherwise who acted
+        function detailLine(log) {
+            let d = log.details;
+            if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = null; } }
+            if (!d || typeof d !== 'object') return '';
+            if (d.received_by) {
+                return '<span class="block text-xs text-teal-700 mt-1"><i class="fas fa-inbox mr-1"></i>Received by ' + escapeHtml(d.received_by) + (d.rows ? ' · ' + escapeHtml(d.rows) + ' rows' : '') + '</span>';
+            }
+            if (d.actor_email) {
+                return '<span class="block text-xs text-gray-500 mt-1">' + escapeHtml(d.actor_email) + '</span>';
+            }
+            return '';
         }
 
         function updatePagination() {

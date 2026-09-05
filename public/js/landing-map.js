@@ -33,6 +33,8 @@ const STYLE_BRGY_ACTIVE = {
 
 let map;
 let heatLayer;
+let streetHeat;          // StreetSegmentHeatmap instance (default style)
+let lastIncidents = [];
 let barangayLayer;
 let sanAgustinLayer;
 let sanAgustinBounds;
@@ -63,6 +65,20 @@ function initMap() {
 
         loadBarangayBoundaries();
         loadCrimeData();
+
+        // 3D view over the same container. Public page: same aggregated
+        // incidents the heat layers use, so nothing extra is exposed.
+        if (typeof CrimeMap3D !== 'undefined' && document.getElementById('crimeMapWrap')) {
+            try {
+                window.crimeMap3D = CrimeMap3D.create({
+                    wrapper: document.getElementById('crimeMapWrap'),
+                    getIncidents: () => lastIncidents,
+                    toggleButton: document.getElementById('map3dBtn'),
+                });
+                const btn = document.getElementById('map3dBtn');
+                btn.classList.add('map-3d-btn');
+            } catch (e) { console.warn('3D view unavailable:', e); }
+        }
 
     } catch (error) {
         console.error('Error initializing map:', error);
@@ -153,6 +169,52 @@ async function loadCrimeData() {
             return;
         }
 
+        lastIncidents = data;
+        renderHeat();
+        if (window.crimeMap3D) window.crimeMap3D.refresh();
+        console.log(`Loaded ${data.length} incidents`);
+
+    } catch (error) {
+        console.error('Error loading crime data:', error);
+        showMapError('Failed to load crime data. Please refresh the page.');
+    } finally {
+        if (loader) loader.classList.add('hidden');
+    }
+}
+
+function currentHeatStyle() {
+    const sel = document.getElementById('heatStyleFilter');
+    return sel && sel.value === 'area' ? 'area' : 'street';
+}
+
+/**
+ * Draw the chosen heat style from the last fetched incidents. Street-Segment
+ * is the default: each road segment coloured by the crimes recorded on it.
+ */
+function renderHeat() {
+    const data = lastIncidents;
+
+    if (heatLayer && map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
+    if (streetHeat) streetHeat.setVisible(false);
+
+    if (currentHeatStyle() === 'street' && typeof StreetSegmentHeatmap !== 'undefined') {
+        if (!streetHeat) {
+            // Public map: hover counts only, no click-through to incidents
+            streetHeat = StreetSegmentHeatmap.create(map, { interactive: true, onSegmentClick: null });
+        }
+        streetHeat.setVisible(true);
+        streetHeat.update(data).catch(err => {
+            console.warn('Street-segment heatmap failed, using area density:', err);
+            renderAreaHeat(data);
+        });
+        return;
+    }
+
+    renderAreaHeat(data);
+}
+
+function renderAreaHeat(data) {
+    try {
         // The API returns latitude/longitude; older payloads used lat/lng.
         const heatPoints = data
             .map(incident => [
@@ -186,14 +248,9 @@ async function loadCrimeData() {
                 1.0: '#8b0000'       // Dark Red - Very High density
             }
         }).addTo(map);
-
-        console.log(`Loaded ${heatPoints.length} mappable incidents`);
-
     } catch (error) {
-        console.error('Error loading crime data:', error);
-        showMapError('Failed to load crime data. Please refresh the page.');
-    } finally {
-        if (loader) loader.classList.add('hidden');
+        console.error('Error drawing area density:', error);
+        showMapError('Failed to draw the heatmap. Please refresh the page.');
     }
 }
 
@@ -240,6 +297,13 @@ function attachEventListeners() {
         if (dateFilter) {
             dateFilter.addEventListener('change', function () {
                 loadCrimeData();
+            });
+        }
+
+        const styleFilter = document.getElementById('heatStyleFilter');
+        if (styleFilter) {
+            styleFilter.addEventListener('change', function () {
+                if (lastIncidents.length) renderHeat();
             });
         }
     } catch (error) {

@@ -102,14 +102,22 @@ if (request()->query('token')) {
                         @endif
                     </dl>
 
-                    <div class="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs text-gray-600">
-                        <i class="fas fa-lock mr-1"></i>
-                        Your email, password and role are managed by the centralized Alertara login,
-                        not by this system. Change them at
-                        <a href="{{ config('services.central_auth.login_url', 'https://login.alertaraqc.com') }}"
-                           target="_blank" rel="noopener"
-                           class="text-alertara-700 font-semibold underline">login.alertaraqc.com</a>.
-                    </div>
+                    @if ($identity['is_staff'])
+                        <div class="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs text-gray-600">
+                            <i class="fas fa-lock mr-1"></i>
+                            Your password is managed in this system. Change it any time from the
+                            <a href="#changePassword" class="text-alertara-700 font-semibold underline">Change password</a> card.
+                        </div>
+                    @else
+                        <div class="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs text-gray-600">
+                            <i class="fas fa-lock mr-1"></i>
+                            Your email, password and role are managed by the centralized Alertara login,
+                            not by this system. Change them at
+                            <a href="{{ config('services.central_auth.login_url', 'https://login.alertaraqc.com') }}"
+                               target="_blank" rel="noopener"
+                               class="text-alertara-700 font-semibold underline">login.alertaraqc.com</a>.
+                        </div>
+                    @endif
                 </div>
             </div>
 
@@ -155,6 +163,54 @@ if (request()->query('token')) {
                         </div>
                     </form>
                 </div>
+
+                @if ($identity['is_staff'])
+                    <!-- Change password (staff accounts) -->
+                    <div id="changePassword" class="bg-white border rounded-lg p-6 {{ $identity['must_change_password'] ? 'border-amber-300 ring-2 ring-amber-100' : 'border-gray-200' }}">
+                        <h3 class="text-lg font-bold text-gray-900 mb-1">
+                            <i class="fas fa-key mr-2 text-alertara-700"></i>Change password
+                        </h3>
+                        @if ($identity['must_change_password'])
+                            <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                <i class="fas fa-triangle-exclamation mr-1"></i>
+                                You are still using the temporary password that was emailed to you. Set a new one to unlock the rest of the system.
+                            </div>
+                        @else
+                            <p class="text-sm text-gray-600 mb-4">
+                                Use at least 8 characters. You stay signed in after the change.
+                            </p>
+                        @endif
+
+                        <form method="POST" action="{{ route('profile.password') }}" class="space-y-4">
+                            @csrf
+                            <div>
+                                <label class="block text-sm font-medium text-gray-900 mb-1">Current password</label>
+                                <input type="password" name="current_password" required autocomplete="current-password"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 @error('current_password') border-red-400 @enderror">
+                                @error('current_password')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-900 mb-1">New password</label>
+                                    <input type="password" name="password" id="newPassword" required minlength="8" autocomplete="new-password"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500 @error('password') border-red-400 @enderror">
+                                    <div class="mt-2 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div id="pwStrength" class="h-full w-0 rounded-full bg-gray-300 transition-all"></div></div>
+                                    <p id="pwStrengthLabel" class="text-[11px] text-gray-500 mt-1">Strength</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-900 mb-1">Confirm new password</label>
+                                    <input type="password" name="password_confirmation" required minlength="8" autocomplete="new-password"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alertara-500">
+                                </div>
+                            </div>
+                            <div class="flex justify-end">
+                                <button type="submit" class="px-4 py-2 bg-alertara-700 text-white rounded-lg hover:bg-alertara-800 font-semibold text-sm">
+                                    <i class="fas fa-shield-halved mr-1"></i>Update password
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                @endif
 
                 <!-- Real activity -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -215,3 +271,33 @@ if (request()->query('token')) {
         </div>
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    (function () {
+        const input = document.getElementById('newPassword');
+        if (!input) return;
+        const bar = document.getElementById('pwStrength');
+        const label = document.getElementById('pwStrengthLabel');
+        input.addEventListener('input', function () {
+            const v = input.value;
+            let score = 0;
+            if (v.length >= 8) score++;
+            if (v.length >= 12) score++;
+            if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+            if (/\d/.test(v)) score++;
+            if (/[^A-Za-z0-9]/.test(v)) score++;
+            const levels = [
+                ['0%', '#d1d5db', 'Strength'],
+                ['25%', '#ef4444', 'Weak'],
+                ['45%', '#f59e0b', 'Fair'],
+                ['70%', '#10b981', 'Good'],
+                ['85%', '#059669', 'Strong'],
+                ['100%', '#047857', 'Very strong'],
+            ];
+            const l = levels[Math.min(score, 5)];
+            bar.style.width = l[0]; bar.style.background = l[1]; label.textContent = l[2];
+        });
+    })();
+</script>
+@endpush
