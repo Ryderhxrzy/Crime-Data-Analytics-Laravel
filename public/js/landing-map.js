@@ -66,18 +66,37 @@ function initMap() {
         loadBarangayBoundaries();
         loadCrimeData();
 
-        // 3D view over the same container. Public page: same aggregated
-        // incidents the heat layers use, so nothing extra is exposed.
-        if (typeof CrimeMap3D !== 'undefined' && document.getElementById('crimeMapWrap')) {
-            try {
-                window.crimeMap3D = CrimeMap3D.create({
-                    wrapper: document.getElementById('crimeMapWrap'),
-                    getIncidents: () => lastIncidents,
-                    toggleButton: document.getElementById('map3dBtn'),
+        // Google Maps (default, Hybrid imagery) and the 3D view over the same
+        // container. Public page: the same aggregated incidents the heat
+        // layers use, drawn as street-segment colours (no individual pins).
+        const wrap = document.getElementById('crimeMapWrap');
+        if (wrap) {
+            const engines = {};
+            const publicMode = () => (document.getElementById('heatStyleFilter') || {}).value === 'area' ? 'heatmap' : 'street-heatmap';
+            if (typeof CrimeMapGoogle !== 'undefined') {
+                try {
+                    window.crimeMapGoogle = engines.google = CrimeMapGoogle.create({
+                        wrapper: wrap, getIncidents: () => lastIncidents, getMode: publicMode,
+                        modeSelect: document.getElementById('heatStyleFilter'),
+                    });
+                } catch (e) { console.warn('Google Maps view unavailable:', e); }
+            }
+            if (typeof CrimeMap3D !== 'undefined') {
+                try {
+                    window.crimeMap3D = engines['3d'] = CrimeMap3D.create({
+                        wrapper: wrap, getIncidents: () => lastIncidents, getMode: publicMode,
+                        modeSelect: document.getElementById('heatStyleFilter'),
+                    });
+                } catch (e) { console.warn('3D view unavailable:', e); }
+            }
+            if (typeof CrimeMapGoogle !== 'undefined') {
+                CrimeMapGoogle.switcher({
+                    engines: engines,
+                    buttons: { google: document.getElementById('mapGoogleBtn'), '2d': document.getElementById('map2dBtn'), '3d': document.getElementById('map3dBtn') },
+                    defaultEngine: 'google',
+                    storageKey: 'landingMapEngine',
                 });
-                const btn = document.getElementById('map3dBtn');
-                btn.classList.add('map-3d-btn');
-            } catch (e) { console.warn('3D view unavailable:', e); }
+            }
         }
 
     } catch (error) {
@@ -172,6 +191,7 @@ async function loadCrimeData() {
         lastIncidents = data;
         renderHeat();
         if (window.crimeMap3D) window.crimeMap3D.refresh();
+        if (window.crimeMapGoogle) window.crimeMapGoogle.refresh();
         console.log(`Loaded ${data.length} incidents`);
 
     } catch (error) {
