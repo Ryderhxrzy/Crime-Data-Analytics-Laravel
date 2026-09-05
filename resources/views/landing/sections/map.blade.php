@@ -11,10 +11,10 @@
             </h2>
 
             <p class="mx-auto mt-4 text-base leading-relaxed text-ink-muted sm:text-lg">
-                Crime density rendered street by street: every road segment is coloured by the
-                incidents recorded along it. The teal boundary marks Barangay San Agustin, Quezon
-                City — the coverage area for this data. Neighbouring barangays are shown faintly
-                for orientation only.
+                Real satellite imagery with roads and street names, and every road segment
+                coloured by the incidents recorded along it. The teal boundary marks Barangay
+                San Agustin, Quezon City — the coverage area for this data. Switch to the classic
+                heat map or the 3D view with the buttons below.
             </p>
         </div>
 
@@ -46,11 +46,11 @@
 
             <div class="flex flex-col gap-2">
                 <span class="text-xs font-semibold uppercase tracking-widest text-ink-subtle">View</span>
-                <button id="map3dBtn" type="button"
-                        class="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand focus:border-brand focus:outline-none"
-                        title="Switch to the 3D map">
-                    <i class="fas fa-cube"></i><span class="ml-1">3D</span>
-                </button>
+                <div class="inline-flex overflow-hidden rounded-xl border border-line bg-white text-sm font-semibold text-ink" role="group" aria-label="Map engine">
+                    <button id="mapGoogleBtn" type="button" class="map-engine-btn px-4 py-2.5 transition-colors hover:bg-surface" title="Google Maps (satellite + roads)"><i class="fab fa-google"></i><span class="ml-1">Google</span></button>
+                    <button id="map2dBtn" type="button" class="map-engine-btn border-l border-line px-4 py-2.5 transition-colors hover:bg-surface" title="Classic heat map"><i class="fas fa-map"></i><span class="ml-1">Classic</span></button>
+                    <button id="map3dBtn" type="button" class="map-engine-btn border-l border-line px-4 py-2.5 transition-colors hover:bg-surface" title="3D map"><i class="fas fa-cube"></i><span class="ml-1">3D</span></button>
+                </div>
             </div>
 
             <p class="text-xs text-ink-subtle sm:text-right">
