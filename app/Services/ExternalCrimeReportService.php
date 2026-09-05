@@ -399,6 +399,45 @@ class ExternalCrimeReportService
     }
 
     /**
+     * The street closest to a coordinate: ['name' => ..., 'meters' => ...],
+     * or null when no street data is loaded. Distance is point-to-polyline
+     * with longitude scaled by cos(latitude), good enough at barangay scale.
+     */
+    public function nearestStreet(float $lat, float $lng): ?array
+    {
+        $kx = cos(deg2rad($lat));
+        $best = null;
+        $bestD = INF;
+
+        foreach ($this->streetIndex() as $street) {
+            $points = $street['points'] ?? [];
+            $count = count($points);
+            if ($count === 0) {
+                continue;
+            }
+            if ($count === 1) {
+                $d = ($points[0][0] - $lat) ** 2 + (($points[0][1] - $lng) * $kx) ** 2;
+                if ($d < $bestD) { $bestD = $d; $best = $street['name']; }
+                continue;
+            }
+            for ($i = 0; $i < $count - 1; $i++) {
+                [$aLat, $aLng] = $points[$i];
+                [$bLat, $bLng] = $points[$i + 1];
+                $ax = $aLng * $kx; $ay = $aLat; $bx = $bLng * $kx; $by = $bLat;
+                $px = $lng * $kx; $py = $lat;
+                $dx = $bx - $ax; $dy = $by - $ay;
+                $len2 = $dx * $dx + $dy * $dy;
+                $t = $len2 > 0 ? max(0, min(1, (($px - $ax) * $dx + ($py - $ay) * $dy) / $len2)) : 0;
+                $cx = $ax + $t * $dx; $cy = $ay + $t * $dy;
+                $d = ($px - $cx) ** 2 + ($py - $cy) ** 2;
+                if ($d < $bestD) { $bestD = $d; $best = $street['name']; }
+            }
+        }
+
+        return $best === null ? null : ['name' => $best, 'meters' => sqrt($bestD) * 111320];
+    }
+
+    /**
      * A point that lies on the named street's polyline. $seed (the record code)
      * decides where along the street the point lands, so the same record always
      * imports to the same spot and two records rarely stack on one pixel.

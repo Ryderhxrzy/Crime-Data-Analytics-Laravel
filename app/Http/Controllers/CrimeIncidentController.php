@@ -120,7 +120,7 @@ class CrimeIncidentController extends Controller
             'incident_description' => 'required|string|max:5000',
             'crime_category_id'    => 'required|integer',
             'barangay_id'          => 'required|integer',
-            'street'               => 'required|string|max:150',
+            'street'               => 'nullable|string|max:150',
             'incident_date'        => 'required|date|before_or_equal:today',
             'incident_time'        => 'required|date_format:H:i',
             'latitude'             => 'required|numeric|between:-90,90',
@@ -146,17 +146,24 @@ class CrimeIncidentController extends Controller
             return back()->withErrors(['barangay_id' => 'Please choose a valid barangay.'])->withInput();
         }
 
-        $street = trim($validated['street']);
+        $street = trim((string) ($validated['street'] ?? ''));
         $isSanAgustin = mb_strtolower(trim($barangay['name'])) === 'san agustin';
-
-        // Inside San Agustin the street must be one the maps know, otherwise
-        // the record can never be grouped with the others on that street.
-        if ($isSanAgustin && !$streetService->hasStreet($street)) {
-            return back()->withErrors(['street' => 'Please pick a street from the San Agustin list.'])->withInput();
-        }
 
         $lat = round((float) $validated['latitude'], 8);
         $lng = round((float) $validated['longitude'], 8);
+
+        // Inside San Agustin the street is read from the coordinates, not typed:
+        // the nearest street in the map data wins, so the record always groups
+        // with the others on that street. Too far from any street is refused.
+        if ($isSanAgustin) {
+            $nearest = $streetService->nearestStreet($lat, $lng);
+            if (!$nearest || $nearest['meters'] > 120) {
+                return back()->withErrors(['street' => 'The pin is not on a San Agustin street. Move it closer to a street and save again.'])->withInput();
+            }
+            $street = $nearest['name'];
+        } elseif ($street === '') {
+            return back()->withErrors(['street' => 'Please type the street where the crime happened.'])->withInput();
+        }
 
         // Default placement keeps the pin on the street: snap whatever the
         // browser sent to the nearest point of that street's polyline.

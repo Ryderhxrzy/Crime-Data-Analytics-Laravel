@@ -117,6 +117,12 @@
                                 @endforeach
                             </div>
                         </div>
+                        <div id="streetDetectedWrap" class="rounded-lg border border-alertara-200 bg-alertara-50/40 p-3">
+                            <label class="field-label"><i class="fas fa-road mr-1 text-alertara-700"></i>Street <span class="req">*</span> <span class="text-[10px] font-semibold text-gray-500 ml-1">from the pin coordinates</span></label>
+                            <input type="text" id="streetDetected" class="field-input bg-white font-semibold text-gray-900" readonly tabindex="-1"
+                                   value="{{ old('street') }}" placeholder="Place the pin on the map">
+                            <p class="field-hint" id="streetDetectedHint">Move the pin on the map; the nearest San Agustin street fills in automatically.</p>
+                        </div>
                         <div>
                             <label class="field-label">Title <span class="req">*</span></label>
                             <input type="text" name="incident_title" class="field-input" required maxlength="255" value="{{ old('incident_title') }}" placeholder="e.g. Cellphone snatching near the corner store">
@@ -210,35 +216,36 @@
                             </select>
                             <p class="field-hint">Defaults to San Agustin, where every record in this system sits.</p>
                         </div>
-                        <div id="streetSelectWrap">
-                            <label class="field-label">Street <span class="req">*</span></label>
-                            <select id="streetSelect" class="field-input" required>
-                                <option value="">Select a street</option>
+                        <div id="streetJumpWrap">
+                            <label class="field-label">Jump to a street <span class="text-[10px] font-semibold text-gray-500 ml-1">filter</span></label>
+                            <select id="streetJump" class="field-input">
+                                <option value="">Choose a street to move the pin there</option>
                                 <optgroup label="Streets with recorded crimes">
                                     @foreach ($activeStreets as $st)
-                                        <option value="{{ $st['name'] }}" data-active="1" {{ old('street') === $st['name'] ? 'selected' : '' }}>{{ $st['name'] }} ({{ $st['count'] }} recorded)</option>
+                                        <option value="{{ $st['name'] }}">{{ $st['name'] }} ({{ $st['count'] }} recorded)</option>
                                     @endforeach
                                 </optgroup>
                                 <optgroup label="Other streets (no crime yet)">
                                     @foreach ($otherStreets as $st)
-                                        <option value="{{ $st['name'] }}" {{ old('street') === $st['name'] ? 'selected' : '' }}>{{ $st['name'] }}</option>
+                                        <option value="{{ $st['name'] }}">{{ $st['name'] }}</option>
                                     @endforeach
                                 </optgroup>
                             </select>
-                            <p class="field-hint">Every San Agustin street is listed; the ones with recorded crimes come first. Once picked, the map shows that street alone.</p>
+                            <p class="field-hint">Moves the pin to that street and zooms in. The saved street is always the one under the pin.</p>
                         </div>
                         <div id="streetTextWrap" class="hidden">
                             <label class="field-label">Street <span class="req">*</span></label>
                             <input type="text" id="streetText" class="field-input" maxlength="150" placeholder="Street name" value="{{ old('street') }}">
-                            <p class="field-hint">Outside San Agustin the pin can be placed anywhere on the map.</p>
+                            <p class="field-hint">Outside San Agustin the street is typed and the pin can be placed anywhere.</p>
                         </div>
                         <input type="hidden" name="street" id="streetInput" value="{{ old('street') }}">
+                        <script type="application/json" id="activeStreetsJson">@json(collect($activeStreets)->pluck('name')->values())</script>
                     </div>
 
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <span class="pin-chip bg-red-50 text-red-700 border border-red-200"><i class="fas fa-location-dot"></i><span id="pinStreetLabel">No street chosen</span></span>
-                            <span class="pin-chip bg-gray-100 text-gray-700" id="pinModeLabel"><i class="fas fa-road"></i>Pin stays on the street</span>
+                            <span class="pin-chip bg-red-50 text-red-700 border border-red-200"><i class="fas fa-location-dot"></i><span id="pinStreetLabel">No street detected yet</span></span>
+                            <span class="pin-chip bg-gray-100 text-gray-700" id="pinModeLabel"><i class="fas fa-road"></i>Pin snaps to the nearest street</span>
                         </div>
                         <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none">
                             <span>Free placement</span>
@@ -275,7 +282,7 @@
                         </div>
                         <div class="sm:col-span-2 flex items-end">
                             <button type="button" id="recenterBtn" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 w-full">
-                                <i class="fas fa-crosshairs mr-1"></i>Put the pin back on the street
+                                <i class="fas fa-crosshairs mr-1"></i>Snap the pin to the nearest street
                             </button>
                         </div>
                     </div>
@@ -342,8 +349,11 @@
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     let streetStats = {};   // name -> {count, top_category, peak_hours}
 
-    const streetSelect = document.getElementById('streetSelect');
+    const streetDetected = document.getElementById('streetDetected');
+    const streetDetectedHint = document.getElementById('streetDetectedHint');
     const streetText = document.getElementById('streetText');
+    let detectedStreet = streetDetected.value.trim();   // filled from the pin's coordinates
+    const NEAR_STREET_METERS = 120;                     // beyond this the pin is "not on a street"
     const streetInput = document.getElementById('streetInput');
     const barangaySelect = document.getElementById('barangaySelect');
     const latInput = document.getElementById('latInput');
@@ -360,7 +370,7 @@
     let saBounds = null;    // {minLat,maxLat,minLng,maxLng}
     let engine = null;      // the active map engine (3D MapLibre or 2D Leaflet)
 
-    const activeStreets = new Set([...streetSelect.querySelectorAll('option[data-active]')].map(o => o.value.toLowerCase()));
+    const activeStreets = new Set((JSON.parse(document.getElementById('activeStreetsJson').textContent || '[]')).map(n => String(n).toLowerCase()));
 
     // ------------------------------------------------------------------
     // Form helpers shared by both engines
@@ -371,7 +381,7 @@
     }
 
     function currentStreet() {
-        return isSanAgustin() ? streetSelect.value : streetText.value.trim();
+        return isSanAgustin() ? detectedStreet : streetText.value.trim();
     }
 
     function setCoords(lat, lng) {
@@ -379,29 +389,38 @@
         lngInput.value = Number(lng).toFixed(8);
     }
 
-    // Nearest point on the chosen street's polylines (longitude scaled by cos lat)
-    function snap(lat, lng) {
-        const lines = streetLines[currentStreet().toLowerCase()];
-        if (!lines || !lines.length) return [lat, lng];
+    // Nearest street to a point: name, distance in metres and the closest
+    // point on it. Longitude is scaled by cos(latitude) so distances compare.
+    function nearestStreet(lat, lng) {
         const kx = Math.cos(lat * Math.PI / 180);
         let best = null, bestD = Infinity;
-        lines.forEach(pts => {
-            if (pts.length === 1) {
-                const d = (pts[0][0] - lat) ** 2 + ((pts[0][1] - lng) * kx) ** 2;
-                if (d < bestD) { bestD = d; best = pts[0]; }
-                return;
-            }
-            for (let i = 0; i < pts.length - 1; i++) {
-                const ax = pts[i][1] * kx, ay = pts[i][0], bx = pts[i + 1][1] * kx, by = pts[i + 1][0];
-                const px = lng * kx, py = lat;
-                const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
-                const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
-                const cx = ax + t * dx, cy = ay + t * dy;
-                const d = (px - cx) ** 2 + (py - cy) ** 2;
-                if (d < bestD) { bestD = d; best = [cy, cx / kx]; }
-            }
+        Object.keys(streetLines).forEach(key => {
+            streetLines[key].forEach(pts => {
+                if (pts.length === 1) {
+                    const d = (pts[0][0] - lat) ** 2 + ((pts[0][1] - lng) * kx) ** 2;
+                    if (d < bestD) { bestD = d; best = { key: key, point: pts[0] }; }
+                    return;
+                }
+                for (let i = 0; i < pts.length - 1; i++) {
+                    const ax = pts[i][1] * kx, ay = pts[i][0], bx = pts[i + 1][1] * kx, by = pts[i + 1][0];
+                    const px = lng * kx, py = lat;
+                    const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+                    const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+                    const cx = ax + t * dx, cy = ay + t * dy;
+                    const d = (px - cx) ** 2 + (py - cy) ** 2;
+                    if (d < bestD) { bestD = d; best = { key: key, point: [cy, cx / kx] }; }
+                }
+            });
         });
-        return best || [lat, lng];
+        if (!best) return null;
+        return { name: streetNames[best.key] || best.key, point: best.point, meters: Math.sqrt(bestD) * 111320 };
+    }
+    const streetNames = {};   // lower -> display name
+
+    // Nearest point on the nearest street
+    function snap(lat, lng) {
+        const n = nearestStreet(lat, lng);
+        return n ? n.point : [lat, lng];
     }
 
     function streetMidpoint(name) {
@@ -456,34 +475,42 @@
         note.classList.toggle('hidden', !outside);
     }
 
+    // The street is read from the pin: nearest San Agustin street to the
+    // coordinates, shown read-only on the form. Too far from any street
+    // leaves it blank so the record cannot be saved off-street.
+    function detectAt(lat, lng) {
+        if (!isSanAgustin()) return;
+        const n = nearestStreet(lat, lng);
+        const ok = n && n.meters <= NEAR_STREET_METERS;
+        detectedStreet = ok ? n.name : '';
+        streetDetected.value = detectedStreet;
+        const jump = document.getElementById('streetJump');
+        if (jump && jump.value !== detectedStreet) jump.value = detectedStreet;
+        streetInput.value = detectedStreet;
+        pinStreetLabel.textContent = detectedStreet || 'No street detected yet';
+        if (ok) {
+            streetDetectedHint.innerHTML = '<i class="fas fa-circle-check mr-1 text-emerald-600"></i>' + esc(n.name) + ' is ' + Math.round(n.meters) + ' m from the pin' + (activeStreets.has(n.name.toLowerCase()) ? ' · has recorded crimes' : ' · no crime recorded yet');
+        } else if (n) {
+            streetDetectedHint.innerHTML = '<i class="fas fa-triangle-exclamation mr-1 text-amber-600"></i>Nearest street is ' + esc(n.name) + ', ' + Math.round(n.meters) + ' m away. Move the pin closer to a street.';
+        } else {
+            streetDetectedHint.textContent = 'Move the pin on the map; the nearest San Agustin street fills in automatically.';
+        }
+        engine.highlightStreet(detectedStreet || null);
+    }
+
     // The pin was moved by the user (drag or click): snap unless free, then record
     function userPlaced(lat, lng) {
         const s = free || !isSanAgustin() ? [lat, lng] : snap(lat, lng);
         engine.setPin(s[0], s[1], false);
         setCoords(s[0], s[1]);
         warnOutsideBoundary(s[0], s[1]);
+        detectAt(s[0], s[1]);
     }
 
     function placePin(lat, lng, pan) {
         engine.setPin(lat, lng, pan);
         setCoords(lat, lng);
-    }
-
-    function onStreetChange(keepPin) {
-        const name = currentStreet();
-        streetInput.value = name;
-        pinStreetLabel.textContent = name || 'No street chosen';
-        if (!isSanAgustin()) return;
-        engine.highlightStreet(name);
-        if (!name) return;
-        engine.fitStreet(name);
-        if (keepPin && latInput.value && lngInput.value) {
-            const s = free ? [+latInput.value, +lngInput.value] : snap(+latInput.value, +lngInput.value);
-            placePin(s[0], s[1], false);
-            return;
-        }
-        const mid = streetMidpoint(name);
-        if (mid) placePin(mid[0], mid[1], true);
+        detectAt(lat, lng);
     }
 
     function setFree(on) {
@@ -493,27 +520,29 @@
         freeToggle.setAttribute('aria-checked', on ? 'true' : 'false');
         pinModeLabel.innerHTML = on
             ? '<i class="fas fa-arrows-up-down-left-right"></i>Pin can go anywhere'
-            : '<i class="fas fa-road"></i>Pin stays on the street';
+            : '<i class="fas fa-road"></i>Pin snaps to the nearest street';
         pinModeLabel.className = 'pin-chip ' + (on ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700');
-        if (!on && isSanAgustin() && currentStreet() && latInput.value) {
+        if (!on && isSanAgustin() && latInput.value) {
             const s = snap(+latInput.value, +lngInput.value); placePin(s[0], s[1], false);
         }
     }
 
     function onBarangayChange() {
         const sa = isSanAgustin();
-        document.getElementById('streetSelectWrap').classList.toggle('hidden', !sa);
+        document.getElementById('streetDetectedWrap').classList.toggle('hidden', !sa);
+        document.getElementById('streetJumpWrap').classList.toggle('hidden', !sa);
         document.getElementById('streetTextWrap').classList.toggle('hidden', sa);
-        streetSelect.required = sa;
         streetText.required = !sa;
         engine.setStreetsVisible(sa);
         if (!sa) {
             setFree(true);
             streetInput.value = streetText.value.trim();
             pinStreetLabel.textContent = streetInput.value || 'No street chosen';
+            engine.highlightStreet(null);
         } else {
             setFree(false);
-            onStreetChange(false);
+            if (latInput.value && lngInput.value) userPlaced(+latInput.value, +lngInput.value);
+            else if (Object.keys(streetLines).length) { const s = snap(SA_CENTER[0], SA_CENTER[1]); placePin(s[0], s[1], true); }
         }
     }
 
@@ -592,7 +621,6 @@
         marker.on('dragend', () => { const p = marker.getLngLat(); userPlaced(p.lat, p.lng); });
 
         map.on('click', e => {
-            if (!currentStreet() && isSanAgustin()) return;
             userPlaced(e.lngLat.lat, e.lngLat.lng);
         });
 
@@ -662,10 +690,8 @@
                 });
                 // Clicking an active street picks it in the form
                 map.on('click', 'sa-streets-line', e => {
-                    const name = e.features && e.features[0] && e.features[0].properties.name;
-                    if (!name || !isSanAgustin()) return;
-                    const opt = [...streetSelect.options].find(o => o.value === name);
-                    if (opt) { streetSelect.value = name; onStreetChange(false); }
+                    if (!isSanAgustin()) return;
+                    userPlaced(e.lngLat.lat, e.lngLat.lng);
                 });
             } else {
                 map.getSource('sa-streets').setData(colouredStreetGeo());
@@ -676,8 +702,8 @@
         function highlightStreet(name) {
             if (!map.getLayer('sa-streets-selected')) { pendingHighlight = name; return; }
             const only = ['==', ['get', 'name'], name || '__none__'];
-            // Selected street alone: everything else disappears until cleared
-            const shown = name ? only : ['!=', ['get', 'name'], '__none__'];
+            // Every street stays visible; the detected one is highlighted on top
+            const shown = ['!=', ['get', 'name'], '__none__'];
             ['sa-streets-casing', 'sa-streets-line', 'sa-streets-labels'].forEach(id => map.setFilter(id, shown));
             map.setFilter('sa-streets-selected', only);
             map.setFilter('sa-streets-selected-inner', only);
@@ -767,8 +793,7 @@
                 streetsLayer = new google.maps.Data({ map: map });
                 map.addListener('click', e => {
                     if (sv && sv.isOpen()) return;
-                    if (!currentStreet() && isSanAgustin()) return;
-                    userPlaced(e.latLng.lat(), e.latLng.lng());
+                            userPlaced(e.latLng.lat(), e.latLng.lng());
                 });
 
                 ready = true;
@@ -789,7 +814,7 @@
                 const active = activeStreets.has(name.toLowerCase());
                 const isSel = !!selected && name === selected;
                 return {
-                    visible: streetsVisible && (!selected || isSel),
+                    visible: streetsVisible,
                     clickable: true,
                     strokeColor: isSel ? '#facc15' : sev.color,
                     strokeWeight: isSel ? 6 : (active ? 4 : 2.5),
@@ -823,10 +848,8 @@
                 tip.close();
             });
             streetsLayer.addListener('click', e => {
-                const name = String(e.feature.getProperty('name') || '').trim();
-                if (!name || !isSanAgustin()) return;
-                const opt = [...streetSelect.options].find(o => o.value === name);
-                if (opt) { streetSelect.value = name; onStreetChange(false); }
+                if (!isSanAgustin() || (sv && sv.isOpen())) return;
+                userPlaced(e.latLng.lat(), e.latLng.lng());
             });
         }
 
@@ -892,7 +915,6 @@
         const icon = L.divIcon({ className: '', html: '<div class="crime-marker"><i class="fas fa-exclamation"></i></div>', iconSize: [30, 30], iconAnchor: [15, 30] });
         let marker = null;
         map.on('click', e => {
-            if (!currentStreet() && isSanAgustin()) return;
             userPlaced(e.latlng.lat, e.latlng.lng);
         });
         return {
@@ -907,7 +929,7 @@
             },
             highlightStreet(name) {
                 if (typeof saStreetsHighlight === 'function') saStreetsHighlight(name ? [name] : []);
-                if (typeof ensureSanAgustinStreets === 'function') ensureSanAgustinStreets().then(() => showOnly(name || null));
+                if (typeof ensureSanAgustinStreets === 'function') ensureSanAgustinStreets().then(() => showOnly(null));
             },
             fitStreet: name => { if (typeof saStreetsFitStreet === 'function') saStreetsFitStreet(name); },
             setStreetsVisible: on => { if (typeof saStreetsSetVisible === 'function') saStreetsSetVisible(on); },
@@ -919,13 +941,22 @@
     // Wiring
     // ------------------------------------------------------------------
     freeToggle.addEventListener('click', () => { if (isSanAgustin()) setFree(!free); });
-    streetSelect.addEventListener('change', () => onStreetChange(false));
+    document.getElementById('streetJump').addEventListener('change', function () {
+        const name = this.value;
+        if (!name || !isSanAgustin()) return;
+        const mid = streetMidpoint(name);
+        if (!mid) return;
+        // Snap onto that street, then read the street back from the coordinates
+        const s = snap(mid[0], mid[1]);
+        placePin(s[0], s[1], true);
+        engine.fitStreet(name);
+    });
     streetText.addEventListener('input', () => { streetInput.value = streetText.value.trim(); pinStreetLabel.textContent = streetInput.value || 'No street chosen'; });
     barangaySelect.addEventListener('change', onBarangayChange);
     document.getElementById('recenterBtn').addEventListener('click', () => {
-        if (!isSanAgustin() || !currentStreet()) return;
-        const mid = streetMidpoint(currentStreet());
-        if (mid) placePin(mid[0], mid[1], true);
+        if (!isSanAgustin() || !latInput.value) return;
+        const s = snap(+latInput.value, +lngInput.value);
+        placePin(s[0], s[1], true);
     });
 
     document.querySelectorAll('#categoryChips [data-cat]').forEach(btn => btn.addEventListener('click', () => {
@@ -941,7 +972,7 @@
 
     document.getElementById('addCrimeForm').addEventListener('submit', function (e) {
         streetInput.value = currentStreet();
-        if (!streetInput.value) { e.preventDefault(); alert('Please choose the street where the crime happened.'); return; }
+        if (!streetInput.value) { e.preventDefault(); alert(isSanAgustin() ? 'Place the pin on a San Agustin street so the street can be detected.' : 'Please type the street where the crime happened.'); return; }
         if (!latInput.value || !lngInput.value) { e.preventDefault(); alert('Please place the pin on the map.'); return; }
         const btn = document.getElementById('submitBtn'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Saving...';
     });
@@ -1024,6 +1055,7 @@
                     const name = String(f.properties?.name || '').trim();
                     if (!name) return;
                     const key = name.toLowerCase();
+                    streetNames[key] = name;
                     const coords = f.geometry?.type === 'MultiLineString' ? f.geometry.coordinates : [f.geometry?.coordinates || []];
                     coords.forEach(line => {
                         const pts = line.filter(c => Array.isArray(c) && c.length >= 2).map(c => [+c[1], +c[0]]);
