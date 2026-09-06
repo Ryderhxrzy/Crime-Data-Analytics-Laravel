@@ -22,6 +22,75 @@ class ReportsController extends Controller
     // ------------------------------------------------ Crime Data report page
 
     /**
+     * Google Static Maps image for one crime, for the PDF.
+     *
+     * The browser cannot draw a live Google map into a PDF, so the report
+     * asks here for a picture: hybrid imagery centred on the crime, the
+     * street traced on it (encoded polylines), the spot marked. Fetched
+     * server-side because the API key stays out of the browser and a
+     * same-origin image can be put on a canvas. Cached: the same crime
+     * produces the same picture.
+     */
+    public function staticMap(Request $request)
+    {
+        $data = $request->validate([
+            'center'    => ['required', 'regex:/^-?\d{1,2}(\.\d+)?,-?\d{1,3}(\.\d+)?$/'],
+            'zoom'      => ['nullable', 'integer', 'min:14', 'max:20'],
+            'size'      => ['nullable', 'regex:/^\d{2,3}x\d{2,3}$/'],
+            'maptype'   => ['nullable', 'in:hybrid,roadmap,satellite'],
+            'path'      => ['nullable', 'array', 'max:40'],
+            'path.*'    => ['string', 'max:2000', 'regex:/^color:0x[0-9a-fA-F]{6,8}\|weight:\d{1,2}\|enc:[?-~]+$/'],
+            'markers'   => ['nullable', 'string', 'max:200', 'regex:/^[A-Za-z0-9:|.,\-]+$/'],
+        ]);
+
+        $key = config('services.google_maps.key');
+        if (!$key) {
+            return response()->json(['error' => 'Google Maps API key is not configured.'], 503);
+        }
+
+        $query = [
+            'center'  => $data['center'],
+            'zoom'    => $data['zoom'] ?? 17,
+            'size'    => $data['size'] ?? '640x300',
+            'scale'   => 2,
+            'maptype' => $data['maptype'] ?? 'hybrid',
+            'key'     => $key,
+        ];
+        $qs = http_build_query($query);
+        foreach ($data['path'] ?? [] as $path) {
+            $qs .= '&path=' . rawurlencode($path);
+        }
+        if (!empty($data['markers'])) {
+            $qs .= '&markers=' . rawurlencode($data['markers']);
+        }
+
+        $cacheKey = 'report_static_map_' . md5($qs);
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+
+        if (!$cached) {
+            try {
+                $res = \Illuminate\Support\Facades\Http::timeout(15)
+                    ->get('https://maps.googleapis.com/maps/api/staticmap?' . $qs);
+            } catch (\Throwable $e) {
+                return response()->json(['error' => 'Google Static Maps could not be reached: ' . $e->getMessage()], 502);
+            }
+
+            if (!$res->successful() || !str_starts_with((string) $res->header('Content-Type'), 'image/')) {
+                // Google answers a refusal in plain text (billing, API not enabled, key restrictions)
+                \Illuminate\Support\Facades\Log::warning('Static map refused', ['status' => $res->status(), 'body' => mb_substr($res->body(), 0, 300)]);
+                return response()->json(['error' => trim($res->body()) ?: 'Google Static Maps refused the request.'], 502);
+            }
+
+            $cached = ['type' => $res->header('Content-Type'), 'body' => base64_encode($res->body())];
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $cached, now()->addDay());
+        }
+
+        return response(base64_decode($cached['body']), 200)
+            ->header('Content-Type', $cached['type'])
+            ->header('Cache-Control', 'private, max-age=86400');
+    }
+
+    /**
      * Reports > Crime Data: every recorded San Agustin crime by street, with
      * a hover map, search, saved selections, and per-crime PDF download — so
      * staff can hand over crime data (with the map of where it happened)

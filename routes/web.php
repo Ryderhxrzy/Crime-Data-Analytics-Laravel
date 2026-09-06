@@ -189,6 +189,11 @@ Route::middleware(['jwt.api', 'password.fresh'])->group(function () {
         Route::post('/crime-data/save', [ReportsController::class, 'storeCrimeReport'])->name('crime-data.save');
         Route::get('/crime-data/saved', [ReportsController::class, 'listCrimeReports'])->name('crime-data.saved');
         Route::delete('/crime-data/saved/{id}', [ReportsController::class, 'deleteCrimeReport'])->name('crime-data.delete');
+        // Google map image for the PDF, fetched server-side so the API key
+        // never reaches the browser and the image can be drawn into the PDF.
+        Route::get('/crime-data/static-map', [ReportsController::class, 'staticMap'])
+            ->middleware('throttle:60,1')
+            ->name('crime-data.static-map');
 
         Route::get('/{id}', [ReportsController::class, 'show'])->name('show');
         Route::get('/{id}/download', [ReportsController::class, 'download'])->name('download');

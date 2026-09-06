@@ -588,6 +588,12 @@
      * a live map (street highlighted + exact spot). Once the map tiles load,
      * the print dialog opens — choose "Save as PDF" to download.
      */
+    const GOOGLE_KEY = (document.querySelector('meta[name="google-maps-key"]') || {}).content || '';
+    const STATIC_MAP_URL = @json(route('reports.crime-data.static-map'));
+    // The report window's own script (Google preview, Google static image for the
+    // PDF, hand-drawn OpenStreetMap only if Google refuses).
+    const REPORT_SCRIPT = "var reportMaps = [], pending = CRIMES.length, actionsReady = false, googleReady = false;\nfunction enableActions() { if (actionsReady) return; actionsReady = true; document.getElementById(\"downloadPdf\").disabled = false; document.getElementById(\"printReport\").disabled = false; }\nfunction done() { if (--pending <= 0) { setTimeout(enableActions, 500); } }\nfunction streetSegments(c) { return STREETS[(c.street || \"\").toLowerCase()] || []; }\nfunction crimeColor(c) { return CATC[c.category] || \"#dc2626\"; }\n\n/* ---- On-screen preview: the SAME Google map (hybrid) the system uses everywhere ---- */\nfunction initReportMaps() {\n    googleReady = true;\n    CRIMES.forEach(function (c, i) {\n        var el = document.getElementById(\"map\" + i);\n        var center = c.lat && c.lng ? { lat: +c.lat, lng: +c.lng } : null;\n        var map = new google.maps.Map(el, {\n            center: center || { lat: 14.7292, lng: 121.0385 }, zoom: 17, mapTypeId: \"hybrid\",\n            disableDefaultUI: true, gestureHandling: \"none\", keyboardShortcuts: false, clickableIcons: false, tilt: 0\n        });\n        reportMaps.push(map);\n        var bounds = new google.maps.LatLngBounds();\n        streetSegments(c).forEach(function (coords) {\n            var path = coords.map(function (p) { bounds.extend({ lat: p[1], lng: p[0] }); return { lat: p[1], lng: p[0] }; });\n            new google.maps.Polyline({ map: map, path: path, strokeColor: \"#111111\", strokeOpacity: .35, strokeWeight: 8, zIndex: 1 });\n            new google.maps.Polyline({ map: map, path: path, strokeColor: \"#f59e0b\", strokeOpacity: .95, strokeWeight: 4, zIndex: 2 });\n        });\n        if (center) {\n            new google.maps.Marker({ map: map, position: center, zIndex: 3, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: crimeColor(c), fillOpacity: 1, strokeColor: \"#ffffff\", strokeWeight: 2 } });\n        }\n        google.maps.event.addListenerOnce(map, \"tilesloaded\", done);\n    });\n}\nfunction reportMapsFailed(why) {\n    CRIMES.forEach(function (c, i) { var el = document.getElementById(\"map\" + i); if (el && !el.hasChildNodes()) el.innerHTML = \"<div style=\\\"padding:20px;color:#b45309;font-size:12px\\\">Google Maps could not be loaded\" + (why ? \": \" + why : \"\") + \". The PDF will still include the map.</div>\"; });\n    enableActions();\n}\nwindow.gm_authFailure = function () { reportMapsFailed(\"API key rejected\"); };\n\n/* ---- PDF image 1: Google Static Maps, fetched through our own server ---- */\nfunction encodePolyline(coords) {\n    var out = \"\", lastLat = 0, lastLng = 0;\n    function enc(v) { v = v < 0 ? ~(v << 1) : (v << 1); var s = \"\"; while (v >= 0x20) { s += String.fromCharCode((0x20 | (v & 0x1f)) + 63); v >>= 5; } return s + String.fromCharCode(v + 63); }\n    coords.forEach(function (p) { var lat = Math.round(p[1] * 1e5), lng = Math.round(p[0] * 1e5); out += enc(lat - lastLat) + enc(lng - lastLng); lastLat = lat; lastLng = lng; });\n    return out;\n}\nfunction staticMapUrl(c, w, h) {\n    var q = new URLSearchParams();\n    q.set(\"center\", (+c.lat).toFixed(6) + \",\" + (+c.lng).toFixed(6));\n    q.set(\"zoom\", \"17\"); q.set(\"size\", w + \"x\" + h); q.set(\"maptype\", \"hybrid\");\n    streetSegments(c).slice(0, 20).forEach(function (coords) {\n        var enc = encodePolyline(coords);\n        q.append(\"path[]\", \"color:0x11111159|weight:8|enc:\" + enc);\n        q.append(\"path[]\", \"color:0xf59e0bf2|weight:4|enc:\" + enc);\n    });\n    q.set(\"markers\", \"color:0x\" + crimeColor(c).replace(\"#\", \"\") + \"|\" + (+c.lat).toFixed(6) + \",\" + (+c.lng).toFixed(6));\n    return STATIC_MAP_URL + \"?\" + q.toString();\n}\nfunction loadImage(url) { return new Promise(function (res, rej) { var img = new Image(); img.crossOrigin = \"anonymous\"; img.onload = function () { res(img); }; img.onerror = function () { rej(new Error(\"image\")); }; img.src = url; }); }\nfunction googleSnapshot(c, w, h) {\n    if (!c.lat || !c.lng) return Promise.reject(new Error(\"no coordinates\"));\n    return fetch(staticMapUrl(c, w, h), { headers: { \"Accept\": \"image/*,application/json\" } }).then(function (r) {\n        if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || (\"HTTP \" + r.status)); }, function () { throw new Error(\"HTTP \" + r.status); });\n        return r.blob();\n    }).then(function (blob) { return new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.readAsDataURL(blob); }); });\n}\n\n/* ---- PDF image 2 (fallback only): OpenStreetMap tiles, street and marker drawn by hand ---- */\n/* through the SAME projection, so the line sits exactly on the road. */\nvar TILE_URL = \"https://tile.openstreetmap.org/{z}/{x}/{y}.png\";\nfunction project(lat, lng, z) { var n = 256 * Math.pow(2, z), s = Math.sin(lat * Math.PI / 180); return { x: (lng + 180) / 360 * n, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n }; }\nfunction osmSnapshot(c, w, h) {\n    var z = 17, S = 2, lat = +c.lat, lng = +c.lng;\n    var segs = streetSegments(c);\n    if (!lat || !lng) { var first = segs[0] && segs[0][0]; if (!first) return Promise.reject(new Error(\"no location\")); lng = first[0]; lat = first[1]; }\n    var center = project(lat, lng, z), tl = { x: center.x - w / 2, y: center.y - h / 2 };\n    var toPt = function (la, ln) { var p = project(la, ln, z); return [p.x - tl.x, p.y - tl.y]; };\n    var canvas = document.createElement(\"canvas\"); canvas.width = w * S; canvas.height = h * S;\n    var ctx = canvas.getContext(\"2d\"); ctx.scale(S, S); ctx.fillStyle = \"#e5e7eb\"; ctx.fillRect(0, 0, w, h);\n    var n = Math.pow(2, z), loads = [];\n    for (var tx = Math.floor(tl.x / 256); tx <= Math.floor((tl.x + w) / 256); tx++) {\n        for (var ty = Math.floor(tl.y / 256); ty <= Math.floor((tl.y + h) / 256); ty++) {\n            if (ty < 0 || ty >= n) continue;\n            (function (tx, ty) { var wx = ((tx % n) + n) % n; var url = TILE_URL.replace(\"{z}\", z).replace(\"{x}\", wx).replace(\"{y}\", ty);\n                loads.push(loadImage(url).then(function (img) { ctx.drawImage(img, tx * 256 - tl.x, ty * 256 - tl.y, 256, 256); }).catch(function () {})); })(tx, ty);\n        }\n    }\n    return Promise.all(loads).then(function () {\n        ctx.lineCap = \"round\"; ctx.lineJoin = \"round\";\n        [[\"#111111\", 8, .35], [\"#f59e0b\", 4, .95]].forEach(function (st) {\n            segs.forEach(function (coords) {\n                ctx.beginPath(); coords.forEach(function (p, i) { var pt = toPt(p[1], p[0]); if (i) ctx.lineTo(pt[0], pt[1]); else ctx.moveTo(pt[0], pt[1]); });\n                ctx.strokeStyle = st[0]; ctx.lineWidth = st[1]; ctx.globalAlpha = st[2]; ctx.stroke(); ctx.globalAlpha = 1;\n            });\n        });\n        if (c.lat && c.lng) { var pt = toPt(+c.lat, +c.lng); ctx.beginPath(); ctx.arc(pt[0], pt[1], 9, 0, Math.PI * 2); ctx.fillStyle = crimeColor(c); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = \"#fff\"; ctx.stroke(); }\n        return canvas.toDataURL(\"image/png\");\n    });\n}\n\n/* Google first; the OSM drawing only if Google refuses (e.g. billing not enabled on the project) */\nvar fallbackNoted = false;\nfunction snapshotCrime(c, w, h) {\n    return googleSnapshot(c, w, h).catch(function (err) {\n        console.warn(\"Google static map unavailable, drawing OpenStreetMap instead:\", err.message);\n        if (!fallbackNoted) { fallbackNoted = true; var n = document.getElementById(\"mapNotice\"); if (n) { n.style.display = \"block\"; n.textContent = \"Google map image unavailable (\" + err.message + \") - the PDF uses an OpenStreetMap drawing instead.\"; } }\n        return osmSnapshot(c, w, h);\n    });\n}\n\ndocument.getElementById(\"printReport\").addEventListener(\"click\", function () { setTimeout(function () { window.print(); }, 250); });\nfunction safeName(v) { return String(v || \"report\").replace(/[^a-z0-9]+/gi, \"-\").replace(/^-+|-+$/g, \"\").toLowerCase() || \"report\"; }\nfunction pdfFilename() { if (CRIMES.length === 1) return safeName(CRIMES[0].street) + \"-\" + safeName(CRIMES[0].code) + \".pdf\"; return \"crime-data-report-\" + new Date().toISOString().slice(0, 10) + \".pdf\"; }\n\ndocument.getElementById(\"downloadPdf\").addEventListener(\"click\", function () {\n    var btn = this;\n    if (!window.html2pdf) { alert(\"PDF generator failed to load. Please try again.\"); return; }\n    btn.disabled = true; btn.textContent = \"Preparing maps\u2026\";\n    var mapEl = document.getElementById(\"map0\"), w = Math.max(300, Math.min(640, Math.round(mapEl.clientWidth || 640))), h = 300;\n    Promise.all(CRIMES.map(function (c) { return snapshotCrime(c, w, h); })).then(function (images) {\n        var copy = document.getElementById(\"reportContent\").cloneNode(true);\n        copy.id = \"pdfDownloadContent\"; copy.style.width = \"190mm\"; copy.style.background = \"#fff\"; copy.style.padding = \"0\";\n        copy.querySelectorAll(\".map\").forEach(function (el, i) { el.innerHTML = \"\"; var image = document.createElement(\"img\"); image.src = images[i]; image.alt = \"Crime location map\"; image.style.cssText = \"display:block;width:100%;height:100%;object-fit:cover;\"; el.appendChild(image); });\n        var staging = document.createElement(\"div\"); staging.style.cssText = \"position:fixed;left:0;top:0;z-index:-1;width:190mm;background:#fff;\"; staging.appendChild(copy); document.body.appendChild(staging);\n        btn.textContent = \"Creating PDF\u2026\";\n        return html2pdf().set({ margin: [10, 10, 10, 10], filename: pdfFilename(), image: { type: \"jpeg\", quality: .98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: \"mm\", format: \"a4\", orientation: \"portrait\" }, pagebreak: { mode: [\"css\", \"legacy\"] } }).from(copy).save().then(function () { staging.remove(); btn.textContent = \"Download PDF\"; btn.disabled = false; });\n    }).catch(function (error) {\n        console.error(\"PDF map failed:\", error);\n        alert(\"The map image could not be created, so no PDF was downloaded. Please try again.\");\n        btn.textContent = \"Download PDF\"; btn.disabled = false;\n    });\n});\nsetTimeout(enableActions, 8000);\n";
+
     function openPdf(codes, reportTitle) {
         const crimes = codes.map(c => allCrimes.find(x => x.code === c)).filter(Boolean);
         if (!crimes.length) { alert('Crime data is still loading — try again in a moment.'); return; }
@@ -633,7 +639,6 @@
 
         w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8">' +
             '<title>' + esc(reportTitle || 'Crime Data Report') + '</title>' +
-            '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">' +
             '<style>' +
                 'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;}' +
                 'header{border-bottom:3px solid #1e3a8a;padding-bottom:10px;margin-bottom:18px;}' +
@@ -650,7 +655,7 @@
                 'table.details td{border:1px solid #ddd;padding:5px 8px;font-size:11.5px;}' +
                 'table.details td.lbl{width:130px;font-weight:700;background:#f8fafc;color:#374151;}' +
                 '.desc{font-size:11.5px;color:#444;margin:0 0 8px;}' +
-                '.map{height:300px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;}' +
+                '.map{height:300px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#e5e7eb;}' +
                 '.maplabel{font-size:10px;color:#666;margin:4px 0 0;}' +
                 'footer{margin-top:18px;border-top:1px solid #ddd;padding-top:8px;font-size:10px;color:#777;}' +
                 '#pdfActions{position:sticky;top:0;z-index:10;display:flex;justify-content:flex-end;gap:8px;padding:0 0 16px;background:#fff;}' +
@@ -665,65 +670,23 @@
                 '<p>Barangay San Agustin, Quezon City · ' + crimes.length + ' crime record' + (crimes.length === 1 ? '' : 's') +
                 ' · Generated ' + new Date().toLocaleString() + '</p>' +
             '</header>' +
+            '<p id="mapNotice" style="display:none;margin:-8px 0 14px;padding:8px 10px;border:1px solid #fcd34d;background:#fffbeb;color:#92400e;font-size:11px;border-radius:6px;"></p>' +
             sections +
             '<footer>Generated by the Crime Data Analytics system. The map shows the street of the crime (highlighted) and the exact recorded spot (marker). For official use.</footer>' +
             '</div>' +
-            '<scr' + 'ipt src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/scr' + 'ipt>' +
-            '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/scr' + 'ipt>' +
             '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/scr' + 'ipt>' +
             '<scr' + 'ipt>' +
             'var CRIMES=' + JSON.stringify(crimes) + ';' +
             'var STREETS=' + JSON.stringify(neededStreets) + ';' +
             'var CATC=' + JSON.stringify(CAT_COLORS) + ';' +
-            'var reportMaps=[],reportStreetLayers=[],pending=CRIMES.length,actionsReady=false;' +
-            'function enableActions(){if(actionsReady)return;actionsReady=true;document.getElementById("downloadPdf").disabled=false;document.getElementById("printReport").disabled=false;}' +
-            'function done(){if(--pending<=0){setTimeout(enableActions,500);}}' +
-            'CRIMES.forEach(function(c,i){var m=L.map("map"+i,{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false});reportMaps.push(m);var t=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,crossOrigin:true});t.on("load",done);t.addTo(m);var g=L.featureGroup();var segs=STREETS[(c.street||"").toLowerCase()]||[];segs.forEach(function(coords){var latlngs=coords.map(function(p){return [p[1],p[0]];});var casing=L.polyline(latlngs,{color:"#111",weight:8,opacity:.35}).addTo(g);var activeLine=L.polyline(latlngs,{color:"#f59e0b",weight:4,opacity:.95}).addTo(g);reportStreetLayers.push({map:m,layers:[casing,activeLine]});});if(c.lat&&c.lng){L.circleMarker([c.lat,c.lng],{radius:9,color:"#fff",weight:2,fillColor:CATC[c.category]||"#dc2626",fillOpacity:1}).addTo(g);}g.addTo(m);setTimeout(function(){m.invalidateSize();var b=g.getBounds();if(b.isValid())m.fitBounds(b.pad(.15),{maxZoom:17});if(c.lat&&c.lng)m.setView([c.lat,c.lng],Math.max(m.getZoom(),17));},30);});' +
-            'document.getElementById("printReport").addEventListener("click",function(){reportMaps.forEach(function(m){m.invalidateSize();});setTimeout(function(){window.print();},250);});' +
-            'function safeName(v){return String(v||"report").replace(/[^a-z0-9]+/gi,"-").replace(/^-+|-+$/g,"").toLowerCase()||"report";}' +
-            'function pdfFilename(){if(CRIMES.length===1)return safeName(CRIMES[0].street)+"-"+safeName(CRIMES[0].code)+".pdf";return "crime-data-report-"+new Date().toISOString().slice(0,10)+".pdf";}' +
-            '/* Change this only when the street line needs a PDF-only vertical correction. ' +
-            'Negative moves the street line up; positive moves it down. */' +
-            'const PDF_STREET_LINE_OFFSET_Y = 8;' +
-            'function snapshotMap(map) {' +
-                'if (!window.html2canvas) {' +
-                    'return Promise.reject(new Error("Map snapshot tool failed to load."));' +
-                '}' +
-                'map.invalidateSize();' +
-                'const streetLayers = reportStreetLayers' +
-                    '.filter(entry => entry.map === map)' +
-                    '.flatMap(entry => entry.layers);' +
-                'const originalLatLngs = streetLayers.map(layer => layer.getLatLngs());' +
-                'if (PDF_STREET_LINE_OFFSET_Y !== 0) {' +
-                    'streetLayers.forEach(layer => {' +
-                        'const shiftedLatLngs = layer.getLatLngs().map(latLng => {' +
-                            'const point = map.latLngToContainerPoint(latLng);' +
-                            'point.y += PDF_STREET_LINE_OFFSET_Y;' +
-                            'return map.containerPointToLatLng(point);' +
-                        '});' +
-                        'layer.setLatLngs(shiftedLatLngs);' +
-                    '});' +
-                '}' +
-                'const restoreStreetPositions = () => {' +
-                    'streetLayers.forEach((layer, index) => {' +
-                        'layer.setLatLngs(originalLatLngs[index]);' +
-                    '});' +
-                '};' +
-                'return html2canvas(map.getContainer(), {' +
-                    'backgroundColor: "#fff",' +
-                    'scale: 2,' +
-                    'useCORS: true,' +
-                    'logging: false' +
-                '}).then(canvas => {' +
-                    'restoreStreetPositions();' +
-                    'return canvas.toDataURL("image/png");' +
-                '}, error => {' +
-                    'restoreStreetPositions();' +
-                    'throw error;' +
-                '});' +
-            '}' +
-            'document.getElementById("downloadPdf").addEventListener("click",function(){var btn=this;if(!window.html2pdf){alert("PDF generator failed to load. Please try again.");return;}btn.disabled=true;btn.textContent="Preparing maps…";reportMaps.forEach(function(m){m.invalidateSize();});setTimeout(function(){Promise.all(reportMaps.map(snapshotMap)).then(function(images){var copy=document.getElementById("reportContent").cloneNode(true);copy.id="pdfDownloadContent";copy.style.width="190mm";copy.style.background="#fff";copy.style.padding="0";copy.querySelectorAll(".map").forEach(function(el,i){el.innerHTML="";var image=document.createElement("img");image.src=images[i];image.alt="Crime location map";image.style.cssText="display:block;width:100%;height:100%;object-fit:fill;";el.appendChild(image);});var staging=document.createElement("div");staging.style.cssText="position:fixed;left:0;top:0;z-index:-1;width:190mm;background:#fff;";staging.appendChild(copy);document.body.appendChild(staging);btn.textContent="Creating PDF…";return html2pdf().set({margin:[10,10,10,10],filename:pdfFilename(),image:{type:"jpeg",quality:.98},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(copy).save().then(function(){staging.remove();btn.textContent="Download PDF";btn.disabled=false;});}).catch(function(error){console.error("PDF map snapshot failed:",error);alert("The map snapshot could not be created, so no inaccurate PDF was downloaded. Please try again.");btn.textContent="Download PDF";btn.disabled=false;});},250);});' +
-            'setTimeout(enableActions,6000);' +
+            'var STATIC_MAP_URL=' + JSON.stringify(STATIC_MAP_URL) + ';' +
+            REPORT_SCRIPT +
+            '<\/scr' + 'ipt>' +
+            // The same Google map as the rest of the system for the on-screen preview.
+            // Loaded last so initReportMaps / reportMapsFailed already exist.
+            (GOOGLE_KEY
+                ? '<scr' + 'ipt src="https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_KEY) + '&callback=initReportMaps&loading=async" onerror="reportMapsFailed(\'script blocked\')"><\/scr' + 'ipt>'
+                : '<scr' + 'ipt>reportMapsFailed("API key not configured");<\/scr' + 'ipt>') +
             '<\/scr' + 'ipt></body></html>');
         w.document.close();
     }
