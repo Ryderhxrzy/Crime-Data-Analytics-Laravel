@@ -138,19 +138,19 @@
 
         <!-- Body -->
         <div class="email-body">
-            <p>Hello <strong>{{ $user->full_name }}</strong>,</p>
+            <p>Hello <strong>{{ $userName }}</strong>,</p>
 
-            <p>We detected an attempt to access your account from a new device. Your account has <strong>Two-Factor Authentication</strong> enabled for security. Please verify this login with the code below.</p>
+            <p>Someone just signed in to your account with the correct password. Every sign-in to this system has to be confirmed with a one-time code. Enter the code below to finish signing in.</p>
 
             <!-- 2FA Info Box -->
             <div class="info-section">
                 <h3>🔐 Two-Factor Authentication</h3>
-                <p>Your account is protected with Two-Factor Authentication enabled. This adds an extra layer of security to your account.</p>
+                <p>Every admin and staff sign-in to the Crime Data Analytics system requires this one-time code, in addition to your password.</p>
             </div>
 
             <!-- Alert Box -->
             <div class="alert-box">
-                <p>⚠️ This is a security verification. If this wasn't you, please ignore this email and your account will remain secure.</p>
+                <p>⚠️ If you did not just try to sign in, do not share this code. Someone else may know your password - change it as soon as you can.</p>
             </div>
 
             <!-- OTP Code -->
@@ -168,15 +168,15 @@
             <!-- Login Details -->
             <div class="info-section">
                 <h3>📋 Login Details</h3>
-                <p><strong>Email:</strong> {{ $user->email }}</p>
-                <p><strong>New Device IP:</strong> {{ $ipAddress }}</p>
+                <p><strong>Email:</strong> {{ $userEmail }}</p>
+                <p><strong>IP address:</strong> {{ $ipAddress }}</p>
                 <p><strong>Time:</strong> {{ now()->format('Y-m-d H:i:s') }}</p>
             </div>
 
             <!-- Security Warning -->
             <div class="security-info">
                 <h4>⚠️ Important Security Notice</h4>
-                <p>This verification code will expire in <strong>10 minutes</strong>.</p>
+                <p>This verification code will expire in <strong>{{ $expiresInMinutes }} minute{{ $expiresInMinutes == 1 ? '' : 's' }}</strong>.</p>
                 <p style="margin-bottom: 0;">If you did not attempt to login, your account may be compromised. Please change your password immediately and contact your administrator.</p>
             </div>
 
