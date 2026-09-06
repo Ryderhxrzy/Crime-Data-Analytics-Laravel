@@ -69,7 +69,7 @@
                         Enter Verification Code
                     </h2>
                     <p class="mt-2 text-xs sm:text-sm text-gray-600">
-                        We sent a 6-digit code to your email
+                        We sent a 6-digit code to <strong class="text-gray-900">{{ $maskedEmail }}</strong>
                     </p>
                 </div>
 
@@ -90,14 +90,14 @@
                         <input type="hidden" id="otp_code" name="otp_code">
                     </div>
 
-                    @if ($errors->has('otp_code'))
-                        <p class="text-sm text-red-600 text-center">{{ $errors->first('otp_code') }}</p>
+                    @if ($errors->any())
+                        <p class="text-sm text-red-600 text-center">{{ $errors->first() }}</p>
                     @endif
 
                     <!-- Timer -->
                     <div class="text-center">
                         <p class="text-sm text-gray-600">
-                            Code expires in: <span id="timer" class="font-bold text-alertara-600">5:00</span>
+                            Code expires in: <span id="timer" class="font-bold text-alertara-600">{{ sprintf('%d:%02d', intdiv((int) $expiresInSeconds, 60), (int) $expiresInSeconds % 60) }}</span>
                         </p>
                         <p id="expiredMessage" class="text-sm text-red-600 hidden mt-2">OTP has expired. Please request a new one.</p>
                     </div>
@@ -128,8 +128,11 @@
     @include('partials.toastr')
 
     <script>
-        const OTP_TIMEOUT = 300; // 5 minutes in seconds
-        const RESEND_COOLDOWN = 30; // 30 seconds
+        // Both come from the server so a re-rendered page (after a wrong code)
+        // counts down the code's real remaining life, not a fresh window.
+        const OTP_TIMEOUT = {{ (int) $expiresInSeconds }};
+        const RESEND_COOLDOWN = {{ (int) \App\Services\LoginOtpService::RESEND_COOLDOWN_SECONDS }};
+        const INITIAL_RESEND_COOLDOWN = {{ (int) $resendCooldown }};
         const OTP_INPUTS = document.querySelectorAll('.otp-input');
         const OTP_CODE_INPUT = document.getElementById('otp_code');
         const SUBMIT_BTN = document.getElementById('submitBtn');
@@ -223,10 +226,15 @@
 
         // Initialize timer
         function initializeTimer() {
-            // Use current time as the start for new sessions
+            // OTP_TIMEOUT is whatever the server says is left on the current
+            // code, so reloading the page cannot buy more time.
             timerStartTime = Date.now();
-            localStorage.setItem('otp_timer_start', timerStartTime.toString());
             let secondsRemaining = OTP_TIMEOUT;
+
+            if (secondsRemaining <= 0) {
+                expireOtp();
+                return;
+            }
 
             updateTimer(secondsRemaining);
 
@@ -278,7 +286,6 @@
                 if (response.ok) {
                     // Reset timer and inputs
                     timerStartTime = Date.now();
-                    localStorage.setItem('otp_timer_start', timerStartTime.toString());
                     clearInterval(timerInterval);
                     OTP_INPUTS.forEach(input => {
                         input.disabled = false;
@@ -295,11 +302,12 @@
                     // Show resend cooldown timer (30 seconds)
                     showResendCooldown(RESEND_COOLDOWN);
 
-                    // Reinitialize timer with new start time
-                    updateTimer(OTP_TIMEOUT);
+                    // Reinitialize timer with the full window the new code has
+                    const freshWindow = data.expiresIn || OTP_TIMEOUT;
+                    updateTimer(freshWindow);
                     timerInterval = setInterval(() => {
                         const elapsedSeconds = Math.floor((Date.now() - timerStartTime) / 1000);
-                        const secondsRemaining = Math.max(0, OTP_TIMEOUT - elapsedSeconds);
+                        const secondsRemaining = Math.max(0, freshWindow - elapsedSeconds);
 
                         if (secondsRemaining <= 0) {
                             clearInterval(timerInterval);
@@ -309,7 +317,7 @@
                         }
                     }, 1000);
 
-                    toastr.success('New OTP code sent successfully! Timer reset to 5 minutes.');
+                    toastr.success(data.message || 'A new verification code has been sent to your email.');
 
                 } else {
                     btn.disabled = false;
@@ -370,8 +378,12 @@
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize resend button as disabled (can only resend after timer expires)
-            document.getElementById('resendBtn').disabled = true;
+            // The server owns the resend cooldown; mirror whatever is left of it.
+            if (INITIAL_RESEND_COOLDOWN > 0) {
+                showResendCooldown(INITIAL_RESEND_COOLDOWN);
+            } else {
+                document.getElementById('resendBtn').disabled = false;
+            }
 
             // Focus first input
             OTP_INPUTS[0].focus();
