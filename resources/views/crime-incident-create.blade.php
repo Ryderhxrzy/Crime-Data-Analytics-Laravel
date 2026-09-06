@@ -247,10 +247,18 @@
                             <span class="pin-chip bg-red-50 text-red-700 border border-red-200"><i class="fas fa-location-dot"></i><span id="pinStreetLabel">No street detected yet</span></span>
                             <span class="pin-chip bg-gray-100 text-gray-700" id="pinModeLabel"><i class="fas fa-road"></i>Pin snaps to the nearest street</span>
                         </div>
-                        <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none">
-                            <span>Free placement</span>
-                            <span class="toggle" id="freeToggle" role="switch" aria-checked="false"></span>
-                        </label>
+                        <div class="flex items-center gap-4 flex-wrap">
+                            {{-- Off by default: while placing a pin the panorama should stay clean
+                                 unless the encoder wants to see what already happened nearby. --}}
+                            <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none" title="Show recorded crimes as arrows inside Street View, with their distance from where you stand">
+                                <span><i class="fas fa-street-view mr-1 text-gray-500"></i>Crimes in Street View</span>
+                                <span class="toggle" id="svCrimesToggle" role="switch" aria-checked="false"></span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none">
+                                <span>Free placement</span>
+                                <span class="toggle" id="freeToggle" role="switch" aria-checked="false"></span>
+                            </label>
+                        </div>
                     </div>
 
                     <div style="position: relative;">
@@ -513,6 +521,42 @@
         detectAt(lat, lng);
     }
 
+    // ---- Crimes shown inside Street View (Google engine only) ----
+    let svCrimesOn = false;
+    const svCrimesToggle = document.getElementById('svCrimesToggle');
+
+    // Crime type -> colour, from the category dropdown of this very form
+    const categoryColors = {};
+    document.querySelectorAll('select[name="crime_category_id"] option[data-color]').forEach(opt => {
+        categoryColors[String(opt.textContent).trim().toLowerCase()] = opt.dataset.color;
+    });
+    const colorOfCategory = name => categoryColors[String(name || '').trim().toLowerCase()] || '#dc2626';
+
+    // Every recorded incident with coordinates, from the per-street stats
+    function recordedCrimePoints() {
+        const out = [];
+        Object.keys(streetStats || {}).forEach(name => {
+            ((streetStats[name] || {}).incidents || []).forEach(inc => {
+                const lat = +inc.lat, lng = +inc.lng;
+                if (!Number.isFinite(lat) || !Number.isFinite(lng) || (!lat && !lng)) return;
+                out.push({ lat, lng, i: {
+                    incident_code: inc.code, category_name: inc.category, street: name,
+                    incident_date: inc.date, incident_time: inc.time, color_code: colorOfCategory(inc.category),
+                } });
+            });
+        });
+        return out;
+    }
+
+    function setStreetViewCrimes(on) {
+        svCrimesOn = !!on;
+        svCrimesToggle.classList.toggle('on', svCrimesOn);
+        svCrimesToggle.setAttribute('aria-checked', svCrimesOn ? 'true' : 'false');
+        if (engine && typeof engine.setStreetViewCrimes === 'function') engine.setStreetViewCrimes(svCrimesOn);
+    }
+    svCrimesToggle.addEventListener('click', () => setStreetViewCrimes(!svCrimesOn));
+    svCrimesToggle.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setStreetViewCrimes(!svCrimesOn); } });
+
     function setFree(on) {
         free = on;
         placement.value = on ? 'free' : 'street';
@@ -745,7 +789,7 @@
         mapEl.style.cssText = 'position:absolute;inset:0;';
         el.appendChild(mapEl);
         let map = null, ready = false, marker = null, streetsLayer = null, boundaryLayer = null, tip = null, sv = null, saRings = [];
-        let selected = null, streetsVisible = true, streetsAdded = false, pendingPin = null, pendingFit = null;
+        let selected = null, streetsVisible = true, streetsAdded = false, pendingPin = null, pendingFit = null, svPins = null;
         if (engineBadge) engineBadge.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading Google Maps';
 
         if (typeof GoogleMapsLoader === 'undefined' || !GoogleMapsLoader.hasKey()) {
@@ -766,6 +810,12 @@
                 // Native Pegman + Google-style inset map, limited to the barangay
                 if (typeof CrimeMapGoogle !== 'undefined') {
                     sv = CrimeMapGoogle.attachStreetView(google, map, el, mapEl, { inside: (lat, lng) => CrimeMapGoogle.insideRings(saRings, lat, lng) });
+                    // Recorded crimes as arrows inside the panorama (same as Crime
+                    // Mapping); the page's toggle turns it on, off by default.
+                    svPins = CrimeMapGoogle.streetViewPins(google, sv.pano, {
+                        getPoints: recordedCrimePoints,
+                        enabled: svCrimesOn,
+                    });
                 }
 
                 // Barangay boundaries: San Agustin outlined, neighbours faint
@@ -876,6 +926,7 @@
                 if (b) map.fitBounds(new window.google.maps.LatLngBounds({ lat: b.minLat, lng: b.minLng }, { lat: b.maxLat, lng: b.maxLng }), 80);
             },
             setStreetsVisible(on) { streetsVisible = on; styleStreets(); },
+            setStreetViewCrimes(on) { if (svPins) svPins.setEnabled(on); },
             resize() { if (map) window.google.maps.event.trigger(map, 'resize'); },
         };
         return api;

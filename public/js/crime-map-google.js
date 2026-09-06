@@ -135,6 +135,7 @@
             .cmg-bubble .s { display: block; font-size: 8.5px; opacity: .95; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
             .cmg-bubble.faded { opacity: .15; pointer-events: none; }
             .cmg-bubble.picked { box-shadow: 0 0 0 3px #facc15, 0 4px 12px rgba(0,0,0,.4); }
+            .cmg-pano-dist { text-shadow: 0 0 3px #000, 0 0 6px #000, 0 1px 2px #000; }
             .map-engine-btn.on { background: #274d4c !important; color: #fff !important; border-color: #274d4c !important; }
             /* Same arrow the classic map drops over a crime when you hover it in the list */
             .cmg-pointer { position: absolute; width: 40px; height: 50px; transform: translate(-50%, calc(-100% - 15px)); pointer-events: none; z-index: 200; }
@@ -317,6 +318,124 @@
     }
 
     // ------------------------------------------------------------------
+    // Crimes inside Street View
+    //
+    // While the panorama is open, every crime within `radius` metres of
+    // Pegman gets a downward arrow planted on the exact spot it happened
+    // (Google draws a marker handed to a panorama at its real position in
+    // the imagery). The arrow shrinks with distance so it reads as standing
+    // in the street rather than floating toward you, and carries the
+    // distance as its label. Clicking opens the crime's details under it.
+    //
+    //   const pins = CrimeMapGoogle.streetViewPins(google, panorama, {
+    //       getPoints: () => [{ lat, lng, i: incident }, ...],
+    //       popup: incident => html,          // optional, default card
+    //       onOpen: incident => {},           // optional "View full details"
+    //       radius: 80, enabled: true,
+    //   });
+    //   pins.setEnabled(false); pins.refresh(); pins.isEnabled();
+    // ------------------------------------------------------------------
+    // Two arrows. Up close the crime is in view, so a pin-style arrow points
+    // DOWN at the exact spot. Farther away the spot is usually behind a
+    // house or round a bend, and a pin there just floats confusingly - so a
+    // navigation arrow points AHEAD instead: "this way, N metres".
+    const ARROW_DOWN = 'M0,0 L-9,-16 L-4,-16 L-4,-30 L4,-30 L4,-16 L9,-16 Z';
+    const ARROW_AHEAD = 'M0,-30 L12,-6 L0,-12 L-12,-6 Z';
+    const NEAR_M = 30;
+    const arrowScale = d => Math.max(0.45, Math.min(1.6, 36 / Math.max(d, 22)));
+    const fmtDist = d => d < 1 ? 'right here' : Math.round(d) + ' m';
+
+    function defaultIncidentPopup(i) {
+        return '<div class="cmg-pop">' +
+            '<div style="font-weight:800;margin-bottom:2px">' + esc(i.incident_title || i.title || i.category_name || 'Incident') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:9999px;background:' + esc(i.color_code || '#274d4c') + ';display:inline-block"></span><span style="font-weight:700;color:#374151">' + esc(i.category_name || 'Unknown') + '</span></div>' +
+            (i.incident_code ? '<div style="font-family:monospace;font-size:11px;color:#6b7280">' + esc(i.incident_code) + '</div>' : '') +
+            (i.street ? '<div><i class="fas fa-road" style="color:#274d4c;width:14px"></i> ' + esc(i.street) + '</div>' : '') +
+            (i.incident_date ? '<div><i class="far fa-calendar" style="color:#274d4c;width:14px"></i> ' + esc(i.incident_date) + (i.incident_time ? ' ' + esc(i.incident_time) : '') + '</div>' : '') +
+            (i.status ? '<div><i class="fas fa-flag" style="color:#274d4c;width:14px"></i> ' + esc(String(i.status).replace(/_/g, ' ')) + (i.clearance_status ? ' · ' + esc(i.clearance_status) : '') + '</div>' : '') +
+            '</div>';
+    }
+
+    function streetViewPins(google, pano, opts) {
+        const o = Object.assign({ getPoints: () => [], popup: defaultIncidentPopup, onOpen: null, radius: 80, enabled: true }, opts || {});
+        injectCss();
+        let markers = [], win = null, enabled = !!o.enabled;
+
+        function clear() {
+            markers.forEach(m => m.setMap(null)); markers = [];
+            if (win) win.close();
+        }
+
+        const svc = new google.maps.StreetViewService();
+
+        // Walk Pegman to the nearest panorama at the crime's spot
+        function goTo(p, statusEl) {
+            if (statusEl) statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            svc.getPanorama({ location: { lat: p.lat, lng: p.lng }, radius: 60, source: google.maps.StreetViewSource.OUTDOOR })
+                .then(r => {
+                    if (r && r.data && r.data.location && r.data.location.pano) { win.close(); pano.setPano(r.data.location.pano); }
+                    else if (statusEl) statusEl.innerHTML = '<i class="fas fa-ban" title="No Street View at that spot"></i>';
+                })
+                .catch(() => { if (statusEl) statusEl.innerHTML = '<i class="fas fa-ban" title="No Street View at that spot"></i>'; });
+        }
+
+        function place() {
+            clear();
+            const pos = pano.getPosition();
+            if (!enabled || !pos || !pano.getVisible()) return;
+            const lat = pos.lat(), lng = pos.lng();
+            if (!win) win = new google.maps.InfoWindow({ maxWidth: 300, pixelOffset: new google.maps.Size(0, 14) });
+            const kx = Math.cos(lat * Math.PI / 180) * 111320, ky = 110540;
+            (o.getPoints() || []).forEach(p => {
+                const d = Math.hypot((p.lng - lng) * kx, (p.lat - lat) * ky);
+                if (!Number.isFinite(d) || d > o.radius) return;
+                const sc = arrowScale(d), near = d <= NEAR_M, color = p.i.color_code || '#dc2626';
+                const m = new google.maps.Marker({
+                    map: pano, position: { lat: p.lat, lng: p.lng }, zIndex: 100 + Math.round(o.radius - d),
+                    title: (p.i.incident_title || p.i.category_name || 'Crime') + ' · ' + (near ? fmtDist(d) : 'this way, ' + fmtDist(d)),
+                    icon: near
+                        ? { path: ARROW_DOWN, scale: sc, anchor: new google.maps.Point(0, 0), labelOrigin: new google.maps.Point(0, -40),
+                            fillColor: color, fillOpacity: 0.95, strokeColor: '#ffffff', strokeWeight: 2 }
+                        : { path: ARROW_AHEAD, scale: sc, anchor: new google.maps.Point(0, -18), labelOrigin: new google.maps.Point(0, 6),
+                            fillColor: color, fillOpacity: 0.9, strokeColor: '#ffffff', strokeWeight: 2 },
+                    // The distance rides on the arrow, so you can tell which crime is which at a glance
+                    label: { text: fmtDist(d), color: '#ffffff', fontSize: Math.round(10 + 3 * sc) + 'px', fontWeight: '800', className: 'cmg-pano-dist' },
+                });
+                m.addListener('click', () => {
+                    win.setContent(
+                        '<div class="cmg-pop"><div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">' +
+                        '<span style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;color:#92400e;border-radius:9999px;padding:3px 10px;font-size:11px;font-weight:800"><i class="fas fa-person-walking"></i> ' +
+                        (d < 1 ? 'You are standing on the spot' : 'About ' + Math.round(d) + ' m ' + (near ? 'from where you stand' : 'ahead')) + '</span>' +
+                        (d >= 1 ? '<button type="button" class="cmg-pano-goto" title="Go to this crime" style="width:28px;height:28px;border-radius:9999px;border:1px solid #fcd34d;background:#fffbeb;color:#92400e;cursor:pointer;font-size:12px;display:inline-flex;align-items:center;justify-content:center"><i class="fas fa-location-arrow"></i></button>' : '') +
+                        '</div></div>' +
+                        o.popup(p.i) +
+                        (typeof o.onOpen === 'function'
+                            ? '<button type="button" class="cmg-pano-open" style="margin-top:8px;width:100%;padding:7px;background:#274d4c;color:#fff;border:0;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-eye mr-1"></i>View full details</button>'
+                            : ''));
+                    win.open({ map: pano, anchor: m });
+                    google.maps.event.addListenerOnce(win, 'domready', () => {
+                        const btn = document.querySelector('.cmg-pano-open');
+                        if (btn) btn.addEventListener('click', () => { win.close(); o.onOpen(p.i); });
+                        const go = document.querySelector('.cmg-pano-goto');
+                        if (go) go.addEventListener('click', () => goTo(p, go));
+                    });
+                });
+                markers.push(m);
+            });
+        }
+
+        pano.addListener('position_changed', place);
+        pano.addListener('visible_changed', () => { if (pano.getVisible()) place(); else clear(); });
+
+        return {
+            refresh: place,
+            clear,
+            setEnabled(on) { enabled = !!on; place(); },
+            isEnabled: () => enabled,
+        };
+    }
+
+    // ------------------------------------------------------------------
     // Canvas heat layer
     //
     // Google's visualization.HeatmapLayer is deprecated and no longer loads,
@@ -438,6 +557,7 @@
             getHeatOptions: () => ({}),
             getWeight: null,               // incident -> 0..1 heat weight (page's own scale)
             onClusterSelect: null,         // (streetName, incidents) when a cluster is picked
+            onIncidentOpen: null,          // (incident) "View full details" from a Street View pin
             modeSelect: null,
             showStreets: true,
             showLegend: true,
@@ -470,6 +590,7 @@
         let segCounts = new Map(), segMax = 0;     // feature index -> { count, cats, incidents, name }
         let saRings = [], focusedStreet = null, currentMode = 'markers', zoomListener = null, pointer = null;
         let walking = false;   // Street View open: Pegman's street is heavier, nothing else fades
+        let svPins = null;     // crime arrows inside the panorama (streetViewPins)
 
         function showMessage(text) {
             let m = overlay.querySelector('.cmg-msg');
@@ -512,6 +633,7 @@
                 if (o.showStreets) addStreets(google);
                 if (o.streetView) {
                     sv = attachStreetView(google, map, overlay, mapEl, { inside: (lat, lng) => insideRings(saRings, lat, lng) });
+                    svPins = streetViewPins(google, sv.pano, { getPoints: currentPoints, popup: incidentPopup, onOpen: o.onIncidentOpen, enabled: true });
                     followPegman(google);
                 }
                 zoomListener = map.addListener('zoom_changed', applyClusterZoom);
@@ -773,16 +895,7 @@
             bubbles.forEach(b => b.el.classList.remove('picked'));
         }
 
-        function incidentPopup(i) {
-            return '<div class="cmg-pop">' +
-                '<div style="font-weight:800;margin-bottom:2px">' + esc(i.incident_title || i.title || i.category_name || 'Incident') + '</div>' +
-                '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:9999px;background:' + esc(i.color_code || '#274d4c') + ';display:inline-block"></span><span style="font-weight:700;color:#374151">' + esc(i.category_name || 'Unknown') + '</span></div>' +
-                (i.incident_code ? '<div style="font-family:monospace;font-size:11px;color:#6b7280">' + esc(i.incident_code) + '</div>' : '') +
-                (i.street ? '<div><i class="fas fa-road" style="color:#274d4c;width:14px"></i> ' + esc(i.street) + '</div>' : '') +
-                (i.incident_date ? '<div><i class="far fa-calendar" style="color:#274d4c;width:14px"></i> ' + esc(i.incident_date) + (i.incident_time ? ' ' + esc(i.incident_time) : '') + '</div>' : '') +
-                (i.status ? '<div><i class="fas fa-flag" style="color:#274d4c;width:14px"></i> ' + esc(String(i.status).replace(/_/g, ' ')) + (i.clearance_status ? ' · ' + esc(i.clearance_status) : '') + '</div>' : '') +
-                '</div>';
-        }
+        const incidentPopup = defaultIncidentPopup;
 
         function addDot(google, p, color, scale) {
             const m = new google.maps.Marker({
@@ -885,6 +998,8 @@
             } else {
                 heat.hide();
             }
+
+            if (svPins) svPins.refresh();
 
             if (mode === 'clusters') {
                 groupByStreet(points).forEach(g => {
@@ -1044,5 +1159,5 @@
         return { activate, current: () => current };
     }
 
-    global.CrimeMapGoogle = { create, switcher, ringsOf, insideRings, outsideMask, attachStreetView, injectCss, colorFor };
+    global.CrimeMapGoogle = { create, switcher, ringsOf, insideRings, outsideMask, attachStreetView, streetViewPins, injectCss, colorFor };
 })(window);

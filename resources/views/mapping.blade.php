@@ -942,6 +942,8 @@ if (request()->query('token')) {
                             renderStreetPanel();
                         },
                         streetView: true,   // native Pegman / Street View on this map
+                        // A crime pin inside Street View opens the same details modal
+                        onIncidentOpen: incident => openIncidentModal(incident.id),
                     });
                 } catch (e) { console.warn('Google Maps view unavailable:', e); }
             }
