@@ -17,19 +17,23 @@ class AuthControllerTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_user_can_login_with_valid_credentials()
+    /**
+     * A correct password no longer signs anyone in on its own: it only opens the
+     * emailed-code step. See LoginOtpTest for the rest of the flow.
+     */
+    public function test_valid_credentials_alone_do_not_authenticate()
     {
-        $user = User::factory()->create([
+        User::factory()->create([
             'email' => 'test@example.com',
             'password' => bcrypt('password')
         ]);
 
-        $response = $this->post('/login', [
+        $this->post('/login', [
             'email' => 'test@example.com',
             'password' => 'password'
         ]);
 
-        $this->assertAuthenticated();
+        $this->assertGuest();
     }
 
     public function test_user_cannot_login_with_invalid_password()
