@@ -1438,28 +1438,52 @@ if (request()->query('token')) {
                 (select.selectedOptions[0] || {}).textContent.trim() || null;
         }
 
-        // Streets come from the same incident rows displayed on the map. This
-        // keeps the dropdown limited to real streets that have data for the
-        // currently selected date/category/status/barangay filters.
+        // Every street of San Agustin is listed, from the street geojson, not
+        // only the streets that happen to have a crime in the current result.
+        // Each option shows how many of the currently loaded crimes sit on it.
+        let allStreetNames = null;   // sorted names once the geojson loads
+        fetch('/data/san_agustin_streets.geojson?t=' + Date.now(), { headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(geo => {
+                const names = new Set();
+                (geo.features || []).forEach(f => {
+                    const name = String(((f.properties || {}).name) || '').trim();
+                    if (name) names.add(name);
+                });
+                allStreetNames = [...names].sort((a, b) => a.localeCompare(b));
+                if (currentData) populateStreetFilter(currentData);
+            })
+            .catch(err => console.warn('Street list not loaded:', err));
+
         function populateStreetFilter(data) {
             const streetSelect = document.getElementById('street');
             const selectedStreet = streetSelect.value;
-            const streets = [...new Set((data || [])
-                .map(incident => (incident.street || '').trim())
-                .filter(Boolean))]
+
+            const counts = {};
+            (data || []).forEach(incident => {
+                const st = (incident.street || '').trim();
+                if (st) counts[st] = (counts[st] || 0) + 1;
+            });
+
+            // Streets recorded on incidents but missing from the geojson still
+            // have to be selectable
+            const listed = new Set(allStreetNames || []);
+            const names = [...listed, ...Object.keys(counts).filter(st => !listed.has(st))]
                 .sort((a, b) => a.localeCompare(b));
 
             streetSelect.innerHTML = '<option value="">All Streets</option>';
-            streets.forEach(street => {
-                const option = document.createElement('option');
-                option.value = street;
-                option.textContent = street;
-                streetSelect.appendChild(option);
+            names.forEach(name => {
+                const o = document.createElement('option');
+                o.value = name;
+                const n = counts[name] || 0;
+                o.textContent = name + (n ? ' (' + n + ')' : '');
+                if (!n) o.style.color = '#9ca3af';
+                streetSelect.appendChild(o);
             });
 
             // If another filter removes the selected street, safely return to
             // the complete filtered result instead of showing an empty map.
-            streetSelect.value = streets.includes(selectedStreet) ? selectedStreet : '';
+            streetSelect.value = names.includes(selectedStreet) ? selectedStreet : '';
         }
 
         function filterDataByStreet(data) {
