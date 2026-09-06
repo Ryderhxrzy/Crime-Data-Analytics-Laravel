@@ -469,6 +469,7 @@
         let streetGeo = null, segments = [], saBounds = null, pending = null;
         let segCounts = new Map(), segMax = 0;     // feature index -> { count, cats, incidents, name }
         let saRings = [], focusedStreet = null, currentMode = 'markers', zoomListener = null, pointer = null;
+        let walking = false;   // Street View open: Pegman's street is heavier, nothing else fades
 
         function showMessage(text) {
             let m = overlay.querySelector('.cmg-msg');
@@ -634,7 +635,9 @@
             const mode = currentMode;
             // A focused street keeps its own colour: it is drawn heavier and
             // every other street fades, the same way the classic map does it.
-            const focusing = focusedStreet !== null;
+            // In Street View the other roads never fade, so the inset still
+            // shows every street around Pegman; the one under him is only heavier.
+            const focusing = focusedStreet !== null && !walking;
             streetLayer.setStyle(f => {
                 const e = entryOf(f), count = e ? e.count : 0;
                 const ratio = segMax > 0 ? count / segMax : 0;
@@ -919,7 +922,7 @@
         // page's: you always see which road you are walking. The street that
         // was focused before (a cluster / Top 10 pick) comes back on exit.
         function followPegman(google) {
-            let savedFocus = null, walking = false;
+            let savedFocus = null;
             const nearestStreet = (lat, lng) => {
                 let best = null, bestD = 40;   // metres: Pegman is on the road, not near it
                 const pad = 60 / 100000;
@@ -941,7 +944,7 @@
             };
             sv.pano.addListener('visible_changed', () => {
                 if (sv.isOpen()) {
-                    if (!walking) { savedFocus = focusedStreet; walking = true; }
+                    if (!walking) { savedFocus = focusedStreet; walking = true; styleStreets(); }
                     update();
                 } else if (walking) {
                     walking = false;
