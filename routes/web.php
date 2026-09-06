@@ -170,8 +170,9 @@ Route::middleware(['jwt.api', 'password.fresh'])->group(function () {
         ->middleware('throttle:60,1')
         ->name('decrypt.get-cached');
 
-    // Audit Logs routes
-    Route::prefix('audit-logs')->name('audit-logs.')->group(function () {
+    // Audit Logs (admins only): staff actions are recorded here, but only
+    // administrators get to read the trail.
+    Route::prefix('audit-logs')->name('audit-logs.')->middleware('admin.only')->group(function () {
         Route::get('/', [AuditLogController::class, 'index'])->name('index');
         Route::get('/filtered', [AuditLogController::class, 'getFiltered'])->name('filtered');
     });
