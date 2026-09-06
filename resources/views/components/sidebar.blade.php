@@ -225,7 +225,8 @@
                     </div>
                 </div>
 
-                <!-- Audit Logs Section -->
+                @if (isAdminAccount())
+                <!-- Audit Logs Section (admins only; the route is guarded too) -->
                 <div class="nav-section">
                     <span class="section-label">History</span>
                     <!-- View History (Audit Logs) -->
@@ -237,6 +238,7 @@
                         </a>
                     </div>
                 </div>
+                @endif
 
                 @if (isAdminAccount())
                     <!-- Administration (admins only) -->
