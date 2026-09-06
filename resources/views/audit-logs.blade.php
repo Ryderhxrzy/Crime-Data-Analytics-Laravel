@@ -70,51 +70,114 @@ if (request()->query('token')) {
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div>
                         <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">View History</h1>
-                        <p class="text-gray-600 mt-1 text-sm lg:text-base">Track all admin actions and audit logs</p>
+                        <p class="text-gray-600 mt-1 text-sm lg:text-base">Every admin and staff action, who did it, and from where</p>
                     </div>
                 </div>
             </div>
 
             <!-- Filters and Search -->
             <div class="bg-white rounded-xl p-4 mb-6 border border-gray-200">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <!-- Date Range -->
-                    <div>
-                        <label class="block text-sm font-medium text-alertara-800 mb-2">Start Date</label>
-                        <input type="date" id="startDateFilter"
-                               class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-semibold text-gray-900"><i class="fas fa-filter mr-2 text-alertara-700"></i>Filters</h2>
+                    <span id="activeFilterCount" class="hidden text-xs font-semibold text-alertara-800 bg-alertara-100 rounded-full px-2.5 py-0.5"></span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+                    <!-- Search -->
+                    <div class="xl:col-span-2">
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Search</label>
+                        <div class="relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                            <input type="text" id="searchFilter" placeholder="Email, action or IP address"
+                                   class="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        </div>
                     </div>
 
+                    <!-- Who -->
                     <div>
-                        <label class="block text-sm font-medium text-alertara-800 mb-2">End Date</label>
-                        <input type="date" id="endDateFilter"
-                               class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Performed by</label>
+                        <select id="actorFilter" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                            <option value="">Everyone</option>
+                            @if (collect($actors)->where('type', 'admin')->isNotEmpty())
+                                <optgroup label="Administrators">
+                                    @foreach (collect($actors)->where('type', 'admin') as $a)
+                                        <option value="{{ $a['email'] }}">{{ $a['name'] }}</option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
+                            @if (collect($actors)->where('type', 'staff')->isNotEmpty())
+                                <optgroup label="Staff">
+                                    @foreach (collect($actors)->where('type', 'staff') as $a)
+                                        <option value="{{ $a['email'] }}">{{ $a['name'] }}</option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
+                        </select>
+                    </div>
+
+                    <!-- Account type -->
+                    <div>
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Account type</label>
+                        <select id="actorTypeFilter" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                            <option value="">Admins &amp; staff</option>
+                            <option value="admin">Admins only</option>
+                            <option value="staff">Staff only</option>
+                        </select>
                     </div>
 
                     <!-- Action Type Filter -->
                     <div>
-                        <label class="block text-sm font-medium text-alertara-800 mb-2">Action Type</label>
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Action</label>
                         <select id="actionTypeFilter" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
-                            <option value="">All Actions</option>
+                            <option value="">All actions</option>
                             @foreach($actionTypes as $type)
-                                <option value="{{ $type }}">{{ str_replace('_', ' ', $type) }}</option>
+                                <option value="{{ $type }}">{{ ucwords(strtolower(str_replace('_', ' ', $type))) }}</option>
                             @endforeach
                         </select>
                     </div>
 
-                    <!-- Search IP -->
+                    <!-- Target -->
                     <div>
-                        <label class="block text-sm font-medium text-alertara-800 mb-2">Search IP Address</label>
-                        <input type="text" id="searchIpFilter" placeholder="e.g., 192.168.1.1"
-                               class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Record type</label>
+                        <select id="targetTableFilter" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                            <option value="">All records</option>
+                            @foreach($targetTables as $t)
+                                <option value="{{ $t }}">{{ ucwords(str_replace(['crime_department_', 'centralized_', '_'], ['', '', ' '], $t)) }}</option>
+                            @endforeach
+                        </select>
                     </div>
 
-                    <!-- Reset Button -->
-                    <div class="flex items-end">
-                        <button id="resetFiltersBtn" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors w-full">
-                            <i class="fas fa-rotate-right mr-2"></i>Reset
-                        </button>
+                    <!-- Date range -->
+                    <div>
+                        <label class="block text-sm font-medium text-alertara-800 mb-2">Period</label>
+                        <select id="periodFilter" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                            <option value="">All time</option>
+                            <option value="today">Today</option>
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                            <option value="custom">Custom range…</option>
+                        </select>
                     </div>
+                </div>
+
+                <!-- Custom range + reset -->
+                <div class="mt-4 flex flex-col sm:flex-row sm:items-end gap-4">
+                    <div id="customRange" class="hidden flex-1 grid grid-cols-2 gap-4 max-w-md">
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">From</label>
+                            <input type="date" id="startDateFilter"
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-alertara-800 mb-2">To</label>
+                            <input type="date" id="endDateFilter"
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-alertara-500 focus:border-alertara-500 bg-white">
+                        </div>
+                    </div>
+                    <div class="flex-1"></div>
+                    <button id="resetFiltersBtn" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium border border-gray-200">
+                        <i class="fas fa-rotate-right mr-2"></i>Reset filters
+                    </button>
                 </div>
             </div>
 
@@ -140,7 +203,7 @@ if (request()->query('token')) {
                             <tr class="bg-gray-50 border-b border-gray-200">
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Date & Time</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Action</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Admin ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Performed by</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Target</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">IP Address</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Browser Info</th>
@@ -168,11 +231,15 @@ if (request()->query('token')) {
                                     @php($d = is_array($log->details) ? $log->details : [])
                                     @if(!empty($d['received_by']))
                                         <span class="block text-xs text-teal-700 mt-1"><i class="fas fa-inbox mr-1"></i>Received by {{ $d['received_by'] }}{{ !empty($d['rows']) ? ' · ' . $d['rows'] . ' rows' : '' }}</span>
-                                    @elseif(!empty($d['actor_email']))
-                                        <span class="block text-xs text-gray-500 mt-1">{{ $d['actor_email'] }}</span>
                                     @endif
                                 </td>
-                                <td class="px-4 py-3 text-sm text-gray-900 font-medium">{{ $log->admin_id }}</td>
+                                <td class="px-4 py-3 text-sm">
+                                    @php($isStaff = ($d['actor_type'] ?? 'admin') === 'staff')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold {{ $isStaff ? 'bg-indigo-100 text-indigo-800' : 'bg-alertara-100 text-alertara-800' }}">
+                                        <i class="fas {{ $isStaff ? 'fa-id-badge' : 'fa-user-shield' }} mr-1"></i>{{ $isStaff ? 'Staff' : 'Admin' }}
+                                    </span>
+                                    <span class="block text-xs text-gray-700 mt-1">{{ $d['actor_email'] ?? ('ID ' . $log->admin_id) }}</span>
+                                </td>
                                 <td class="px-4 py-3 text-sm">
                                     <span class="text-gray-700">{{ $log->target_table }}</span>
                                     <span class="text-gray-500 text-xs block">(ID: {{ $log->target_id }})</span>
@@ -216,10 +283,13 @@ if (request()->query('token')) {
 
             // Real-time filter listeners with debouncing
             const filterElements = [
-                'startDateFilter',
-                'endDateFilter',
+                'searchFilter',
+                'actorFilter',
+                'actorTypeFilter',
                 'actionTypeFilter',
-                'searchIpFilter'
+                'targetTableFilter',
+                'startDateFilter',
+                'endDateFilter'
             ];
 
             filterElements.forEach(elementId => {
@@ -230,12 +300,26 @@ if (request()->query('token')) {
                 }
             });
 
+            // Period presets fill the date inputs; "custom" reveals them
+            document.getElementById('periodFilter').addEventListener('change', function () {
+                const custom = document.getElementById('customRange');
+                const start = document.getElementById('startDateFilter');
+                const end = document.getElementById('endDateFilter');
+                const iso = d => d.toISOString().slice(0, 10);
+                const today = new Date();
+                custom.classList.toggle('hidden', this.value !== 'custom');
+                if (this.value === 'custom') { start.focus(); return; }
+                if (this.value === '') { start.value = ''; end.value = ''; }
+                else if (this.value === 'today') { start.value = iso(today); end.value = iso(today); }
+                else { const from = new Date(today); from.setDate(from.getDate() - parseInt(this.value, 10) + 1); start.value = iso(from); end.value = iso(today); }
+                applyFiltersWithDebounce();
+            });
+
             // Reset button
             document.getElementById('resetFiltersBtn').addEventListener('click', function() {
-                document.getElementById('startDateFilter').value = '';
-                document.getElementById('endDateFilter').value = '';
-                document.getElementById('actionTypeFilter').value = '';
-                document.getElementById('searchIpFilter').value = '';
+                filterElements.forEach(id => { document.getElementById(id).value = ''; });
+                document.getElementById('periodFilter').value = '';
+                document.getElementById('customRange').classList.add('hidden');
                 currentPage = 1;
                 loadAuditLogs();
             });
@@ -263,11 +347,20 @@ if (request()->query('token')) {
 
         function loadAuditLogs() {
             const filters = {
-                start_date: document.getElementById('startDateFilter').value || '',
-                end_date: document.getElementById('endDateFilter').value || '',
+                search: document.getElementById('searchFilter').value.trim() || '',
+                actor: document.getElementById('actorFilter').value || '',
+                actor_type: document.getElementById('actorTypeFilter').value || '',
                 action_type: document.getElementById('actionTypeFilter').value || '',
-                search_ip: document.getElementById('searchIpFilter').value || ''
+                target_table: document.getElementById('targetTableFilter').value || '',
+                start_date: document.getElementById('startDateFilter').value || '',
+                end_date: document.getElementById('endDateFilter').value || ''
             };
+
+            // How many filters are narrowing the list right now
+            const active = Object.values(filters).filter(Boolean).length - (filters.start_date && filters.end_date ? 1 : 0);
+            const chip = document.getElementById('activeFilterCount');
+            chip.textContent = active + ' filter' + (active === 1 ? '' : 's') + ' active';
+            chip.classList.toggle('hidden', active === 0);
 
             fetch('{{ route("audit-logs.filtered") }}?' + new URLSearchParams(filters), {
                 method: 'GET',
@@ -298,6 +391,9 @@ if (request()->query('token')) {
             const endIndex = startIndex + pageSize;
             const paginatedLogs = allAuditLogs.slice(startIndex, endIndex);
 
+            if (!paginatedLogs.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-500"><i class="fas fa-inbox text-3xl text-gray-300 block mb-2"></i>No audit entries match these filters.</td></tr>';
+            } else
             tbody.innerHTML = paginatedLogs.map(log => `
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td class="px-4 py-3 text-sm text-gray-900">
@@ -310,7 +406,7 @@ if (request()->query('token')) {
                         </span>
                         ${detailLine(log)}
                     </td>
-                    <td class="px-4 py-3 text-sm text-gray-900 font-medium">${log.admin_id}</td>
+                    <td class="px-4 py-3 text-sm">${actorCell(log)}</td>
                     <td class="px-4 py-3 text-sm">
                         <span class="text-gray-700">${log.target_table}</span>
                         <span class="text-gray-500 text-xs block">(ID: ${log.target_id})</span>
@@ -348,18 +444,29 @@ if (request()->query('token')) {
 
         const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-        // One line under the badge: the receipt for AI reports, otherwise who acted
-        function detailLine(log) {
+        function detailsOf(log) {
             let d = log.details;
             if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = null; } }
-            if (!d || typeof d !== 'object') return '';
+            return d && typeof d === 'object' ? d : {};
+        }
+
+        // One line under the badge: the receipt for AI reports
+        function detailLine(log) {
+            const d = detailsOf(log);
             if (d.received_by) {
                 return '<span class="block text-xs text-teal-700 mt-1"><i class="fas fa-inbox mr-1"></i>Received by ' + escapeHtml(d.received_by) + (d.rows ? ' · ' + escapeHtml(d.rows) + ' rows' : '') + '</span>';
             }
-            if (d.actor_email) {
-                return '<span class="block text-xs text-gray-500 mt-1">' + escapeHtml(d.actor_email) + '</span>';
-            }
             return '';
+        }
+
+        // Who acted: admin / staff badge plus their email. Older entries only
+        // have an id, and were always admins.
+        function actorCell(log) {
+            const d = detailsOf(log);
+            const staff = d.actor_type === 'staff';
+            return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold ' + (staff ? 'bg-indigo-100 text-indigo-800' : 'bg-alertara-100 text-alertara-800') + '">' +
+                '<i class="fas ' + (staff ? 'fa-id-badge' : 'fa-user-shield') + ' mr-1"></i>' + (staff ? 'Staff' : 'Admin') + '</span>' +
+                '<span class="block text-xs text-gray-700 mt-1">' + escapeHtml(d.actor_email || ('ID ' + log.admin_id)) + '</span>';
         }
 
         function updatePagination() {
