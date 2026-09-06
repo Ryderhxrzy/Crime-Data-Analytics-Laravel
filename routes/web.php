@@ -55,6 +55,17 @@ Route::post('/login', [AuthController::class, 'login'])
     ->name('login.submit');
 Route::get('/unlock-account/{token}', [AuthController::class, 'unlockAccount'])->name('unlock-account');
 
+// Two-factor step. Reached only with a pending login in the session (the
+// controller bounces anyone else back to /login), so no auth middleware here:
+// the account is deliberately not signed in yet.
+Route::get('/verify-otp', [AuthController::class, 'showVerifyOtp'])->name('verify.otp.show');
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp'])
+    ->middleware('throttle:20,1')
+    ->name('verify.otp');
+Route::post('/verify-otp/resend', [AuthController::class, 'resendOtp'])
+    ->middleware('throttle:5,1')
+    ->name('otp.resend');
+
 // Google login routes
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('login.google');
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
