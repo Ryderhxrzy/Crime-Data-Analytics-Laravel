@@ -932,6 +932,15 @@ if (request()->query('token')) {
                         getIncidents: () => currentData,
                         getMode: () => document.getElementById('visualizationMode').value,
                         modeSelect: document.getElementById('visualizationMode'),
+                        // Heat map follows the same sliders and crime weights as the 2D map
+                        getHeatOptions: () => ({ radius: heatmapRadius, blur: heatmapBlur, intensity: heatmapIntensity }),
+                        getWeight: calculateCrimeWeight,
+                        // Picking a street cluster fills the side panel like the 2D view does
+                        onClusterSelect: (name, incidents) => {
+                            selectedStreet = name;
+                            showClusterIncidents(incidents, name);
+                            renderStreetPanel();
+                        },
                         streetView: true,   // native Pegman / Street View on this map
                     });
                 } catch (e) { console.warn('Google Maps view unavailable:', e); }
@@ -2071,6 +2080,8 @@ if (request()->query('token')) {
 
             pointerMarker = L.marker([lat, lng], { icon: arrowIcon }).addTo(map);
             selectedIncidentCoords = [lat, lng];
+            // The same arrow on the Google view, which sits over the classic map
+            if (window.crimeMapGoogle) window.crimeMapGoogle.showPointer(lat, lng);
             console.log('Pointer marker created successfully');
         }
 
@@ -2973,6 +2984,7 @@ if (request()->query('token')) {
             // Refresh heatmap
             if (currentVisualizationMode === 'heatmap') {
                 displayHeatmap(currentData);
+                if (window.crimeMapGoogle) window.crimeMapGoogle.refresh();
             }
         });
 
@@ -2982,6 +2994,7 @@ if (request()->query('token')) {
             // Refresh heatmap
             if (currentVisualizationMode === 'heatmap') {
                 displayHeatmap(currentData);
+                if (window.crimeMapGoogle) window.crimeMapGoogle.refresh();
             }
         });
 
@@ -2991,6 +3004,7 @@ if (request()->query('token')) {
             // Refresh heatmap
             if (currentVisualizationMode === 'heatmap') {
                 displayHeatmap(currentData);
+                if (window.crimeMapGoogle) window.crimeMapGoogle.refresh();
             }
         });
 
@@ -3155,59 +3169,23 @@ if (request()->query('token')) {
                     openIncidentModal(incidentId);
                 });
 
-                // Hover effect
+                // Hover: highlight the row and point at the crime on the map
                 item.addEventListener('mouseover', function() {
                     this.style.background = '#e8f5f3';
+                    const inc = incidents.find(i => String(i.id) === this.getAttribute('data-incident-id'));
+                    if (inc) createPointerMarker(inc.latitude, inc.longitude, inc.id);
                 });
 
                 item.addEventListener('mouseout', function() {
                     this.style.background = '#f9fafb';
+                    const id = this.getAttribute('data-incident-id');
+                    if (String(selectedIncidentId) !== id) clearArrowPointer();
                 });
             });
 
-            // Update header to show cluster name with reset button
-            const incidentsPanel = document.getElementById('incidentsPanel');
-            const headerDiv = incidentsPanel.querySelector('div:first-child');
-            if (headerDiv) {
-                headerDiv.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="font-size: 13px; font-weight: 700; color: #111; margin: 0 0 10px;">
-                            <i class="fas fa-building mr-2" style="color: #274d4c;"></i>Crimes in ${clusterName}
-                        </h3>
-                        <button id="resetClusterView" style="
-                            padding: 6px 10px;
-                            background: #e5e7eb;
-                            color: #111;
-                            border: 1px solid #d1d5db;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            font-size: 11px;
-                            font-weight: 600;
-                            transition: all 0.2s;
-                        ">
-                            <i class="fas fa-arrow-left mr-1"></i>Back
-                        </button>
-                    </div>
-                    <input type="text" id="incidentSearch" placeholder="Search crimes..." style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; box-sizing: border-box;">
-                `;
-
-                // Add reset button handler
-                const resetBtn = headerDiv.querySelector('#resetClusterView');
-                if (resetBtn) {
-                    resetBtn.addEventListener('click', function() {
-                        document.getElementById('severityLegend').style.display = 'none';
-                        clearStreetFocus();
-                    });
-
-                    resetBtn.addEventListener('mouseover', function() {
-                        this.style.background = '#d1d5db';
-                    });
-
-                    resetBtn.addEventListener('mouseout', function() {
-                        this.style.background = '#e5e7eb';
-                    });
-                }
-            }
+            // The panel header stays as it is ("Crimes" + search). The street
+            // being shown is already marked in the "Streets with crime" list,
+            // where clicking it again clears the selection.
         }
 
         // Clear arrow pointer when changing visualization mode
@@ -3217,6 +3195,7 @@ if (request()->query('token')) {
                 pointerMarker = null;
                 selectedIncidentCoords = null;
             }
+            if (window.crimeMapGoogle) window.crimeMapGoogle.hidePointer();
         }
 
         // The intensity scale is shared by both heat views; this swaps its
