@@ -189,20 +189,29 @@
                                                 data-position="{{ $s->position }}" data-contact="{{ $s->contact_number }}">
                                             <i class="fas fa-pen"></i>Edit
                                         </button>
-                                        <form method="POST" action="{{ route('staff.reset-password', $s->id) }}" onsubmit="return confirm('Issue a new temporary password for {{ addslashes($s->full_name) }} and email it?');">
+                                        {{-- Every action that changes an account goes through the confirm modal; the
+                                             form itself is submitted by the modal's confirm button. --}}
+                                        <form method="POST" action="{{ route('staff.reset-password', $s->id) }}" class="confirm-form">
                                             @csrf
-                                            <button type="submit" class="action-btn"><i class="fas fa-key"></i>Reset password</button>
+                                            <button type="button" class="action-btn confirm-btn"
+                                                    data-kind="reset" data-name="{{ $s->full_name }}" data-email="{{ $s->email }}">
+                                                <i class="fas fa-key"></i>Reset password
+                                            </button>
                                         </form>
-                                        <form method="POST" action="{{ route('staff.toggle', $s->id) }}">
+                                        <form method="POST" action="{{ route('staff.toggle', $s->id) }}" class="confirm-form">
                                             @csrf
-                                            <button type="submit" class="action-btn {{ $s->is_active ? '' : '' }}">
+                                            <button type="button" class="action-btn confirm-btn"
+                                                    data-kind="{{ $s->is_active ? 'deactivate' : 'activate' }}" data-name="{{ $s->full_name }}" data-email="{{ $s->email }}">
                                                 <i class="fas {{ $s->is_active ? 'fa-user-slash' : 'fa-user-check' }}"></i>{{ $s->is_active ? 'Deactivate' : 'Activate' }}
                                             </button>
                                         </form>
-                                        <form method="POST" action="{{ route('staff.destroy', $s->id) }}" onsubmit="return confirm('Delete the account of {{ addslashes($s->full_name) }}? This cannot be undone.');">
+                                        <form method="POST" action="{{ route('staff.destroy', $s->id) }}" class="confirm-form">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="action-btn danger"><i class="fas fa-trash"></i></button>
+                                            <button type="button" class="action-btn danger confirm-btn" title="Delete account"
+                                                    data-kind="delete" data-name="{{ $s->full_name }}" data-email="{{ $s->email }}">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
                                         </form>
                                     </div>
                                 </td>
@@ -212,6 +221,35 @@
                 </table>
             </div>
         @endif
+    </div>
+</div>
+
+<!-- Confirm action modal (reset password / activate / deactivate / delete) -->
+<div class="staff-modal" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="card" style="max-width: 460px;">
+        <div class="p-6">
+            <div class="flex items-start gap-4">
+                <div id="confirmIcon" class="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-xl"></div>
+                <div class="min-w-0 flex-1">
+                    <h3 id="confirmTitle" class="text-lg font-bold text-gray-900"></h3>
+                    <p id="confirmBody" class="text-sm text-gray-600 mt-1.5 leading-relaxed"></p>
+                    <div class="mt-3 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                        <i class="fas fa-user text-gray-400 text-xs"></i>
+                        <div class="min-w-0">
+                            <div id="confirmName" class="text-sm font-semibold text-gray-900 truncate"></div>
+                            <div id="confirmEmail" class="text-xs text-gray-500 truncate"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+            <button type="button" onclick="closeModal('confirmModal')"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-100">
+                Cancel
+            </button>
+            <button type="button" id="confirmOk" class="px-4 py-2 rounded-lg text-sm font-semibold text-white"></button>
+        </div>
     </div>
 </div>
 
@@ -313,6 +351,63 @@
         openModal('editStaffModal');
     }
     document.querySelectorAll('.edit-staff-btn').forEach(b => b.addEventListener('click', () => openEdit(b)));
+
+    // One modal for every account action. What it says, and how loud the
+    // confirm button is, depends on the action.
+    const CONFIRM_KINDS = {
+        reset: {
+            title: 'Reset this password?',
+            body: 'A new temporary password will be generated and emailed to the staff member. Their current password stops working immediately and they must set a new one on their next sign-in.',
+            icon: 'fa-key', iconClass: 'bg-amber-100 text-amber-700',
+            ok: 'Reset & email password', okClass: 'bg-alertara-600 hover:bg-alertara-700',
+        },
+        deactivate: {
+            title: 'Deactivate this account?',
+            body: 'The staff member will be signed out and can no longer log in. Their records and history are kept, and the account can be activated again at any time.',
+            icon: 'fa-user-slash', iconClass: 'bg-orange-100 text-orange-700',
+            ok: 'Deactivate account', okClass: 'bg-orange-600 hover:bg-orange-700',
+        },
+        activate: {
+            title: 'Activate this account?',
+            body: 'The staff member will be able to log in again with their existing password.',
+            icon: 'fa-user-check', iconClass: 'bg-emerald-100 text-emerald-700',
+            ok: 'Activate account', okClass: 'bg-emerald-600 hover:bg-emerald-700',
+        },
+        delete: {
+            title: 'Delete this account?',
+            body: 'This permanently removes the staff account. It cannot be undone. If you only want to stop them from logging in, deactivate the account instead.',
+            icon: 'fa-trash', iconClass: 'bg-red-100 text-red-700',
+            ok: 'Delete permanently', okClass: 'bg-red-600 hover:bg-red-700',
+        },
+    };
+    let confirmForm = null;
+    const okBtn = document.getElementById('confirmOk');
+
+    document.querySelectorAll('.confirm-btn').forEach(btn => btn.addEventListener('click', () => {
+        const k = CONFIRM_KINDS[btn.dataset.kind];
+        if (!k) return;
+        confirmForm = btn.closest('form');
+        document.getElementById('confirmTitle').textContent = k.title;
+        document.getElementById('confirmBody').textContent = k.body;
+        document.getElementById('confirmName').textContent = btn.dataset.name || '';
+        document.getElementById('confirmEmail').textContent = btn.dataset.email || '';
+        const icon = document.getElementById('confirmIcon');
+        icon.className = 'w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-xl ' + k.iconClass;
+        icon.innerHTML = '<i class="fas ' + k.icon + '"></i>';
+        okBtn.className = 'px-4 py-2 rounded-lg text-sm font-semibold text-white ' + k.okClass;
+        okBtn.textContent = k.ok;
+        okBtn.disabled = false;
+        openModal('confirmModal');
+        okBtn.focus();
+    }));
+
+    okBtn.addEventListener('click', () => {
+        if (!confirmForm) return;
+        // Guard against a double click while the request is on its way
+        okBtn.disabled = true;
+        okBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Working...';
+        confirmForm.submit();
+    });
 
     @if ($errors->any() && old('email'))
         openModal('addStaffModal');
