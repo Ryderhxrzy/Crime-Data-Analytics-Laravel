@@ -29,6 +29,9 @@ if (request()->query('token')) {
     <script src="{{ asset('js/google-maps-loader.js') }}?v={{ filemtime(public_path('js/google-maps-loader.js')) }}"></script>
     <script src="{{ asset('js/crime-map-google.js') }}?v={{ filemtime(public_path('js/crime-map-google.js')) }}"></script>
     <style>
+        /* Top 10 list: the selected street */
+        #topHotspots .hotspot-item.is-active { background: #e8f5f3; box-shadow: inset 4px 0 0 #274d4c; }
+        #topHotspots .hotspot-item.is-active:hover { background: #dcf0ec; }
         .map-3d-btn.on { background: #274d4c !important; color: #fff !important; border-color: #274d4c !important; }
     </style>
 
@@ -522,6 +525,10 @@ if (request()->query('token')) {
                         getIncidents: () => currentData,
                         getMode: () => document.getElementById('visualizationMode').value,
                         modeSelect: document.getElementById('visualizationMode'),
+                        // Same heat radius / blur / crime weights as the 2D heat map
+                        getHeatOptions: () => ({ radius: heatmapRadius, blur: heatmapBlur, intensity: heatmapIntensity }),
+                        getWeight: calculateCrimeWeight,
+                        streetView: true,   // Pegman, so a street can be walked like on Crime Mapping
                     });
                 } catch (e) { console.warn('Google Maps view unavailable:', e); }
             }
@@ -917,6 +924,7 @@ if (request()->query('token')) {
                     selectHotspot(this.dataset.street, hotspotByStreet(this.dataset.street));
                 });
             });
+            if (selectedHotspot) markActiveHotspot(selectedHotspot.area_name);
 
             updateKeyMetrics();
             updateTrendAnalysis();
@@ -1428,7 +1436,16 @@ if (request()->query('token')) {
         function clearStreetSelection() {
             selectedHotspot = null;
             document.getElementById('streetAnalysisCard').style.display = 'none';
+            markActiveHotspot(null);
             if (typeof saStreetsHighlight === 'function') saStreetsHighlight(null);
+            if (window.crimeMapGoogle) window.crimeMapGoogle.clearFocus();
+        }
+
+        // The chosen street stays marked in the Top 10 list
+        function markActiveHotspot(name) {
+            document.querySelectorAll('#topHotspots .hotspot-item').forEach(item => {
+                item.classList.toggle('is-active', name !== null && item.dataset.street === name);
+            });
         }
 
         function selectHotspot(name, hotspot, scrollIntoView = true) {
@@ -1440,11 +1457,15 @@ if (request()->query('token')) {
                 document.getElementById('streetAnalysisName').textContent = name;
                 card.style.display = 'block';
 
-                // Zoom to the street and pick it out from its neighbours
+                markActiveHotspot(name);
+
+                // Zoom to the street and pick it out from its neighbours, on
+                // whichever map is showing
                 if (typeof saStreetsFitStreet === 'function') saStreetsFitStreet(name);
                 const filteredStreets = Array.from(document.getElementById('streets')?.selectedOptions || [])
                     .map(option => option.value);
                 if (typeof saStreetsHighlight === 'function') saStreetsHighlight(filteredStreets.length ? filteredStreets : name);
+                if (window.crimeMapGoogle) window.crimeMapGoogle.focusStreet(name);
 
                 if (!hotspot) {
                     body.innerHTML = `
